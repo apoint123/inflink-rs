@@ -21,7 +21,7 @@
   "devDependencies": {
     "@types/less": "^3.0.3",
     "@types/react-icons": "^3.0.0",
-    "esbuild": "^0.16.1",
+    "esbuild": "^0.25.8",
     "esbuild-sass-plugin": "^2.4.5",
     "esbuild-stylus-loader": "^0.4.2"
   },
