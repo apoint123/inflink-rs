@@ -1,0 +1,36 @@
+[package]
+name = "smtc_handler"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1", features = [
+    "net",
+    "sync",
+    "rt-multi-thread",
+    "macros",
+    "time",
+] }
+tokio-tungstenite = "0.27"
+futures-util = { version = "0.3", default-features = false, features = [
+    "sink",
+    "std",
+] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+windows = { version = "0.61", features = [
+    "Media_Control",
+    "Media_Playback",
+    "Storage_Streams",
+    "System",
+    "Win32_System_Com",
+    "Win32_System_WinRT",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+base64 = "0.22.1"
+log = "0.4.27"
+env_logger = "0.11.8"

@@ -1,0 +1,12 @@
+node_modules/
+/package.lock
+/yarn.lock
+/native/.vs/
+/native/Debug/
+/native/Release/
+/native/packages/
+InfLink.dll.pdb
+.vs/
+*.log
+Debug
+Release
