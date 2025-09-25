@@ -1,3 +1,5 @@
+import type { Store } from "redux";
+
 /**
  * UI 中实际存在的播放模式
  */
@@ -54,10 +56,7 @@ export interface NCMReduxState {
 	playing: NCMPlayingInfo | null;
 }
 
-export interface NCMStore {
-	getState: () => NCMReduxState;
-	subscribe: (listener: () => void) => () => void;
-}
+export type NCMStore = Store<NCMReduxState>;
 
 export interface AudioLoadInfo {
 	duration: number; // 秒
@@ -86,8 +85,4 @@ export interface ReactRootElement extends HTMLElement {
 			};
 		};
 	};
-}
-
-export interface ClickableReactProps {
-	onClick?: () => void;
 }

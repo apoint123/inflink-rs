@@ -8,12 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@emotion/react':
-        specifier: ^11.14.0
-        version: 11.14.0(@types/react@19.1.13)(react@19.1.1)
-      '@emotion/styled':
-        specifier: ^11.14.1
-        version: 11.14.1(@emotion/react@11.14.0(@types/react@19.1.13)(react@19.1.1))(@types/react@19.1.13)(react@19.1.1)
       '@mui/material':
         specifier: ^7.3.2
         version: 7.3.2(@emotion/react@11.14.0(@types/react@19.1.13)(react@19.1.1))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.1.13)(react@19.1.1))(@types/react@19.1.13)(react@19.1.1))(@types/react@19.1.13)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
@@ -29,9 +23,6 @@ importers:
       react-dom:
         specifier: ^19.1.1
         version: 19.1.1(react@19.1.1)
-      react-icons:
-        specifier: ^5.5.0
-        version: 5.5.0(react@19.1.1)
       typescript:
         specifier: ^5.9.2
         version: 5.9.2
@@ -39,18 +30,15 @@ importers:
       '@biomejs/biome':
         specifier: ^2.2.4
         version: 2.2.4
-      '@types/less':
-        specifier: ^3.0.8
-        version: 3.0.8
       '@types/node':
         specifier: ^24.5.2
         version: 24.5.2
       '@vitejs/plugin-react':
         specifier: ^5.0.3
         version: 5.0.3(vite@7.1.7(@types/node@24.5.2)(sass-embedded@1.93.2)(sass@1.93.2)(stylus@0.64.0))
-      sass:
-        specifier: ^1.93.2
-        version: 1.93.2
+      redux:
+        specifier: ^5.0.1
+        version: 5.0.1
       vite:
         specifier: ^7.1.7
         version: 7.1.7(@types/node@24.5.2)(sass-embedded@1.93.2)(sass@1.93.2)(stylus@0.64.0)
@@ -730,9 +718,6 @@ packages:
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
 
-  '@types/less@3.0.8':
-    resolution: {integrity: sha512-Gjm4+H9noDJgu5EdT3rUw5MhPBag46fiOy27BefvWkNL8mlZnKnCaVVVTLKj6RYXed9b62CPKnPav9govyQDzA==}
-
   '@types/node@24.5.2':
     resolution: {integrity: sha512-FYxk1I7wPv3K2XBaoyH2cTnocQEu8AOZ60hPbsyukMPLv5/5qr7V1i8PLHdl6Zf87I+xZXFvPCXYjiTFq+YSDQ==}
 
@@ -1081,11 +1066,6 @@ packages:
     peerDependencies:
       react: ^19.1.1
 
-  react-icons@5.5.0:
-    resolution: {integrity: sha512-MEFcXdkP3dLo8uumGI5xN3lDFNsRtrjbOEKDLD7yv76v4wpnEq2Lt2qeHaQOr34I/wPN3s3+N08WkQ+CW37Xiw==}
-    peerDependencies:
-      react: '*'
-
   react-is@16.13.1:
     resolution: {integrity: sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==}
 
@@ -1109,6 +1089,9 @@ packages:
   readdirp@4.1.2:
     resolution: {integrity: sha512-GDhwkLfywWL2s6vEjyhri+eXmfH6j1L7JE27WhqLeYzoh/A3DBaYGEj2H/HFZCn/kMfim73FXxEJTw06WtxQwg==}
     engines: {node: '>= 14.18.0'}
+
+  redux@5.0.1:
+    resolution: {integrity: sha512-M9/ELqF6fy8FwmkpnF0S3YKOqMyoWJ4+CS5Efg2ct3oY9daQvd/Pc71FpGZsVsbl3Cpb+IIcjBDUnnyBdQbq4w==}
 
   resolve-from@4.0.0:
     resolution: {integrity: sha512-pb/MYmXstAkysRFx8piNI1tGFNQIFA3vkE3Gq4EuA1dF6gHp/+vgZqsCGJapvy8N3Q+4o7FwvquPJcnZ7RYy4g==}
@@ -1575,6 +1558,7 @@ snapshots:
       stylis: 4.2.0
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   '@emotion/cache@11.14.0':
     dependencies:
@@ -1589,6 +1573,7 @@ snapshots:
   '@emotion/is-prop-valid@1.4.0':
     dependencies:
       '@emotion/memoize': 0.9.0
+    optional: true
 
   '@emotion/memoize@0.9.0': {}
 
@@ -1607,6 +1592,7 @@ snapshots:
       '@types/react': 19.1.13
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   '@emotion/serialize@1.3.3':
     dependencies:
@@ -1632,12 +1618,14 @@ snapshots:
       '@types/react': 19.1.13
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   '@emotion/unitless@0.10.0': {}
 
   '@emotion/use-insertion-effect-with-fallbacks@1.2.0(react@19.1.1)':
     dependencies:
       react: 19.1.1
+    optional: true
 
   '@emotion/utils@1.4.2': {}
 
@@ -1986,13 +1974,12 @@ snapshots:
 
   '@types/estree@1.0.8': {}
 
-  '@types/less@3.0.8': {}
-
   '@types/node@24.5.2':
     dependencies:
       undici-types: 7.12.0
 
-  '@types/parse-json@4.0.2': {}
+  '@types/parse-json@4.0.2':
+    optional: true
 
   '@types/prop-types@15.7.15': {}
 
@@ -2039,6 +2026,7 @@ snapshots:
       '@babel/runtime': 7.28.4
       cosmiconfig: 7.1.0
       resolve: 1.22.10
+    optional: true
 
   balanced-match@1.0.2:
     optional: true
@@ -2066,13 +2054,15 @@ snapshots:
   buffer-builder@0.2.0:
     optional: true
 
-  callsites@3.1.0: {}
+  callsites@3.1.0:
+    optional: true
 
   caniuse-lite@1.0.30001743: {}
 
   chokidar@4.0.3:
     dependencies:
       readdirp: 4.1.2
+    optional: true
 
   clsx@2.1.1: {}
 
@@ -2087,7 +2077,8 @@ snapshots:
   colorjs.io@0.5.2:
     optional: true
 
-  convert-source-map@1.9.0: {}
+  convert-source-map@1.9.0:
+    optional: true
 
   convert-source-map@2.0.0: {}
 
@@ -2098,6 +2089,7 @@ snapshots:
       parse-json: 5.2.0
       path-type: 4.0.0
       yaml: 1.10.2
+    optional: true
 
   cross-spawn@7.0.6:
     dependencies:
@@ -2134,6 +2126,7 @@ snapshots:
   error-ex@1.3.4:
     dependencies:
       is-arrayish: 0.2.1
+    optional: true
 
   esbuild@0.25.10:
     optionalDependencies:
@@ -2166,7 +2159,8 @@ snapshots:
 
   escalade@3.2.0: {}
 
-  escape-string-regexp@4.0.0: {}
+  escape-string-regexp@4.0.0:
+    optional: true
 
   fdir@6.5.0(picomatch@4.0.3):
     optionalDependencies:
@@ -2177,7 +2171,8 @@ snapshots:
       to-regex-range: 5.0.1
     optional: true
 
-  find-root@1.1.0: {}
+  find-root@1.1.0:
+    optional: true
 
   foreground-child@3.3.1:
     dependencies:
@@ -2188,7 +2183,8 @@ snapshots:
   fsevents@2.3.3:
     optional: true
 
-  function-bind@1.1.2: {}
+  function-bind@1.1.2:
+    optional: true
 
   gensync@1.0.0-beta.2: {}
 
@@ -2208,23 +2204,29 @@ snapshots:
   hasown@2.0.2:
     dependencies:
       function-bind: 1.1.2
+    optional: true
 
   hoist-non-react-statics@3.3.2:
     dependencies:
       react-is: 16.13.1
+    optional: true
 
-  immutable@5.1.3: {}
+  immutable@5.1.3:
+    optional: true
 
   import-fresh@3.3.1:
     dependencies:
       parent-module: 1.0.1
       resolve-from: 4.0.0
+    optional: true
 
-  is-arrayish@0.2.1: {}
+  is-arrayish@0.2.1:
+    optional: true
 
   is-core-module@2.16.1:
     dependencies:
       hasown: 2.0.2
+    optional: true
 
   is-extglob@2.1.1:
     optional: true
@@ -2254,11 +2256,13 @@ snapshots:
 
   jsesc@3.1.0: {}
 
-  json-parse-even-better-errors@2.3.1: {}
+  json-parse-even-better-errors@2.3.1:
+    optional: true
 
   json5@2.2.3: {}
 
-  lines-and-columns@1.2.4: {}
+  lines-and-columns@1.2.4:
+    optional: true
 
   loose-envify@1.4.0:
     dependencies:
@@ -2302,6 +2306,7 @@ snapshots:
   parent-module@1.0.1:
     dependencies:
       callsites: 3.1.0
+    optional: true
 
   parse-json@5.2.0:
     dependencies:
@@ -2309,11 +2314,13 @@ snapshots:
       error-ex: 1.3.4
       json-parse-even-better-errors: 2.3.1
       lines-and-columns: 1.2.4
+    optional: true
 
   path-key@3.1.1:
     optional: true
 
-  path-parse@1.0.7: {}
+  path-parse@1.0.7:
+    optional: true
 
   path-scurry@1.11.1:
     dependencies:
@@ -2321,7 +2328,8 @@ snapshots:
       minipass: 7.1.2
     optional: true
 
-  path-type@4.0.0: {}
+  path-type@4.0.0:
+    optional: true
 
   picocolors@1.1.1: {}
 
@@ -2347,10 +2355,6 @@ snapshots:
       react: 19.1.1
       scheduler: 0.26.0
 
-  react-icons@5.5.0(react@19.1.1):
-    dependencies:
-      react: 19.1.1
-
   react-is@16.13.1: {}
 
   react-is@19.1.1: {}
@@ -2368,15 +2372,20 @@ snapshots:
 
   react@19.1.1: {}
 
-  readdirp@4.1.2: {}
+  readdirp@4.1.2:
+    optional: true
 
-  resolve-from@4.0.0: {}
+  redux@5.0.1: {}
+
+  resolve-from@4.0.0:
+    optional: true
 
   resolve@1.22.10:
     dependencies:
       is-core-module: 2.16.1
       path-parse: 1.0.7
       supports-preserve-symlinks-flag: 1.0.0
+    optional: true
 
   rollup@4.52.2:
     dependencies:
@@ -2507,6 +2516,7 @@ snapshots:
       source-map-js: 1.2.1
     optionalDependencies:
       '@parcel/watcher': 2.5.1
+    optional: true
 
   sax@1.4.1:
     optional: true
@@ -2528,7 +2538,8 @@ snapshots:
 
   source-map-js@1.2.1: {}
 
-  source-map@0.5.7: {}
+  source-map@0.5.7:
+    optional: true
 
   source-map@0.7.6:
     optional: true
@@ -2575,7 +2586,8 @@ snapshots:
       has-flag: 4.0.0
     optional: true
 
-  supports-preserve-symlinks-flag@1.0.0: {}
+  supports-preserve-symlinks-flag@1.0.0:
+    optional: true
 
   sync-child-process@1.0.2:
     dependencies:
@@ -2647,4 +2659,5 @@ snapshots:
 
   yallist@3.1.1: {}
 
-  yaml@1.10.2: {}
+  yaml@1.10.2:
+    optional: true

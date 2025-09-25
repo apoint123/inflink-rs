@@ -1,10 +1,11 @@
+import type React from "react";
 import type {
+	Artist,
 	AudioLoadInfo,
 	Channel,
-	ClickableReactProps,
 	LegacyNativeCmder,
 	NCMPlayMode,
-	NCMReduxState,
+	NCMStore,
 	NcmEventMap,
 	NcmEventName,
 	ReactRootElement,
@@ -35,10 +36,6 @@ const SELECTORS = {
 };
 
 const CONSTANTS = {
-	// setPlayMode 函数的相关配置
-	SET_PLAY_MODE_POLL_INTERVAL_MS: 50, // 切换播放模式后的轮询等待时间
-	SET_PLAY_MODE_MAX_ATTEMPTS: 5, // 最大尝试切换次数
-
 	// 时间线更新节流间隔
 	TIMELINE_THROTTLE_INTERVAL_MS: 1000,
 
@@ -46,6 +43,11 @@ const CONSTANTS = {
 
 	// React 内部 props 属性的前缀
 	REACT_PROPS_PREFIX: "__reactProps$",
+
+	NCM_PLAY_MODE_ORDER: "playOrder",
+	NCM_PLAY_MODE_LOOP: "playCycle",
+	NCM_PLAY_MODE_SHUFFLE: "playRandom",
+	NCM_PLAY_MODE_ONE: "playOneCycle",
 };
 
 declare const legacyNativeCmder: LegacyNativeCmder; // NCM 2.x
@@ -65,10 +67,10 @@ function triggerReactClick(element: HTMLElement | null): void {
 	if (reactPropsKey) {
 		const props = (element as unknown as Record<string, unknown>)[
 			reactPropsKey
-		] as ClickableReactProps | undefined;
+		] as React.HTMLAttributes<HTMLElement> | undefined;
 
 		if (props?.onClick) {
-			props.onClick();
+			props.onClick({} as React.MouseEvent<HTMLElement>);
 			return;
 		}
 	}
@@ -142,12 +144,6 @@ class DOMController {
 		);
 	}
 
-	public togglePlayMode(): void {
-		triggerReactClick(
-			document.querySelector<HTMLButtonElement>(SELECTORS.PLAY_MODE_BUTTON),
-		);
-	}
-
 	public getCurrentPlayMode(): NCMPlayMode | null {
 		const playModeButton = document.querySelector<HTMLButtonElement>(
 			SELECTORS.PLAY_MODE_BUTTON,
@@ -163,28 +159,12 @@ class DOMController {
  * NCM 事件适配器
  */
 class NcmEventAdapter {
-	private readonly isNCMV3: boolean;
-	private registeredEvt?: Set<string>;
-	private callbacks?: Map<string, Set<NcmEventMap[NcmEventName]>>;
+	private readonly registeredEvt: Set<string>;
+	private readonly callbacks: Map<string, Set<NcmEventMap[NcmEventName]>>;
 
 	constructor() {
-		this.isNCMV3 = this.checkIsNCMV3();
-		if (this.isNCMV3) {
-			this.registeredEvt = new Set<string>();
-			this.callbacks = new Map<string, Set<NcmEventMap[NcmEventName]>>();
-		}
-	}
-
-	private checkIsNCMV3(): boolean {
-		try {
-			const version =
-				window.APP_CONF?.appver || betterncm?.ncm?.getNCMVersion();
-
-			if (version) {
-				return parseInt(version.split(".")[0], 10) >= 3;
-			}
-		} catch {}
-		return false;
+		this.registeredEvt = new Set<string>();
+		this.callbacks = new Map<string, Set<NcmEventMap[NcmEventName]>>();
 	}
 
 	public on<E extends NcmEventName>(
@@ -193,44 +173,27 @@ class NcmEventAdapter {
 	): void {
 		const namespace = "audioplayer";
 		try {
-			if (this.isNCMV3) {
-				if (!this.registeredEvt || !this.callbacks) {
-					console.error(
-						"[React Store Provider] NCMv3 event handler not initialized correctly.",
-					);
-					return;
-				}
-
-				const fullName = `${namespace}.on${eventName}`;
-				if (!this.registeredEvt.has(fullName)) {
-					this.registeredEvt.add(fullName);
-					channel.registerCall(fullName, (...args: unknown[]) => {
-						this.callbacks?.get(fullName)?.forEach((cb) => {
-							(cb as (...args: unknown[]) => void)(...args);
-						});
+			const fullName = `${namespace}.on${eventName}`;
+			if (!this.registeredEvt.has(fullName)) {
+				this.registeredEvt.add(fullName);
+				channel.registerCall(fullName, (...args: unknown[]) => {
+					this.callbacks?.get(fullName)?.forEach((cb) => {
+						(cb as (...args: unknown[]) => void)(...args);
 					});
-				}
-
-				let callbackSet = this.callbacks.get(fullName);
-
-				if (!callbackSet) {
-					callbackSet = new Set();
-					this.callbacks.set(fullName, callbackSet);
-				}
-
-				callbackSet.add(callback);
-			} else if (legacyNativeCmder?.appendRegisterCall) {
-				legacyNativeCmder.appendRegisterCall(
-					eventName,
-					namespace,
-					callback as (...args: unknown[]) => void,
-				);
+				});
 			}
+
+			let callbackSet = this.callbacks.get(fullName);
+
+			if (!callbackSet) {
+				callbackSet = new Set();
+				this.callbacks.set(fullName, callbackSet);
+			}
+
+			callbackSet.add(callback);
 		} catch (e) {
 			console.error(
-				`[React Store Provider] Failed to register event ${eventName} for NCM v${
-					this.isNCMV3 ? "3" : "2"
-				}`,
+				`[React Store Provider] Failed to register event ${eventName}`,
 				e,
 			);
 		}
@@ -242,14 +205,15 @@ export class ReactStoreProvider extends BaseProvider {
 	private musicDuration = 0;
 	private musicPlayProgress = 0;
 	private playState: PlayState = "Paused";
-	private store: NCMReduxState | null = null;
+	private reduxStore: NCMStore | null = null;
 	private unsubscribeStore: (() => void) | null = null;
 	private lastProgress = 0;
 	private dispatchTimelineThrottled: () => void;
 	private lastTrackId: string | null = null;
 	private lastIsPlaying: boolean | null = null;
 	private lastPlayMode: string | undefined = undefined;
-	private isSwitchingMode = false;
+	private lastModeBeforeShuffle: string | null = null;
+	private isUpdatingFromProvider = false;
 
 	private readonly domController: DOMController;
 	private readonly eventAdapter: NcmEventAdapter;
@@ -269,6 +233,8 @@ export class ReactStoreProvider extends BaseProvider {
 		this.ready = new Promise((resolve) => {
 			this.resolveReady = resolve;
 		});
+
+		this.handleControlEvent = this.handleControlEvent.bind(this);
 
 		this.dispatchTimelineThrottled = throttle(() => {
 			this.dispatchEvent(
@@ -299,9 +265,8 @@ export class ReactStoreProvider extends BaseProvider {
 				?.memoizedProps?.store;
 
 		if (rootStore) {
-			this.store = rootStore.getState();
-			this.unsubscribeStore = rootStore.subscribe(() => {
-				this.store = rootStore.getState();
+			this.reduxStore = rootStore;
+			this.unsubscribeStore = this.reduxStore.subscribe(() => {
 				this.onStateChanged();
 			});
 		} else {
@@ -336,117 +301,139 @@ export class ReactStoreProvider extends BaseProvider {
 		);
 	}
 
-	private registerControlListeners(): void {
-		this.addEventListener("control", async (e: CustomEvent) => {
-			const msg = e.detail;
-			switch (msg.type) {
-				case "Play":
-					this.domController.play();
-					if (this.playState !== "Playing") {
-						this.playState = "Playing";
-						this.dispatchEvent(
-							new CustomEvent("updatePlayState", { detail: this.playState }),
-						);
-					}
-					break;
-				case "Pause":
-					this.domController.pause();
-					if (this.playState !== "Paused") {
-						this.playState = "Paused";
-						this.dispatchEvent(
-							new CustomEvent("updatePlayState", { detail: this.playState }),
-						);
-					}
-					break;
-				case "NextSong":
-					this.domController.nextSong();
-					break;
-				case "PreviousSong":
-					this.domController.previousSong();
-					break;
-				case "Seek":
-					if (typeof msg.position === "number")
-						this.seekToPosition(msg.position);
-					break;
-				case "ToggleShuffle": {
-					if (this.isSwitchingMode) return;
-					const isShuffle =
-						this.domController.getCurrentPlayMode() === "shuffle";
-					await this.setPlayMode(isShuffle ? "loop" : "shuffle");
-					break;
-				}
-				case "ToggleRepeat": {
-					if (this.isSwitchingMode) return;
-					const currentMode = this.domController.getCurrentPlayMode();
-					let targetMode: NCMPlayMode = "loop";
-					if (currentMode === "order") targetMode = "loop";
-					else if (currentMode === "loop") targetMode = "singleloop";
-					else targetMode = "order";
-					await this.setPlayMode(targetMode);
-					break;
-				}
-			}
-		});
-	}
-
-	private async setPlayMode(targetMode: NCMPlayMode): Promise<void> {
-		console.log(`[React Store Provider] Setting play mode to: ${targetMode}`);
-		this.isSwitchingMode = true;
-
-		for (let i = 0; i < CONSTANTS.SET_PLAY_MODE_MAX_ATTEMPTS; i++) {
-			const currentMode = this.domController.getCurrentPlayMode();
-			if (currentMode === targetMode) {
-				break;
-			}
-			this.domController.togglePlayMode();
-			// 等待 UI 响应
-			await new Promise((resolve) =>
-				setTimeout(resolve, CONSTANTS.SET_PLAY_MODE_POLL_INTERVAL_MS),
-			);
+	private handleControlEvent(e: CustomEvent): void {
+		if (this.isUpdatingFromProvider) {
+			return;
+		}
+		if (!this.reduxStore) {
+			return;
 		}
 
-		this.isSwitchingMode = false;
-		// 强制分发一次播放模式更新事件
-		this.onStateChanged(true);
+		const msg = e.detail;
+		const currentMode = this.reduxStore.getState()?.playing?.playingMode;
+
+		switch (msg.type) {
+			case "Play":
+				this.domController.play();
+				if (this.playState !== "Playing") {
+					this.playState = "Playing";
+					this.dispatchEvent(
+						new CustomEvent("updatePlayState", { detail: this.playState }),
+					);
+				}
+				break;
+			case "Pause":
+				this.domController.pause();
+				if (this.playState !== "Paused") {
+					this.playState = "Paused";
+					this.dispatchEvent(
+						new CustomEvent("updatePlayState", { detail: this.playState }),
+					);
+				}
+				break;
+			case "NextSong":
+				this.domController.nextSong();
+				break;
+			case "PreviousSong":
+				this.domController.previousSong();
+				break;
+			case "Seek":
+				if (typeof msg.position === "number") this.seekToPosition(msg.position);
+				break;
+			case "ToggleShuffle": {
+				const isShuffleOn = currentMode === CONSTANTS.NCM_PLAY_MODE_SHUFFLE;
+				const targetMode = isShuffleOn
+					? this.lastModeBeforeShuffle || CONSTANTS.NCM_PLAY_MODE_LOOP
+					: CONSTANTS.NCM_PLAY_MODE_SHUFFLE;
+
+				if (!isShuffleOn && currentMode) {
+					this.lastModeBeforeShuffle = currentMode;
+				} else {
+					this.lastModeBeforeShuffle = null;
+				}
+
+				this.reduxStore.dispatch({
+					type: "playing/switchPlayingMode",
+					payload: { playingMode: targetMode },
+				});
+				break;
+			}
+			case "ToggleRepeat": {
+				let targetMode: string;
+				if (currentMode === CONSTANTS.NCM_PLAY_MODE_SHUFFLE) {
+					targetMode = CONSTANTS.NCM_PLAY_MODE_ORDER;
+					this.lastModeBeforeShuffle = null;
+				} else {
+					switch (currentMode) {
+						case CONSTANTS.NCM_PLAY_MODE_ORDER:
+							targetMode = CONSTANTS.NCM_PLAY_MODE_LOOP;
+							break;
+						case CONSTANTS.NCM_PLAY_MODE_LOOP:
+							targetMode = CONSTANTS.NCM_PLAY_MODE_ONE;
+							break;
+						default:
+							targetMode = CONSTANTS.NCM_PLAY_MODE_ORDER;
+							break;
+					}
+				}
+
+				this.reduxStore.dispatch({
+					type: "playing/switchPlayingMode",
+					payload: { playingMode: targetMode },
+				});
+				break;
+			}
+		}
+	}
+
+	private registerControlListeners(): void {
+		this.addEventListener("control", this.handleControlEvent);
 	}
 
 	private async onStateChanged(forceDispatchPlayMode = false): Promise<void> {
-		if (!this.store?.playing) return;
-		const playingInfo = this.store.playing;
+		if (!this.reduxStore) return;
 
-		// 处理播放模式变化
-		const currentNcmMode = this.domController.getCurrentPlayMode();
-		if (this.lastPlayMode !== currentNcmMode || forceDispatchPlayMode) {
-			this.lastPlayMode = currentNcmMode || undefined;
+		const playingState = this.reduxStore.getState().playing;
+		const newNcmMode = playingState?.playingMode;
 
-			if (!this.isSwitchingMode || forceDispatchPlayMode) {
-				let isShuffling = false;
-				let repeatMode = "None"; // "None", "List", "Track"
-				switch (currentNcmMode) {
-					case "shuffle":
-						isShuffling = true;
-						repeatMode = "List";
-						break;
-					case "order":
-						isShuffling = false;
-						repeatMode = "None";
-						break;
-					case "loop":
-						isShuffling = false;
-						repeatMode = "List";
-						break;
-					case "singleloop":
-						isShuffling = false;
-						repeatMode = "Track";
-						break;
-				}
-				this.onPlayModeChange?.({ isShuffling, repeatMode });
-				this.dispatchEvent(
-					new CustomEvent("updatePlayMode", { detail: currentNcmMode }),
-				);
+		if (this.lastPlayMode !== newNcmMode || forceDispatchPlayMode) {
+			this.lastPlayMode = newNcmMode || undefined;
+
+			let isShuffling = newNcmMode === CONSTANTS.NCM_PLAY_MODE_SHUFFLE;
+			let repeatMode = "None";
+
+			switch (newNcmMode) {
+				case CONSTANTS.NCM_PLAY_MODE_SHUFFLE:
+					isShuffling = true;
+					repeatMode = "List";
+					break;
+				case CONSTANTS.NCM_PLAY_MODE_ORDER:
+					isShuffling = false;
+					repeatMode = "None";
+					break;
+				case CONSTANTS.NCM_PLAY_MODE_LOOP:
+					isShuffling = false;
+					repeatMode = "List";
+					break;
+				case CONSTANTS.NCM_PLAY_MODE_ONE:
+					isShuffling = false;
+					repeatMode = "Track";
+					break;
 			}
+
+			this.isUpdatingFromProvider = true;
+			setTimeout(() => {
+				this.isUpdatingFromProvider = false;
+			}, 100);
+
+			this.onPlayModeChange?.({ isShuffling, repeatMode });
+			this.dispatchEvent(
+				new CustomEvent("updatePlayMode", { detail: newNcmMode }),
+			);
 		}
 
+		const playingInfo = this.reduxStore.getState().playing;
+		if (!playingInfo) return;
 		// 处理歌曲信息变化
 		const currentTrackId = String(playingInfo.resourceTrackId || "").trim();
 		if (
@@ -469,7 +456,9 @@ export class ReactStoreProvider extends BaseProvider {
 					detail: {
 						songName: playingInfo.resourceName || "未知歌名",
 						authorName:
-							playingInfo.resourceArtists?.map((v) => v.name).join(" / ") || "",
+							playingInfo.resourceArtists
+								?.map((v: Artist) => v.name)
+								.join(" / ") || "",
 						albumName: playingInfo.musicAlbumName ?? playingInfo.resourceName,
 						thumbnail_base64: thumbnailBase64,
 					},
@@ -529,13 +518,9 @@ export class ReactStoreProvider extends BaseProvider {
 	): void {
 		let newPlayState: PlayState = this.playState;
 		if (typeof stateInfo === "string") {
-			// NCM 3.0+
 			const state = stateInfo.split("|")[1];
 			if (state === "pause") newPlayState = "Paused";
 			else if (state === "resume") newPlayState = "Playing";
-		} else if (typeof stateInfo === "number") {
-			// NCM 2.x
-			newPlayState = stateInfo === 1 ? "Playing" : "Paused";
 		}
 
 		if (this.playState !== newPlayState) {
@@ -571,11 +556,12 @@ export class ReactStoreProvider extends BaseProvider {
 	}
 
 	public async forceDispatchFullState(): Promise<void> {
-		if (!this.store?.playing || !this.lastTrackId) {
+		if (!this.reduxStore?.getState().playing || !this.lastTrackId) {
 			console.warn("[React Store Provider] 没有缓存的状态可以分发。");
 			return;
 		}
-		const playingInfo = this.store.playing;
+		const playingInfo = this.reduxStore.getState().playing;
+		if (!playingInfo) return;
 
 		const thumbnailUrl = playingInfo.resourceCoverUrl || "";
 		const thumbnailBase64 = thumbnailUrl
@@ -597,6 +583,7 @@ export class ReactStoreProvider extends BaseProvider {
 		this.dispatchEvent(
 			new CustomEvent("updatePlayState", { detail: this.playState }),
 		);
+
 		this.dispatchEvent(
 			new CustomEvent("updateTimeline", {
 				detail: {
@@ -617,6 +604,7 @@ export class ReactStoreProvider extends BaseProvider {
 			this.unsubscribeStore();
 			this.unsubscribeStore = null;
 		}
+		this.removeEventListener("control", this.handleControlEvent);
 		console.log("[React Store Provider] Disposed.");
 	}
 }
