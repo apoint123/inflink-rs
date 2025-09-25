@@ -6,18 +6,21 @@
 import {
 	Alert,
 	AlertTitle,
+	CircularProgress,
 	FormControlLabel,
 	FormGroup,
 	Switch,
 	Typography,
 } from "@mui/material";
-import * as React from "react";
 import { createRoot } from "react-dom/client";
 
-import { useLocalStorage } from "./hooks";
+import {
+	useCompatibility,
+	useInfoProvider,
+	useLocalStorage,
+	useSmtcConnection,
+} from "./hooks";
 import { STORE_KEY_SMTC_ENABLED } from "./keys";
-import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
-import { ReactStoreProvider } from "./SongInfoProviders/ReactStoreProvider";
 
 const configElement = document.createElement("div");
 
@@ -33,99 +36,16 @@ plugin.onLoad((selfPlugin) => {
 });
 
 function Main() {
-	const [isCompatible, setIsCompatible] = React.useState<boolean | null>(null);
-
-	React.useEffect(() => {
-		try {
-			const version = betterncm.ncm.getNCMVersion();
-			const majorVersion = parseInt(version.split(".")[0], 10);
-			if (majorVersion >= 3) {
-				setIsCompatible(true);
-			} else {
-				setIsCompatible(false);
-			}
-		} catch (e) {
-			console.error("[InfLink] 无法检测网易云音乐版本。", e);
-			setIsCompatible(false);
-		}
-	}, []);
-
+	const isCompatible = useCompatibility();
 	const [SMTCEnabled, setSMTCEnabled] = useLocalStorage(
 		STORE_KEY_SMTC_ENABLED,
 		true,
 	);
-
-	const [infoProvider, setInfoProvider] =
-		React.useState<ReactStoreProvider | null>(null);
-
-	React.useEffect(() => {
-		if (isCompatible) {
-			const provider = new ReactStoreProvider();
-			setInfoProvider(provider);
-
-			return () => {
-				provider.disabled = true;
-				provider.dispatchEvent(new CustomEvent("disable"));
-				if ("dispose" in provider && typeof provider.dispose === "function") {
-					provider.dispose();
-				}
-			};
-		}
-	}, [isCompatible]);
-
-	// 设置 Provider 和 SMTC 后端之间的连接
-	React.useEffect(() => {
-		if (!infoProvider) {
-			return;
-		}
-
-		const smtcImplObj = SMTCNativeBackendInstance;
-
-		if (!SMTCEnabled) {
-			smtcImplObj.disable();
-			return;
-		}
-
-		const onUpdateSongInfo = (e: CustomEvent) => smtcImplObj.update(e.detail);
-		const onUpdatePlayState = (e: CustomEvent) =>
-			smtcImplObj.updatePlayState(e.detail === "Playing" ? 3 : 4);
-		const onUpdateTimeline = (e: CustomEvent) =>
-			smtcImplObj.updateTimeline(e.detail);
-
-		infoProvider.addEventListener("updateSongInfo", onUpdateSongInfo);
-		infoProvider.addEventListener("updatePlayState", onUpdatePlayState);
-		infoProvider.addEventListener("updateTimeline", onUpdateTimeline);
-
-		infoProvider.onPlayModeChange = (detail) => {
-			smtcImplObj.updatePlayMode(detail);
-		};
-
-		smtcImplObj.apply(
-			// 处理从后端来的控制命令
-			(msg) => {
-				infoProvider.dispatchEvent(new CustomEvent("control", { detail: msg }));
-			},
-			// 连接成功后执行的回调
-			async () => {
-				await infoProvider.ready;
-				infoProvider.forceDispatchFullState();
-			},
-		);
-
-		const cleanup = () => {
-			console.log("[InfLink] 清理事件监听...");
-			infoProvider.removeEventListener("updateSongInfo", onUpdateSongInfo);
-			infoProvider.removeEventListener("updatePlayState", onUpdatePlayState);
-			infoProvider.removeEventListener("updateTimeline", onUpdateTimeline);
-			infoProvider.onPlayModeChange = null;
-			smtcImplObj.disable();
-		};
-
-		return cleanup;
-	}, [infoProvider, SMTCEnabled]);
+	const infoProvider = useInfoProvider(isCompatible);
+	useSmtcConnection(infoProvider, SMTCEnabled);
 
 	if (isCompatible === null) {
-		return;
+		return <CircularProgress size={24} />;
 	}
 
 	if (isCompatible === false) {
