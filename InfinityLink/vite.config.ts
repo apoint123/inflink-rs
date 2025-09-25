@@ -30,16 +30,12 @@ const buildRustPlugin = (): Plugin => {
 			const manifestDest = path.resolve(options.dir, "manifest.json");
 			fs.copyFileSync(manifestSrc, manifestDest);
 
-			const backendDir = path.resolve(options.dir, "backend");
-			if (!fs.existsSync(backendDir)) {
-				fs.mkdirSync(backendDir, { recursive: true });
-			}
-
 			const rustSrc = path.resolve(
 				__dirname,
-				"../smtc_handler/target/release/smtc_handler.exe",
+				"../smtc_handler/target/release/smtc_handler.dll",
 			);
-			const rustDest = path.resolve(backendDir, "smtc_handler.exe");
+
+			const rustDest = path.resolve(options.dir, "smtc_handler.dll");
 			fs.copyFileSync(rustSrc, rustDest);
 		},
 	};

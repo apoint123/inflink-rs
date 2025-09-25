@@ -35,6 +35,10 @@ declare global {
 			export function reloadIgnoreCache(): void;
 			export function restart(): void;
 		}
+		const native_plugin: {
+			getRegisteredAPIs: () => string[];
+			call: <T = unknown>(identifier: string, args?: unknown[]) => T;
+		};
 	}
 	interface Window {
 		React: typeof import("react");

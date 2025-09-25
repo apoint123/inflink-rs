@@ -10,14 +10,13 @@ import { createRoot } from "react-dom/client";
 
 import { useLocalStorage } from "./hooks";
 import { STORE_KEY_SMTC_ENABLED } from "./keys";
-import { SMTCRustBackend } from "./Receivers/smtc-rust";
+import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
 import { ReactStoreProvider } from "./SongInfoProviders/ReactStoreProvider";
 
 const configElement = document.createElement("div");
 
 plugin.onLoad((selfPlugin: NCMPlugin) => {
 	console.log("[InfLink] 插件正在加载...", selfPlugin);
-	console.log("[InfLink] 插件路径:", plugin.pluginPath);
 
 	try {
 		createRoot(configElement).render(<Main />);
@@ -35,8 +34,6 @@ function Main() {
 
 	const [infoProvider, setInfoProvider] =
 		React.useState<ReactStoreProvider | null>(null);
-
-	const smtcImplObj = SMTCRustBackend;
 
 	React.useEffect(() => {
 		const provider = new ReactStoreProvider();
@@ -57,62 +54,50 @@ function Main() {
 			return;
 		}
 
-		let cleanup = () => {};
+		const smtcImplObj = SMTCNativeBackendInstance;
 
-		const setupConnections = async () => {
-			if (!SMTCEnabled) {
-				smtcImplObj.disable();
-				return;
-			}
+		if (!SMTCEnabled) {
+			smtcImplObj.disable();
+			return;
+		}
 
-			console.log("[InfLink] 等待 ReactStoreProvider 就绪...");
-			await infoProvider.ready;
+		const onUpdateSongInfo = (e: CustomEvent) => smtcImplObj.update(e.detail);
+		const onUpdatePlayState = (e: CustomEvent) =>
+			smtcImplObj.updatePlayState(e.detail === "Playing" ? 3 : 4);
+		const onUpdateTimeline = (e: CustomEvent) =>
+			smtcImplObj.updateTimeline(e.detail);
 
-			const onUpdateSongInfo = (e: CustomEvent) => smtcImplObj.update(e.detail);
-			const onUpdatePlayState = (e: CustomEvent) =>
-				smtcImplObj.updatePlayState(e.detail === "Playing" ? 3 : 4);
-			const onUpdateTimeline = (e: CustomEvent) =>
-				smtcImplObj.updateTimeline(e.detail);
+		infoProvider.addEventListener("updateSongInfo", onUpdateSongInfo);
+		infoProvider.addEventListener("updatePlayState", onUpdatePlayState);
+		infoProvider.addEventListener("updateTimeline", onUpdateTimeline);
 
-			infoProvider.addEventListener("updateSongInfo", onUpdateSongInfo);
-			infoProvider.addEventListener("updatePlayState", onUpdatePlayState);
-			infoProvider.addEventListener("updateTimeline", onUpdateTimeline);
-
-			infoProvider.onPlayModeChange = (detail) => {
-				smtcImplObj.updatePlayMode(detail);
-			};
-
-			smtcImplObj.apply(
-				// 处理从后端来的控制命令
-				(msg) => {
-					infoProvider.dispatchEvent(
-						new CustomEvent("control", { detail: msg }),
-					);
-				},
-				// 连接成功后执行的回调
-				() => {
-					infoProvider.forceDispatchFullState();
-				},
-			);
-
-			infoProvider.forceDispatchFullState();
-
-			cleanup = () => {
-				console.log("[InfLink] 清理连接和事件监听...");
-				infoProvider.removeEventListener("updateSongInfo", onUpdateSongInfo);
-				infoProvider.removeEventListener("updatePlayState", onUpdatePlayState);
-				infoProvider.removeEventListener("updateTimeline", onUpdateTimeline);
-				infoProvider.onPlayModeChange = null;
-				smtcImplObj.disable();
-			};
+		infoProvider.onPlayModeChange = (detail) => {
+			smtcImplObj.updatePlayMode(detail);
 		};
 
-		setupConnections();
+		smtcImplObj.apply(
+			// 处理从后端来的控制命令
+			(msg) => {
+				infoProvider.dispatchEvent(new CustomEvent("control", { detail: msg }));
+			},
+			// 连接成功后执行的回调
+			async () => {
+				await infoProvider.ready;
+				infoProvider.forceDispatchFullState();
+			},
+		);
 
-		return () => {
-			cleanup();
+		const cleanup = () => {
+			console.log("[InfLink] 清理事件监听...");
+			infoProvider.removeEventListener("updateSongInfo", onUpdateSongInfo);
+			infoProvider.removeEventListener("updatePlayState", onUpdatePlayState);
+			infoProvider.removeEventListener("updateTimeline", onUpdateTimeline);
+			infoProvider.onPlayModeChange = null;
+			smtcImplObj.disable();
 		};
-	}, [infoProvider, SMTCEnabled, smtcImplObj]);
+
+		return cleanup;
+	}, [infoProvider, SMTCEnabled]);
 
 	return (
 		<div>
