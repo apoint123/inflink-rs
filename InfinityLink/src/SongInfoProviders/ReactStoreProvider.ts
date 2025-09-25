@@ -9,7 +9,7 @@ import type {
 	NcmEventMap,
 	NcmEventName,
 	ReactRootElement,
-} from "../types";
+} from "../types/ncm-internal";
 import { throttle } from "../utils";
 import { BaseProvider, type PlayState } from "./BaseProvider";
 

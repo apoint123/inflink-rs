@@ -20,7 +20,10 @@ export type ControlMessage =
 				| "ToggleShuffle"
 				| "ToggleRepeat";
 	  }
-	| { type: "Seek"; position: number };
+	| {
+			type: "Seek";
+			position: number;
+	  };
 
 export type SmtcSimpleEvent = {
 	type:

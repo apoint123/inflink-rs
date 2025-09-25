@@ -11,7 +11,6 @@ import {
 	Switch,
 	Typography,
 } from "@mui/material";
-import type { NCMPlugin } from "plugin";
 import * as React from "react";
 import { createRoot } from "react-dom/client";
 
@@ -22,7 +21,7 @@ import { ReactStoreProvider } from "./SongInfoProviders/ReactStoreProvider";
 
 const configElement = document.createElement("div");
 
-plugin.onLoad((selfPlugin: NCMPlugin) => {
+plugin.onLoad((selfPlugin) => {
 	console.log("[InfLink] 插件正在加载...", selfPlugin);
 
 	try {

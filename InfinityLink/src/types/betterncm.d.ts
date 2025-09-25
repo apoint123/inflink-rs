@@ -1,5 +1,15 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: betterncm的定义如此 */
 /** biome-ignore-all lint/complexity/noBannedTypes: betterncm的定义如此 */
+
+declare module "betterncm-api/base" {
+	export const betterncmFetch: (
+		relPath: string,
+		option?: RequestInit & {
+			ignoreApiKey?: boolean;
+		},
+	) => Promise<Response>;
+}
+
 declare module "betterncm-api/utils" {
 	export namespace utils {
 		function waitForElement<K extends keyof HTMLElementTagNameMap>(
@@ -49,15 +59,7 @@ declare module "betterncm-api/utils" {
 		): HTMLElement;
 	}
 }
-declare module "betterncm-api/react" {}
-declare module "betterncm-api/base" {
-	export const betterncmFetch: (
-		relPath: string,
-		option?: RequestInit & {
-			ignoreApiKey?: boolean;
-		},
-	) => Promise<Response>;
-}
+
 declare module "betterncm-api/fs" {
 	/**
 	 * 和外界的文件系统进行交互的接口
@@ -136,6 +138,7 @@ declare module "betterncm-api/fs" {
 		function remove(path: string): Promise<boolean>;
 	}
 }
+
 declare module "betterncm-api/app" {
 	export namespace app {
 		/**
@@ -231,6 +234,7 @@ declare module "betterncm-api/app" {
 		function getSucceededHijacks(): Promise<string[]>;
 	}
 }
+
 declare module "betterncm-api/ncm" {
 	export namespace ncm {
 		function findNativeFunction(
@@ -264,12 +268,16 @@ declare module "betterncm-api/ncm" {
 		): [Function, any, string[]] | null;
 		/**
 		 * 获取当前正在播放的歌曲的信息，包括歌曲信息，来源，当前播放状态等
+		 *
+		 * @warning 在网易云音乐 v3 版本不可用
 		 * @todo 补全返回值类型
 		 * @returns 当前歌曲的播放信息
 		 */
 		function getPlayingSong(): any;
 		/**
 		 * 获取当前正在播放的歌曲的简要信息
+		 *
+		 * @warning 在网易云音乐 v3 版本不可用
 		 * @deprecated 由于找到了自带的接口，故这个函数被弃用，请转而使用 `betterncm.ncm.getPlayingSong`
 		 * @returns 简化的播放信息
 		 */
@@ -280,12 +288,14 @@ declare module "betterncm-api/ncm" {
 		};
 	}
 }
+
 declare module "betterncm-api/tests" {
 	export namespace tests {
 		function fail(reason: string): Promise<void>;
 		function success(message: string): Promise<void>;
 	}
 }
+
 declare module "betterncm-api/index" {
 	/**
 	 * @fileoverview
@@ -322,22 +332,27 @@ declare module "betterncm-api/index" {
 	export type { fs, app, ncm, utils, tests, reload };
 	export default BetterNCM;
 }
+
 declare module "plugin" {
 	export interface InjectFile {
 		file: string;
 	}
-	export interface HijackOperation {
-		type: string;
-	}
-	export interface HijackReplaceOrRegexOperation extends HijackOperation {
+
+	export interface HijackReplaceOrRegexOperation {
 		type: "replace" | "regex";
 		from: string;
 		to: string;
 	}
-	export interface HijackAppendOrPrependOperation extends HijackOperation {
+
+	export interface HijackAppendOrPrependOperation {
 		type: "append" | "prepend";
 		code: string;
 	}
+
+	export type HijackOperation =
+		| HijackReplaceOrRegexOperation
+		| HijackAppendOrPrependOperation;
+
 	export interface PluginManifest {
 		manifest_version: number;
 		name: string;
@@ -352,74 +367,77 @@ declare module "plugin" {
 		};
 		hijacks: {
 			[versionRange: string]: {
-				[matchUrlPath: string]:
-					| HijackReplaceOrRegexOperation
-					| HijackAppendOrPrependOperation;
+				[matchUrlPath: string]: HijackOperation;
 			};
 		};
 	}
+
 	export class NCMPlugin extends EventTarget {
-		pluginPath: string;
-		injects: NCMInjectPlugin[];
-		manifest: PluginManifest;
-		finished: boolean;
-		devMode: boolean;
+		readonly pluginPath: string;
+		readonly injects: NCMInjectPlugin[];
+		readonly manifest: PluginManifest;
+		readonly finished: boolean;
+		readonly devMode: boolean;
 		constructor(manifest: PluginManifest, pluginPath: string, devMode: boolean);
 		haveConfigElement(): boolean;
 	}
+
 	export class NCMInjectPlugin extends EventTarget {
 		readonly filePath: string;
-		pluginPath: string;
-		manifest: PluginManifest;
-		configViewElement: HTMLElement | null;
-		mainPlugin: NCMPlugin;
-		loadError: Error | null;
-		finished: boolean;
+		readonly pluginPath: string;
+		readonly manifest: PluginManifest;
+		readonly configViewElement: HTMLElement | null;
+		readonly mainPlugin: NCMPlugin;
+		readonly loadError: Error | null;
+		readonly finished: boolean;
 		constructor(mainPlugin: NCMPlugin, filePath: string);
-		onLoad(fn: (selfPlugin: NCMPlugin, evt: CustomEvent) => void): void;
+		onLoad(fn: (selfPlugin: NCMInjectPlugin) => void): void;
 		onConfig(fn: (toolsBox: any) => HTMLElement): void;
 		onAllPluginsLoaded(
-			fn: (
-				loadedPlugins: typeof window.loadedPlugins,
-				evt: CustomEvent,
-			) => void,
+			fn: (loadedPlugins: Window["loadedPlugins"], evt: CustomEvent) => void,
 		): void;
+
 		getConfig<T>(key: string): T | undefined;
 		getConfig<T>(key: string, defaultValue: T): T;
 		setConfig<T>(key: string, value: T): void;
 		_getConfigElement(): HTMLElement | null;
 	}
 }
+
 declare module "plugin-manager/components/button" {
 	export const Button: React.FC<
 		React.PropsWithChildren<React.HTMLAttributes<HTMLAnchorElement>>
 	>;
 }
+
 declare module "plugin-manager/components/progress-ring" {
-	export const ProgressRing: React.FC<{
-		size?: string;
-	}>;
+	export const ProgressRing: React.FC<{ size?: string }>;
 }
+
 declare module "plugin-manager/components/header" {
 	export const HeaderComponent: React.FC<{
 		onRequestOpenStartupWarnings: Function;
 	}>;
 }
+
 declare module "plugin-manager/components/safe-mode-info" {
 	export const SafeModeInfo: React.FC;
 }
+
 declare module "plugin-manager/components/warning" {
 	export const StartupWarning: React.FC<{
 		onRequestClose: Function;
 	}>;
 }
+
 declare module "plugin-manager/index" {
-	import type { loadedPlugins } from "loader";
 	export function initPluginManager(): Promise<void>;
 	export let onPluginLoaded: (_: typeof loadedPlugins) => void;
 }
+
 declare module "loader" {
-	export let loadedPlugins: typeof window.loadedPlugins;
+	export const loadedPlugins: Window["loadedPlugins"];
+
 	/**
 	 * 禁用安全模式，将会在下一次重载生效
 	 *
@@ -438,6 +456,7 @@ declare module "loader" {
 	 * 供用户和插件作者排查加载错误
 	 */
 	export function enableSafeMode(): Promise<void>;
+
 	export class PluginLoadError extends Error {
 		readonly pluginPath: string;
 		readonly rawError: Error;
@@ -449,10 +468,12 @@ declare module "loader" {
 		);
 		toString(): string;
 	}
+
 	export class DependencyResolveError extends Error {
 		constructor(message?: string, options?: ErrorOptions);
 		toString(): string;
 	}
+
 	export const isSafeMode: () => boolean;
 	export const getLoadError: () => string;
 }

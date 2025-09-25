@@ -1,57 +1,67 @@
-import type { NCMPlugin } from "index";
+import type { NCMInjectPlugin, NCMPlugin } from "plugin";
 
 declare global {
-	/** 一个由 C++ 侧设置的访问密钥，以免出现非法调用 */
-	const BETTERNCM_API_KEY: string;
-	const BETTERNCM_API_PATH: string;
-	const BETTERNCM_FILES_PATH: string;
-	const BETTERNCM_API_PORT: number;
-	// biome-ignore lint/suspicious/noExplicitAny: 网易云自带IPC对象，因为量比较大所以不做类型限定了
-	const channel: any;
-	const h: typeof createElement;
-	const f: typeof Fragment;
-	const dom: typeof BetterNCM.utils.dom;
-	const React: typeof import("react");
-	const ReactDOM: typeof import("react-dom");
-	// biome-ignore lint/suspicious/noExplicitAny: 云村自带的应用配置属性，因为量比较大所以不做类型限定了
-	const APP_CONF: any;
-	declare const betterncm: typeof import("betterncm-api/index").default;
-	export namespace betterncm_native {
-		export namespace fs {
-			export function watchDirectory(
-				watchDirPath: string,
-				callback: (dirPath: string, filename: string) => void,
-			): void;
-
-			export function readFileText(filePath: string): string;
-
-			export function readDir(filePath: string): string[];
-
-			export function exists(filePath: string): boolean;
-		}
-
-		export namespace app {
-			export function version(): string;
-			export function reloadIgnoreCache(): void;
-			export function restart(): void;
-		}
-		const native_plugin: {
-			getRegisteredAPIs: () => string[];
-			call: <T = unknown>(identifier: string, args?: unknown[]) => T;
-		};
-	}
 	interface Window {
-		React: typeof import("react");
-		ReactDOM: typeof import("react-dom");
-		h: typeof createElement;
-		f: typeof Fragment;
-		loadedPlugins: { [pluginId: string]: NCMPlugin };
-		loadFailedErrors: [string, Error][];
-		dom: typeof BetterNCM.utils.dom;
-		// biome-ignore lint/suspicious/noExplicitAny: 云村自带的应用配置属性，因为量比较大所以不做类型限定了
-		APP_CONF: any;
+		/** 一个由 C++ 侧设置的访问密钥，以免出现非法调用 */
+		BETTERNCM_API_KEY: string;
 		BETTERNCM_API_PATH: string;
 		BETTERNCM_FILES_PATH: string;
+		BETTERNCM_API_PORT: number;
+
+		// biome-ignore lint/suspicious/noExplicitAny: 网易云自带IPC对象，因为量比较大所以不做类型限定了
+		channel: any;
+
+		h: typeof import("react").createElement;
+		f: typeof import("react").Fragment;
+		dom: typeof import("betterncm-api/utils").dom;
+		React: typeof import("react");
+		ReactDOM: typeof import("react-dom");
+
+		// biome-ignore lint/suspicious/noExplicitAny: 云村自带的应用配置属性，因为量比较大所以不做类型限定了
+		APP_CONF: any;
+
+		betterncm: typeof import("betterncm-api/index").default;
+
+		betterncm_native: {
+			fs: {
+				watchDirectory(
+					watchDirPath: string,
+					callback: (dirPath: string, filename: string) => void,
+				): void;
+				readFileText(filePath: string): string;
+				readDir(filePath: string): string[];
+				exists(filePath: string): boolean;
+			};
+			app: {
+				version(): string;
+				reloadIgnoreCache(): void;
+				restart(): void;
+			};
+			native_plugin: {
+				getRegisteredAPIs: () => string[];
+				call: <T = unknown>(identifier: string, args?: unknown[]) => T;
+			};
+		};
+
+		plugin: NCMInjectPlugin;
+
+		loadedPlugins: { [pluginId: string]: NCMPlugin };
+
+		loadFailedErrors: [string, Error][];
 	}
-	const plugin: import("plugin").NCMInjectPlugin;
+
+	const BETTERNCM_API_KEY: Window["BETTERNCM_API_KEY"];
+	const BETTERNCM_API_PATH: Window["BETTERNCM_API_PATH"];
+	const BETTERNCM_FILES_PATH: Window["BETTERNCM_FILES_PATH"];
+	const BETTERNCM_API_PORT: Window["BETTERNCM_API_PORT"];
+	const channel: Window["channel"];
+	const h: Window["h"];
+	const f: Window["f"];
+	const dom: Window["dom"];
+	const React: Window["React"];
+	const ReactDOM: Window["ReactDOM"];
+	const APP_CONF: Window["APP_CONF"];
+	const betterncm: Window["betterncm"];
+	const betterncm_native: Window["betterncm_native"];
+	const plugin: Window["plugin"];
 }
