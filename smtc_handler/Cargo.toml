@@ -18,7 +18,7 @@ futures-util = { version = "0.3", default-features = false, features = [
 ] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-windows = { version = "0.61", features = [
+windows = { version = "0.62", features = [
     "Media_Control",
     "Media_Playback",
     "Storage_Streams",

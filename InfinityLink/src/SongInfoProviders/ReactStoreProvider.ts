@@ -1,3 +1,14 @@
+import type {
+	AudioLoadInfo,
+	Channel,
+	ClickableReactProps,
+	LegacyNativeCmder,
+	NCMPlayMode,
+	NCMReduxState,
+	NcmEventMap,
+	NcmEventName,
+	ReactRootElement,
+} from "../types";
 import { throttle } from "../utils";
 import { BaseProvider, type PlayState } from "./BaseProvider";
 
@@ -37,99 +48,8 @@ const CONSTANTS = {
 	REACT_PROPS_PREFIX: "__reactProps$",
 };
 
-/**
- * UI 中实际存在的播放模式
- */
-type NCMPlayMode = "order" | "loop" | "shuffle" | "singleloop";
-
-export enum PlayMode {
-	Order = "order",
-	Repeat = "repeat",
-	Random = "random",
-	One = "one",
-	AI = "AI",
-}
-
-interface BetterNCM {
-	utils: {
-		waitForElement: (selector: string) => Promise<HTMLElement>;
-	};
-	ncm?: {
-		getNCMVersion: () => string;
-	};
-}
-
-interface LegacyNativeCmder {
-	appendRegisterCall: (
-		name: string,
-		namespace: string,
-		callback: (...args: unknown[]) => void,
-	) => void;
-	_envAdapter: {
-		callAdapter: (
-			method: string,
-			callback: () => void,
-			args: unknown[],
-		) => void;
-	};
-}
-
-interface Channel {
-	registerCall: (name: string, callback: (...args: unknown[]) => void) => void;
-}
-
-declare const betterncm: BetterNCM;
 declare const legacyNativeCmder: LegacyNativeCmder; // NCM 2.x
 declare const channel: Channel; // NCM 3.0+
-
-interface Artist {
-	id: string;
-	name: string;
-}
-
-interface NCMPlayingInfo {
-	resourceTrackId?: string;
-	resourceName?: string;
-	resourceArtists?: Artist[];
-	musicAlbumName?: string;
-	resourceCoverUrl?: string;
-	playing?: boolean;
-	progress?: number; // 秒
-	curTrack?: {
-		duration?: number; // 毫秒
-	};
-	playingState?: 1 | 2; // 1: Playing, 2: Paused
-	playingMode?: string;
-}
-
-interface NCMReduxState {
-	playing: NCMPlayingInfo | null;
-}
-
-interface NCMStore {
-	getState: () => NCMReduxState;
-	subscribe: (listener: () => void) => () => void;
-}
-
-interface AudioLoadInfo {
-	duration: number; // 秒
-}
-
-interface ReactRootElement extends HTMLElement {
-	_reactRootContainer?: {
-		_internalRoot?: {
-			current?: {
-				child?: {
-					child?: {
-						memoizedProps?: {
-							store?: NCMStore;
-						};
-					};
-				};
-			};
-		};
-	};
-}
 
 /**
  * 模拟 React 事件点击。
@@ -142,12 +62,19 @@ function triggerReactClick(element: HTMLElement | null): void {
 		key.startsWith(CONSTANTS.REACT_PROPS_PREFIX),
 	);
 
-	if (reactPropsKey && (element as any)[reactPropsKey]?.onClick) {
-		(element as any)[reactPropsKey].onClick();
-	} else {
-		// 如果找不到 React 属性，则尝试原生点击
-		element.click();
+	if (reactPropsKey) {
+		const props = (element as unknown as Record<string, unknown>)[
+			reactPropsKey
+		] as ClickableReactProps | undefined;
+
+		if (props?.onClick) {
+			props.onClick();
+			return;
+		}
 	}
+
+	// 如果找不到 React 属性，则尝试原生点击
+	element.click();
 }
 
 /**
@@ -238,20 +165,21 @@ class DOMController {
 class NcmEventAdapter {
 	private readonly isNCMV3: boolean;
 	private registeredEvt?: Set<string>;
-	private callbacks?: Map<string, Set<(...args: any[]) => void>>;
+	private callbacks?: Map<string, Set<NcmEventMap[NcmEventName]>>;
 
 	constructor() {
 		this.isNCMV3 = this.checkIsNCMV3();
 		if (this.isNCMV3) {
 			this.registeredEvt = new Set<string>();
-			this.callbacks = new Map<string, Set<(...args: any[]) => void>>();
+			this.callbacks = new Map<string, Set<NcmEventMap[NcmEventName]>>();
 		}
 	}
 
 	private checkIsNCMV3(): boolean {
 		try {
 			const version =
-				(window as any).APP_CONF?.appver || betterncm?.ncm?.getNCMVersion();
+				window.APP_CONF?.appver || betterncm?.ncm?.getNCMVersion();
+
 			if (version) {
 				return parseInt(version.split(".")[0], 10) >= 3;
 			}
@@ -259,29 +187,50 @@ class NcmEventAdapter {
 		return false;
 	}
 
-	public on(
-		eventName: "Load" | "End" | "PlayProgress" | "PlayState",
-		callback: (...args: any[]) => void,
+	public on<E extends NcmEventName>(
+		eventName: E,
+		callback: NcmEventMap[E],
 	): void {
 		const namespace = "audioplayer";
 		try {
 			if (this.isNCMV3) {
+				if (!this.registeredEvt || !this.callbacks) {
+					console.error(
+						"[React Store Provider] NCMv3 event handler not initialized correctly.",
+					);
+					return;
+				}
+
 				const fullName = `${namespace}.on${eventName}`;
-				if (!this.registeredEvt!.has(fullName)) {
-					this.registeredEvt!.add(fullName);
-					channel.registerCall(fullName, (...args: any[]) => {
-						this.callbacks?.get(fullName)?.forEach((cb) => cb(...args));
+				if (!this.registeredEvt.has(fullName)) {
+					this.registeredEvt.add(fullName);
+					channel.registerCall(fullName, (...args: unknown[]) => {
+						this.callbacks?.get(fullName)?.forEach((cb) => {
+							(cb as (...args: unknown[]) => void)(...args);
+						});
 					});
 				}
-				if (!this.callbacks!.has(fullName))
-					this.callbacks!.set(fullName, new Set());
-				this.callbacks!.get(fullName)!.add(callback);
+
+				let callbackSet = this.callbacks.get(fullName);
+
+				if (!callbackSet) {
+					callbackSet = new Set();
+					this.callbacks.set(fullName, callbackSet);
+				}
+
+				callbackSet.add(callback);
 			} else if (legacyNativeCmder?.appendRegisterCall) {
-				legacyNativeCmder.appendRegisterCall(eventName, namespace, callback);
+				legacyNativeCmder.appendRegisterCall(
+					eventName,
+					namespace,
+					callback as (...args: unknown[]) => void,
+				);
 			}
 		} catch (e) {
 			console.error(
-				`[React Store Provider] Failed to register event ${eventName} for NCM v${this.isNCMV3 ? "3" : "2"}`,
+				`[React Store Provider] Failed to register event ${eventName} for NCM v${
+					this.isNCMV3 ? "3" : "2"
+				}`,
 				e,
 			);
 		}
@@ -306,7 +255,7 @@ export class ReactStoreProvider extends BaseProvider {
 	private readonly eventAdapter: NcmEventAdapter;
 
 	public ready: Promise<void>;
-	private resolveReady: () => void;
+	private resolveReady!: () => void;
 
 	public onPlayModeChange:
 		| ((detail: { isShuffling: boolean; repeatMode: string }) => void)
@@ -663,7 +612,7 @@ export class ReactStoreProvider extends BaseProvider {
 		);
 	}
 
-	public dispose(): void {
+	public override dispose(): void {
 		if (this.unsubscribeStore) {
 			this.unsubscribeStore();
 			this.unsubscribeStore = null;

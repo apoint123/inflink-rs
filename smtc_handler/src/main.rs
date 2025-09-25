@@ -267,7 +267,7 @@ fn smtc_thread_main(
                                     let stream = InMemoryRandomAccessStream::new()?;
                                     let writer = DataWriter::CreateDataWriter(&stream)?;
                                     writer.WriteBytes(&bytes)?;
-                                    writer.StoreAsync()?.get()?;
+                                    writer.StoreAsync()?;
                                     writer.DetachStream()?;
                                     stream.Seek(0)?;
                                     let stream_ref =

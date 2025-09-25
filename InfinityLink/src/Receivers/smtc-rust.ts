@@ -8,7 +8,7 @@ import type {
 	ControlMessage,
 	SongInfo,
 	TimelineInfo,
-} from "src/types/smtc";
+} from "../types/smtc";
 
 export class SMTCRust {
 	private ws: WebSocket | null = null;

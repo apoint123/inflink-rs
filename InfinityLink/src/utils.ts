@@ -1,5 +1,5 @@
 // from https://github.com/martinstark/throttle-ts
-export const throttle = <R, A extends any[]>(
+export const throttle = <R, A extends unknown[]>(
 	fn: (...args: A) => R,
 	delay: number,
 ): [(...args: A) => R | undefined, () => void, () => void] => {

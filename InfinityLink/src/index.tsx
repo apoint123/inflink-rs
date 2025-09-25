@@ -3,30 +3,19 @@
  * 此处的脚本将会在插件管理器加载插件期间被加载
  * 一般情况下只需要从这个入口点进行开发即可满足绝大部分需求
  */
-import {
-	FormControlLabel,
-	FormGroup,
-	FormLabel,
-	Radio,
-	RadioGroup,
-	Switch,
-} from "@mui/material";
+import { FormControlLabel, FormGroup, Switch, Typography } from "@mui/material";
+import type { NCMPlugin } from "plugin";
 import * as React from "react";
 import { createRoot } from "react-dom/client";
 
 import { useLocalStorage } from "./hooks";
-import {
-	STORE_KEY_INFO_PROVIDER,
-	STORE_KEY_SMTC_ENABLED,
-	STORE_KEY_SMTC_IMPL,
-} from "./keys";
+import { STORE_KEY_SMTC_ENABLED } from "./keys";
 import { SMTCRustBackend } from "./Receivers/smtc-rust";
-import type { BaseProvider } from "./SongInfoProviders/BaseProvider";
 import { ReactStoreProvider } from "./SongInfoProviders/ReactStoreProvider";
 
 const configElement = document.createElement("div");
 
-plugin.onLoad((selfPlugin) => {
+plugin.onLoad((selfPlugin: NCMPlugin) => {
 	console.log("[InfLink] 插件正在加载...", selfPlugin);
 	console.log("[InfLink] 插件路径:", plugin.pluginPath);
 
@@ -39,48 +28,32 @@ plugin.onLoad((selfPlugin) => {
 });
 
 function Main() {
-	const [_smtcImpl, setSmtcImpl] = useLocalStorage<"rust">(
-		STORE_KEY_SMTC_IMPL,
-		"rust",
-	);
-
 	const [SMTCEnabled, setSMTCEnabled] = useLocalStorage(
 		STORE_KEY_SMTC_ENABLED,
 		true,
 	);
 
-	const [infoProviderName, setInfoProviderName] = useLocalStorage(
-		STORE_KEY_INFO_PROVIDER,
-		"reactstore",
-	);
-
-	const [InfoProvider, setInfoProvider] = React.useState<BaseProvider | null>(
-		null,
-	);
+	const [infoProvider, setInfoProvider] =
+		React.useState<ReactStoreProvider | null>(null);
 
 	const smtcImplObj = SMTCRustBackend;
 
 	React.useEffect(() => {
-		let provider: BaseProvider | null = null;
-		if (infoProviderName === "reactstore") {
-			provider = new ReactStoreProvider();
-		}
-
+		const provider = new ReactStoreProvider();
 		setInfoProvider(provider);
 
 		return () => {
-			if (provider) {
-				provider.disabled = true;
-				provider.dispatchEvent(new CustomEvent("disable"));
-				if ("dispose" in provider && typeof provider.dispose === "function") {
-					provider.dispose();
-				}
+			provider.disabled = true;
+			provider.dispatchEvent(new CustomEvent("disable"));
+			if ("dispose" in provider && typeof provider.dispose === "function") {
+				provider.dispose();
 			}
 		};
-	}, [infoProviderName]);
+	}, []);
 
+	// 设置 Provider 和 SMTC 后端之间的连接
 	React.useEffect(() => {
-		if (!InfoProvider) {
+		if (!infoProvider) {
 			return;
 		}
 
@@ -88,14 +61,12 @@ function Main() {
 
 		const setupConnections = async () => {
 			if (!SMTCEnabled) {
-				SMTCRustBackend.disable();
+				smtcImplObj.disable();
 				return;
 			}
 
-			if (InfoProvider instanceof ReactStoreProvider) {
-				console.log("[InfLink] 等待 ReactStoreProvider 就绪...");
-				await InfoProvider.ready;
-			}
+			console.log("[InfLink] 等待 ReactStoreProvider 就绪...");
+			await infoProvider.ready;
 
 			const onUpdateSongInfo = (e: CustomEvent) => smtcImplObj.update(e.detail);
 			const onUpdatePlayState = (e: CustomEvent) =>
@@ -103,43 +74,35 @@ function Main() {
 			const onUpdateTimeline = (e: CustomEvent) =>
 				smtcImplObj.updateTimeline(e.detail);
 
-			InfoProvider.addEventListener("updateSongInfo", onUpdateSongInfo);
-			InfoProvider.addEventListener("updatePlayState", onUpdatePlayState);
-			InfoProvider.addEventListener("updateTimeline", onUpdateTimeline);
+			infoProvider.addEventListener("updateSongInfo", onUpdateSongInfo);
+			infoProvider.addEventListener("updatePlayState", onUpdatePlayState);
+			infoProvider.addEventListener("updateTimeline", onUpdateTimeline);
 
-			if (InfoProvider instanceof ReactStoreProvider) {
-				InfoProvider.onPlayModeChange = (detail) => {
-					smtcImplObj.updatePlayMode(detail);
-				};
-			}
+			infoProvider.onPlayModeChange = (detail) => {
+				smtcImplObj.updatePlayMode(detail);
+			};
 
 			smtcImplObj.apply(
 				// 处理从后端来的控制命令
 				(msg) => {
-					InfoProvider.dispatchEvent(
+					infoProvider.dispatchEvent(
 						new CustomEvent("control", { detail: msg }),
 					);
 				},
 				// 连接成功后执行的回调
 				() => {
-					if (InfoProvider instanceof ReactStoreProvider) {
-						InfoProvider.forceDispatchFullState();
-					}
+					infoProvider.forceDispatchFullState();
 				},
 			);
 
-			if (InfoProvider instanceof ReactStoreProvider) {
-				InfoProvider.forceDispatchFullState();
-			}
+			infoProvider.forceDispatchFullState();
 
 			cleanup = () => {
 				console.log("[InfLink] 清理连接和事件监听...");
-				InfoProvider.removeEventListener("updateSongInfo", onUpdateSongInfo);
-				InfoProvider.removeEventListener("updatePlayState", onUpdatePlayState);
-				InfoProvider.removeEventListener("updateTimeline", onUpdateTimeline);
-				if (InfoProvider instanceof ReactStoreProvider) {
-					InfoProvider.onPlayModeChange = null;
-				}
+				infoProvider.removeEventListener("updateSongInfo", onUpdateSongInfo);
+				infoProvider.removeEventListener("updatePlayState", onUpdatePlayState);
+				infoProvider.removeEventListener("updateTimeline", onUpdateTimeline);
+				infoProvider.onPlayModeChange = null;
 				smtcImplObj.disable();
 			};
 		};
@@ -149,50 +112,23 @@ function Main() {
 		return () => {
 			cleanup();
 		};
-	}, [InfoProvider, SMTCEnabled, smtcImplObj]);
+	}, [infoProvider, SMTCEnabled, smtcImplObj]);
 
 	return (
 		<div>
+			<Typography variant="h6" gutterBottom>
+				InfLink-rs 设置
+			</Typography>
 			<FormGroup>
-				<FormLabel>信息源</FormLabel>
-				<RadioGroup
-					row
-					defaultValue={infoProviderName}
-					onChange={(_, v) => setInfoProviderName(v)}
-					name="infoprovider"
-				>
-					<FormControlLabel
-						value="reactstore"
-						control={<Radio />}
-						label="React Store"
-					/>
-				</RadioGroup>
-
-				<div>
-					<FormControlLabel
-						control={
-							<Switch
-								checked={SMTCEnabled}
-								onChange={(_e, checked) => setSMTCEnabled(checked)}
-							/>
-						}
-						label="开启 SMTC"
-					/>
-				</div>
-
-				{SMTCEnabled ? (
-					<div>
-						<FormLabel>SMTC 实现</FormLabel>
-						<RadioGroup
-							row
-							value="rust"
-							onChange={(_, _v) => setSmtcImpl("rust")}
-							name="smtcImpl"
-						>
-							<FormControlLabel value="rust" control={<Radio />} label="Rust" />
-						</RadioGroup>
-					</div>
-				) : null}
+				<FormControlLabel
+					control={
+						<Switch
+							checked={SMTCEnabled}
+							onChange={(_e, checked) => setSMTCEnabled(checked)}
+						/>
+					}
+					label="启用 SMTC 支持"
+				/>
 			</FormGroup>
 		</div>
 	);
