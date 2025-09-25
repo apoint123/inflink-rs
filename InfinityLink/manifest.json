@@ -1,12 +1,10 @@
 {
 	"manifest_version": 1,
-	"name": "InfLink",
-	"version": "1.1.1",
-	"author": "MicroBlock",
-	"description": "连接各种歌曲信息协议\n目前：SMTC（Windows自带）, Discord Rich Presence",
-	"preview": "preview.png",
-	"betterncm_version": ">=1.0.0",
+	"name": "InfLink-rs",
+	"version": "1.0.0",
+	"author": "apoint123",
 	"ncm3-compatible": true,
+	"description": "SMTC integration using a standalone Rust executable.",
 	"injects": {
 		"Main": [
 			{

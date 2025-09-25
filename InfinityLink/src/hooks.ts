@@ -1,40 +1,34 @@
 import { useState } from "react";
 
 export function useLocalStorage<T>(
-    key: string,
-    initialValue: T,
-    parse: (string:string) => T = JSON.parse,
-    stringify: (value:T) => string = JSON.stringify,
+	key: string,
+	initialValue: T,
+	parse: (string: string) => T = JSON.parse,
+	stringify: (value: T) => string = JSON.stringify,
 ): [T, (value: T | ((prevValue: T) => T)) => void] {
-    const [storedValue, setStoredValue] = useState(() => {
-        try {
-            const item = window.localStorage.getItem(key);
-            return item ? parse(item) : initialValue;
-        } catch (error) {
-            console.log(error);
-            return initialValue;
-        }
-    });
+	const [storedValue, setStoredValue] = useState(() => {
+		try {
+			const item = window.localStorage.getItem(key);
+			return item ? parse(item) : initialValue;
+		} catch (error) {
+			console.log(error);
+			return initialValue;
+		}
+	});
 
-    const setValue = (value: T | ((prevValue: T) => T)) => {
-        try {
-            const valueToStore =
-                value instanceof Function ? value(storedValue) : value;
-            setStoredValue(valueToStore);
-            window.localStorage.setItem(key, stringify(valueToStore));
-        } catch (error) {
-            console.log(error);
-        }
-    };
+	const setValue = (value: T | ((prevValue: T) => T)) => {
+		try {
+			const valueToStore =
+				value instanceof Function ? value(storedValue) : value;
+			setStoredValue(valueToStore);
+			window.localStorage.setItem(key, stringify(valueToStore));
+		} catch (error) {
+			console.log(error);
+		}
+	};
 
-    return [storedValue, setValue];
+	return [storedValue, setValue];
 }
-
-
-
-
-
-
 
 const cachedFunctionMap: Map<string, Function> = new Map();
 
@@ -59,5 +53,5 @@ export function callCachedSearchFunction<F extends (...args: any[]) => any>(
 }
 
 export function getPlayingSong() {
-    return callCachedSearchFunction("getPlaying", []);
+	return callCachedSearchFunction("getPlaying", []);
 }

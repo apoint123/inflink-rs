@@ -10,3 +10,4 @@ InfLink.dll.pdb
 *.log
 Debug
 Release
+**/dist/

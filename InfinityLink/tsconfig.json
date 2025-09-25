@@ -1,21 +1,28 @@
 {
-    "include": [
-        "./src/**/*.ts",
-        "./src/**/*.tsx",
-        "./*.css"
-    ],
-    "compilerOptions": {
-        "target": "ESNext",
-        "lib": [
-            "ESNext",
-            "DOM"
-        ],
-        "types": [],
-        "jsx": "react",
-        "jsxFactory": "h",
-        "jsxFragmentFactory": "f",
-        "moduleResolution": "node",
-        "strictNullChecks": true,
-        "allowJs": false
-    }
+	"include": ["./src/**/*.ts", "./src/**/*.tsx"],
+	"compilerOptions": {
+		"baseUrl": "./",
+		"strict": true,
+		"strictNullChecks": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"noImplicitOverride": true,
+		"noFallthroughCasesInSwitch": true,
+		"forceConsistentCasingInFileNames": true,
+
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"resolveJsonModule": true,
+		"allowImportingTsExtensions": true,
+		"noEmit": true,
+
+		"target": "ESNext",
+		"lib": ["ESNext", "DOM", "DOM.Iterable"],
+		"jsx": "react-jsx",
+
+		"esModuleInterop": true,
+		"allowSyntheticDefaultImports": true,
+
+		"skipLibCheck": true
+	}
 }

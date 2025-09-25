@@ -12,22 +12,16 @@ import {
 	Switch,
 } from "@mui/material";
 import * as React from "react";
-import { render } from "react-dom";
-
-import "./index.scss";
+import { createRoot } from "react-dom/client";
 
 import { useLocalStorage } from "./hooks";
 import {
-	STORE_KEY_DCRPC_ENABLED,
 	STORE_KEY_INFO_PROVIDER,
 	STORE_KEY_SMTC_ENABLED,
 	STORE_KEY_SMTC_IMPL,
 } from "./keys";
-import { DCRPC } from "./Receivers/dc-rpc";
 import { SMTCRustBackend } from "./Receivers/smtc-rust";
 import type { BaseProvider } from "./SongInfoProviders/BaseProvider";
-import { DOMProvider } from "./SongInfoProviders/DOMProvider";
-import { NativeProvider } from "./SongInfoProviders/NativeProvider";
 import { ReactStoreProvider } from "./SongInfoProviders/ReactStoreProvider";
 
 const configElement = document.createElement("div");
@@ -37,7 +31,7 @@ plugin.onLoad((selfPlugin) => {
 	console.log("[InfLink] 插件路径:", plugin.pluginPath);
 
 	try {
-		render(<Main />, configElement);
+		createRoot(configElement).render(<Main />);
 		console.log("[InfLink] React 组件渲染成功");
 	} catch (error) {
 		console.error("[InfLink] React 组件渲染失败:", error);
@@ -45,18 +39,14 @@ plugin.onLoad((selfPlugin) => {
 });
 
 function Main() {
-	const [_smtcImpl, setSmtcImpl] = useLocalStorage<
-		"native" | "frontend" | "rust"
-	>(STORE_KEY_SMTC_IMPL, "rust");
+	const [_smtcImpl, setSmtcImpl] = useLocalStorage<"rust">(
+		STORE_KEY_SMTC_IMPL,
+		"rust",
+	);
 
 	const [SMTCEnabled, setSMTCEnabled] = useLocalStorage(
 		STORE_KEY_SMTC_ENABLED,
 		true,
-	);
-
-	const [DCRPCEnabled, setDCRPCEnabled] = useLocalStorage(
-		STORE_KEY_DCRPC_ENABLED,
-		false,
 	);
 
 	const [infoProviderName, setInfoProviderName] = useLocalStorage(
@@ -71,23 +61,22 @@ function Main() {
 	const smtcImplObj = SMTCRustBackend;
 
 	React.useEffect(() => {
-		if (InfoProvider) {
-			InfoProvider.disabled = true;
-			InfoProvider.dispatchEvent(new CustomEvent("disable"));
-			if (
-				"dispose" in InfoProvider &&
-				typeof InfoProvider.dispose === "function"
-			) {
-				InfoProvider.dispose();
-			}
+		let provider: BaseProvider | null = null;
+		if (infoProviderName === "reactstore") {
+			provider = new ReactStoreProvider();
 		}
 
-		let provider: BaseProvider | null = null;
-		if (infoProviderName === "dom") provider = new DOMProvider();
-		if (infoProviderName === "native") provider = new NativeProvider();
-		if (infoProviderName === "reactstore") provider = new ReactStoreProvider();
-
 		setInfoProvider(provider);
+
+		return () => {
+			if (provider) {
+				provider.disabled = true;
+				provider.dispatchEvent(new CustomEvent("disable"));
+				if ("dispose" in provider && typeof provider.dispose === "function") {
+					provider.dispose();
+				}
+			}
+		};
 	}, [infoProviderName]);
 
 	React.useEffect(() => {
@@ -162,12 +151,6 @@ function Main() {
 		};
 	}, [InfoProvider, SMTCEnabled, smtcImplObj]);
 
-	React.useEffect(() => {
-		if (DCRPCEnabled) {
-			DCRPC.apply();
-		}
-	}, [DCRPCEnabled]);
-
 	return (
 		<div>
 			<FormGroup>
@@ -178,12 +161,6 @@ function Main() {
 					onChange={(_, v) => setInfoProviderName(v)}
 					name="infoprovider"
 				>
-					<FormControlLabel value="dom" control={<Radio />} label="DOM" />
-					<FormControlLabel
-						value="native"
-						control={<Radio />}
-						label="原生 (3.0.0 不可用)"
-					/>
 					<FormControlLabel
 						value="reactstore"
 						control={<Radio />}
@@ -200,16 +177,6 @@ function Main() {
 							/>
 						}
 						label="开启 SMTC"
-					/>
-
-					<FormControlLabel
-						control={
-							<Switch
-								checked={DCRPCEnabled}
-								onChange={(_e, checked) => setDCRPCEnabled(checked)}
-							/>
-						}
-						label="开启 Discord RPC"
 					/>
 				</div>
 

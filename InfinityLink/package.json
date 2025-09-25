@@ -1,29 +1,30 @@
 {
-  "name": "betterncm-plugin-template",
-  "version": "1.0.0",
-  "main": "index.js",
-  "license": "MIT",
-  "scripts": {
-    "build": "node ./build.js",
-    "build:dev": "node ./build.js --dev"
-  },
-  "dependencies": {
-    "@emotion/react": "^11.11.1",
-    "@emotion/styled": "^11.11.0",
-    "@mui/material": "^5.11.4",
-    "@types/react": "^18.0.26",
-    "@types/react-dom": "^18.0.9",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-icons": "^4.7.1",
-    "typescript": "^4.9.4"
-  },
-  "devDependencies": {
-    "@types/less": "^3.0.3",
-    "@types/react-icons": "^3.0.0",
-    "esbuild": "^0.16.1",
-    "esbuild-sass-plugin": "^2.4.5",
-    "esbuild-stylus-loader": "^0.4.2"
-  },
-  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+	"name": "betterncm-plugin-template",
+	"version": "1.0.0",
+	"main": "index.js",
+	"license": "MIT",
+	"scripts": {
+		"build": "vite build",
+		"build:dev": "vite build --mode development --watch"
+	},
+	"dependencies": {
+		"@emotion/react": "^11.14.0",
+		"@emotion/styled": "^11.14.1",
+		"@mui/material": "^7.3.2",
+		"@types/react": "^19.1.13",
+		"@types/react-dom": "^19.1.9",
+		"react": "^19.1.1",
+		"react-dom": "^19.1.1",
+		"react-icons": "^5.5.0",
+		"typescript": "^5.9.2"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.2.4",
+		"@types/less": "^3.0.8",
+		"@types/node": "^24.5.2",
+		"@vitejs/plugin-react": "^5.0.3",
+		"sass": "^1.93.2",
+		"vite": "^7.1.7"
+	},
+	"packageManager": "pnpm@10.17.1"
 }
