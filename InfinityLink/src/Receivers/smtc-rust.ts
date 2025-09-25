@@ -3,58 +3,12 @@
  * 通过WebSocket与Rust后端通信来控制Windows SMTC
  */
 
-interface SongInfo {
-	songName: string;
-	albumName: string;
-	authorName: string;
-	thumbnail_base64: string;
-}
-
-interface TimelineInfo {
-	currentTime: number;
-	totalTime: number;
-}
-
-type ControlMessage =
-	| {
-			type:
-				| "Pause"
-				| "Play"
-				| "PreviousSong"
-				| "NextSong"
-				| "ToggleShuffle"
-				| "ToggleRepeat";
-	  }
-	| { type: "Seek"; position: number };
-
-type CommandData =
-	| {
-			command: "UpdateMetadata";
-			data: {
-				title: string;
-				artist: string;
-				album: string;
-				thumbnail_base64: string;
-			};
-	  }
-	| {
-			command: "UpdateTimeline";
-			data: {
-				current: number;
-				total: number;
-			};
-	  }
-	| {
-			command: "UpdateStatus";
-			data: 3 | 4;
-	  }
-	| {
-			command: "UpdatePlayMode";
-			data: {
-				is_shuffling: boolean;
-				repeat_mode: string;
-			};
-	  };
+import type {
+	CommandData,
+	ControlMessage,
+	SongInfo,
+	TimelineInfo,
+} from "src/types/smtc";
 
 export class SMTCRust {
 	private ws: WebSocket | null = null;
@@ -62,7 +16,6 @@ export class SMTCRust {
 	private reconnectTimer: number | null = null;
 	private isEnabled = false;
 	private messageCallback: ((msg: ControlMessage) => void) | null = null;
-	private backendStarted = false;
 	private connectionAttempts = 0;
 	private readonly MAX_RECONNECT_ATTEMPTS = 10;
 	private pendingCommands: CommandData[] = [];
@@ -249,7 +202,7 @@ export class SMTCRust {
 		}
 	}
 
-	apply(postMsg: (msg: ControlMessage) => any, onConnect?: () => void) {
+	apply(postMsg: (msg: ControlMessage) => void, onConnect?: () => void) {
 		console.log("[InfLink-Rust] 正在应用后端...");
 		this.isEnabled = true;
 		this.messageCallback = postMsg;
