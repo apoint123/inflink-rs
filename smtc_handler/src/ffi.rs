@@ -48,11 +48,11 @@ pub struct PluginAPI {
     pub ncm_version: *const [u16; 3],
 }
 
-unsafe fn c_char_to_str<'a>(s: *const c_char) -> &'a str {
+unsafe fn c_char_to_string(s: *const c_char) -> String {
     if s.is_null() {
-        return "";
+        return String::new();
     }
-    unsafe { CStr::from_ptr(s).to_str().unwrap_or("") }
+    unsafe { CStr::from_ptr(s).to_string_lossy().into_owned() }
 }
 
 #[unsafe(no_mangle)]
@@ -73,54 +73,107 @@ pub unsafe extern "C" fn inflink_shutdown(_args: *mut *mut c_void) -> *mut c_cha
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn inflink_poll_events(_args: *mut *mut c_void) -> *mut c_char {
-    if let Some(events_json) = smtc_core::poll_events() {
-        CString::new(events_json).unwrap().into_raw()
-    } else {
-        ptr::null_mut()
-    }
+    smtc_core::poll_events() as *mut c_char
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn inflink_update_play_state(args: *mut *mut c_void) -> *mut c_char {
-    let status_code = unsafe { **(args.cast::<*mut i32>()) };
-    if let Err(e) = smtc_core::update_play_state(status_code) {
-        log::error!("[InfLink-rs] 更新播放状态失败: {}", e);
+    if args.is_null() {
+        log::error!("[InfLink-rs] update_play_state 收到了空指针");
+        return ptr::null_mut();
     }
+    unsafe {
+        let status_ptr = *args.add(0);
+        if status_ptr.is_null() {
+            log::error!("[InfLink-rs] update_play_state 收到了空指针");
+            return ptr::null_mut();
+        }
+
+        let status_code = *status_ptr.cast::<i32>();
+        if let Err(e) = smtc_core::update_play_state(status_code) {
+            log::error!("[InfLink-rs] 更新播放状态失败: {}", e);
+        }
+    }
+
     ptr::null_mut()
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn inflink_update_timeline(args: *mut *mut c_void) -> *mut c_char {
-    let args_arr = args.cast::<*mut f64>();
-    let current_ms = unsafe { **args_arr };
-    let total_ms = unsafe { **(args_arr.add(1)) };
-    if let Err(e) = smtc_core::update_timeline(current_ms, total_ms) {
-        log::error!("[InfLink-rs] 更新时间线失败: {}", e);
+    if args.is_null() {
+        log::error!("[InfLink-rs] update_timeline 收到了空指针");
+        return ptr::null_mut();
+    }
+
+    unsafe {
+        let current_ms_ptr = *args.add(0);
+        let total_ms_ptr = *args.add(1);
+        if current_ms_ptr.is_null() || total_ms_ptr.is_null() {
+            log::error!("[InfLink-rs] update_timeline 收到了空指针");
+            return ptr::null_mut();
+        }
+
+        let current_ms = *current_ms_ptr.cast::<f64>();
+        let total_ms = *total_ms_ptr.cast::<f64>();
+        if let Err(e) = smtc_core::update_timeline(current_ms, total_ms) {
+            log::error!("[InfLink-rs] 更新时间线失败: {}", e);
+        }
     }
     ptr::null_mut()
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn inflink_update_play_mode(args: *mut *mut c_void) -> *mut c_char {
-    let is_shuffling = unsafe { **(args.cast::<*mut bool>()) };
-    let repeat_mode_ptr = unsafe { *(args.add(1)).cast::<*const c_char>() };
-    let repeat_mode = unsafe { c_char_to_str(repeat_mode_ptr) };
-    if let Err(e) = smtc_core::update_play_mode(is_shuffling, repeat_mode) {
-        log::error!("[InfLink-rs] 更新播放模式失败: {}", e);
+    if args.is_null() {
+        log::error!("[InfLink-rs] update_play_mode 收到了空指针");
+        return ptr::null_mut();
+    }
+
+    unsafe {
+        let is_shuffling_ptr = *args.add(0);
+        let repeat_mode_ptr = *args.add(1);
+        if is_shuffling_ptr.is_null() || repeat_mode_ptr.is_null() {
+            log::error!("[InfLink-rs] update_play_mode 收到了空指针");
+            return ptr::null_mut();
+        }
+
+        let is_shuffling = *is_shuffling_ptr.cast::<bool>();
+        let repeat_mode = c_char_to_string(repeat_mode_ptr.cast::<c_char>());
+        if let Err(e) = smtc_core::update_play_mode(is_shuffling, &repeat_mode) {
+            log::error!("[InfLink-rs] 更新播放模式失败: {}", e);
+        }
     }
     ptr::null_mut()
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn inflink_update_metadata(args: *mut *mut c_void) -> *mut c_char {
-    let args_arr = args.cast::<*const c_char>();
-    let title = unsafe { c_char_to_str(*args_arr) };
-    let artist = unsafe { c_char_to_str(*(args_arr.add(1))) };
-    let album = unsafe { c_char_to_str(*(args_arr.add(2))) };
-    let thumbnail = unsafe { c_char_to_str(*(args_arr.add(3))) };
+    if args.is_null() {
+        log::error!("[InfLink-rs] update_metadata 收到了空指针");
+        return ptr::null_mut();
+    }
+    unsafe {
+        let title_ptr = *args.add(0);
+        let artist_ptr = *args.add(1);
+        let album_ptr = *args.add(2);
+        let thumbnail_ptr = *args.add(3);
+        if title_ptr.is_null()
+            || artist_ptr.is_null()
+            || album_ptr.is_null()
+            || thumbnail_ptr.is_null()
+        {
+            log::error!("[InfLink-rs] update_metadata 收到了空指针");
+            return ptr::null_mut();
+        }
 
-    if let Err(e) = smtc_core::update_metadata(title, artist, album, thumbnail) {
-        log::error!("[InfLink-rs] 更新元数据失败: {}", e);
+        let title = c_char_to_string(title_ptr.cast::<c_char>());
+        let artist = c_char_to_string(artist_ptr.cast::<c_char>());
+        let album = c_char_to_string(album_ptr.cast::<c_char>());
+        let thumbnail = c_char_to_string(thumbnail_ptr.cast::<c_char>());
+
+        if let Err(e) = smtc_core::update_metadata(&title, &artist, &album, &thumbnail) {
+            log::error!("[InfLink-rs] 更新元数据失败: {}", e);
+        }
     }
     ptr::null_mut()
 }
@@ -139,45 +192,56 @@ pub unsafe extern "C" fn BetterNCMPluginMain(api: *mut PluginAPI) -> c_int {
         log::info!("[InfLink-rs] 正在注册 API...");
         let add_api = api.add_native_api;
 
-        let id_init = CString::new("inflink.initialize").unwrap();
-        add_api(ptr::null(), 0, id_init.as_ptr(), inflink_initialize);
+        macro_rules! register_api {
+            ($id:expr, $args:expr, $func:ident) => {
+                let identifier = match CString::new($id) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        log::error!("[InfLink-rs] 无法创建 CString '{}': {}", $id, e);
+                        return -1;
+                    }
+                };
+                add_api(
+                    $args.as_ptr(),
+                    $args.len() as c_int,
+                    identifier.as_ptr(),
+                    $func,
+                );
+            };
+            ($id:expr, $func:ident) => {
+                let identifier = match CString::new($id) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        log::error!("[InfLink-rs] 无法创建 CString '{}': {}", $id, e);
+                        return -1;
+                    }
+                };
+                add_api(ptr::null(), 0, identifier.as_ptr(), $func);
+            };
+        }
 
-        let id_shutdown = CString::new("inflink.shutdown").unwrap();
-        add_api(ptr::null(), 0, id_shutdown.as_ptr(), inflink_shutdown);
-
-        let id_poll = CString::new("inflink.poll_events").unwrap();
-        add_api(ptr::null(), 0, id_poll.as_ptr(), inflink_poll_events);
-
-        let id_state = CString::new("inflink.update_play_state").unwrap();
-        add_api(
-            STATE_ARGS.as_ptr(),
-            1,
-            id_state.as_ptr(),
-            inflink_update_play_state,
+        register_api!("inflink.initialize", inflink_initialize);
+        register_api!("inflink.shutdown", inflink_shutdown);
+        register_api!("inflink.poll_events", inflink_poll_events);
+        register_api!(
+            "inflink.update_play_state",
+            STATE_ARGS,
+            inflink_update_play_state
         );
-
-        let id_timeline = CString::new("inflink.update_timeline").unwrap();
-        add_api(
-            TIMELINE_ARGS.as_ptr(),
-            2,
-            id_timeline.as_ptr(),
-            inflink_update_timeline,
+        register_api!(
+            "inflink.update_timeline",
+            TIMELINE_ARGS,
+            inflink_update_timeline
         );
-
-        let id_play_mode = CString::new("inflink.update_play_mode").unwrap();
-        add_api(
-            PLAY_MODE_ARGS.as_ptr(),
-            2,
-            id_play_mode.as_ptr(),
-            inflink_update_play_mode,
+        register_api!(
+            "inflink.update_play_mode",
+            PLAY_MODE_ARGS,
+            inflink_update_play_mode
         );
-
-        let id_metadata = CString::new("inflink.update_metadata").unwrap();
-        add_api(
-            METADATA_ARGS.as_ptr(),
-            4,
-            id_metadata.as_ptr(),
-            inflink_update_metadata,
+        register_api!(
+            "inflink.update_metadata",
+            METADATA_ARGS,
+            inflink_update_metadata
         );
     }
     0

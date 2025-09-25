@@ -1,5 +1,6 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::Serialize;
+use std::ffi::{CString, c_char};
 use std::sync::{LazyLock, Mutex};
 use windows::{
     Foundation::{TimeSpan, TypedEventHandler},
@@ -37,6 +38,9 @@ static MEDIA_PLAYER: LazyLock<Mutex<MediaPlayer>> = LazyLock::new(|| {
 });
 
 static EVENT_QUEUE: LazyLock<Mutex<Vec<SmtcEvent>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+
+static JSON_BUFFER: LazyLock<Mutex<CString>> =
+    LazyLock::new(|| Mutex::new(CString::new("").unwrap()));
 
 pub fn initialize() -> WinResult<()> {
     let player = MEDIA_PLAYER.lock().unwrap();
@@ -116,14 +120,25 @@ pub fn shutdown() -> WinResult<()> {
     Ok(())
 }
 
-pub fn poll_events() -> Option<String> {
+pub fn poll_events() -> *const c_char {
     let mut queue = EVENT_QUEUE.lock().unwrap();
     if queue.is_empty() {
-        None
-    } else {
-        let result = serde_json::to_string(&*queue).ok();
-        queue.clear();
-        result
+        return std::ptr::null();
+    }
+
+    let events_json = match serde_json::to_string(&*queue) {
+        Ok(json) => json,
+        Err(_) => return std::ptr::null(),
+    };
+    queue.clear();
+
+    match CString::new(events_json) {
+        Ok(c_string) => {
+            let mut buffer_guard = JSON_BUFFER.lock().unwrap();
+            *buffer_guard = c_string;
+            buffer_guard.as_ptr()
+        }
+        Err(_) => std::ptr::null(),
     }
 }
 
