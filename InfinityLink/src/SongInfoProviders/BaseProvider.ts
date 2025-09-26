@@ -1,47 +1,50 @@
+import mitt, { type Emitter } from "mitt";
 import type { ControlMessage, SongInfo, TimelineInfo } from "../types/smtc";
 
 export type PlayState = "Playing" | "Paused";
 
-interface ProviderEventMap {
+type ProviderEventMap = {
 	updateSongInfo: CustomEvent<SongInfo>;
 	updatePlayState: CustomEvent<PlayState>;
 	updateTimeline: CustomEvent<TimelineInfo>;
 	control: CustomEvent<ControlMessage>;
 	disable: CustomEvent<void>;
-}
+};
 
-// biome-ignore lint/suspicious/noUnsafeDeclarationMerging: EventTarget 提供了 addEventListener 和 removeEventListener 的实现，这里只是扩充了以下类型
-export class BaseProvider extends EventTarget {
-	disabled = false;
+export class BaseProvider {
+	private readonly emitter: Emitter<ProviderEventMap>;
 
-	override dispatchEvent(event: Event): boolean {
-		if (this.disabled) return false;
-		return super.dispatchEvent(event);
+	public disabled = false;
+
+	constructor() {
+		this.emitter = mitt<ProviderEventMap>();
 	}
 
-	dispose() {}
-}
-
-export interface BaseProvider {
-	addEventListener<K extends keyof ProviderEventMap>(
+	public addEventListener<K extends keyof ProviderEventMap>(
 		type: K,
-		listener: (this: BaseProvider, ev: ProviderEventMap[K]) => void,
-		options?: boolean | AddEventListenerOptions,
-	): void;
-	addEventListener(
-		type: string,
-		listener: EventListenerOrEventListenerObject,
-		options?: boolean | AddEventListenerOptions,
-	): void;
+		listener: (ev: ProviderEventMap[K]) => void,
+	): void {
+		this.emitter.on(type, listener);
+	}
 
-	removeEventListener<K extends keyof ProviderEventMap>(
+	public removeEventListener<K extends keyof ProviderEventMap>(
 		type: K,
-		listener: (this: BaseProvider, ev: ProviderEventMap[K]) => void,
-		options?: boolean | EventListenerOptions,
-	): void;
-	removeEventListener(
-		type: string,
-		listener: EventListenerOrEventListenerObject,
-		options?: boolean | EventListenerOptions,
-	): void;
+		listener: (ev: ProviderEventMap[K]) => void,
+	): void {
+		this.emitter.off(type, listener);
+	}
+
+	public dispatchEvent(event: Event): boolean {
+		if (this.disabled) return false;
+
+		const type = event.type as keyof ProviderEventMap;
+		this.emitter.emit(type, event as ProviderEventMap[typeof type]);
+
+		return true;
+	}
+
+	public dispose(): void {
+		this.emitter.all.clear();
+		console.log("[BaseProvider] Disposed.");
+	}
 }
