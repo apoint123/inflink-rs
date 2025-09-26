@@ -1,4 +1,4 @@
 [workspace]
-members = ["smtc_handler", "cef-bindings"]
+members = ["smtc_handler", "cef-safe"]
 
 resolver = "3"

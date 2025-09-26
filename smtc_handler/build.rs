@@ -6,5 +6,5 @@ fn main() {
     let libcef_path = binding.to_string_lossy();
 
     println!("cargo:rustc-link-search={libcef_path}");
-    println!("cargo:rustc-link-lib=libcef");
+    println!("cargo:rustc-link-lib=libcef_x64");
 }

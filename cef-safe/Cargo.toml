@@ -1,0 +1,22 @@
+[package]
+name = "cef-safe"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+cef-sys = { path = "cef-sys" }
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+
+cast_possible_wrap = "allow"
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+cast_precision_loss = "allow"
+
+items_after_statements = "allow"
+missing_errors_doc = "allow"
+future_not_send = "allow"
+ignore_without_reason = "allow"
+missing_panics_doc = "allow"

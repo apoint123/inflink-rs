@@ -1,5 +1,6 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use cef_bindings::{CefBaseRefCounted, CefV8Context, CefV8Value, renderer_post_task_in_v8_ctx};
+use cef_safe::{CefV8Context, CefV8Value, renderer_post_task_in_v8_ctx};
+use log::error;
 use serde::Serialize;
 use std::sync::{LazyLock, Mutex};
 use windows::{
@@ -19,9 +20,9 @@ use windows::{
 struct SmtcCallback {
     v8_context: CefV8Context,
     v8_function: CefV8Value,
-    _v8_function_ref: CefBaseRefCounted,
 }
-
+// Safety: 我们目前只是把 CefRefPtr 发送到下面的 EVENT_CALLBACK
+// renderer_post_task_in_v8_ctx 确保了对这些对象的操作会在相同的线程上执行
 unsafe impl Send for SmtcCallback {}
 
 static EVENT_CALLBACK: LazyLock<Mutex<Option<SmtcCallback>>> = LazyLock::new(|| Mutex::new(None));
@@ -38,56 +39,65 @@ enum SmtcEvent {
     Seek { position_ms: f64 },
 }
 
-pub fn register_event_callback(v8_func_ptr: *mut cef_bindings::sys::cef_v8value_t) {
-    unsafe {
-        let v8_function = CefV8Value::from_raw(v8_func_ptr);
-        let v8_context = CefV8Context::current();
-
-        let base_ref = CefBaseRefCounted::from_raw(v8_func_ptr as _);
-        base_ref.add_ref();
-
-        let callback = SmtcCallback {
+pub fn register_event_callback(v8_func_ptr: *mut cef_safe::cef_sys::_cef_v8value_t) {
+    let callback = unsafe { CefV8Value::from_raw(v8_func_ptr) }.and_then(|v8_function| {
+        CefV8Context::current().map(|v8_context| SmtcCallback {
+            v8_function: v8_function.clone(),
             v8_context,
-            v8_function,
-            _v8_function_ref: base_ref,
-        };
+        })
+    });
 
-        *EVENT_CALLBACK.lock().unwrap() = Some(callback);
-        log::info!("[InfLink-rs] 事件回调注册成功");
+    if callback.is_some() {
+        *EVENT_CALLBACK.lock().unwrap() = callback;
     }
 }
 
 pub fn unregister_event_callback() {
-    if EVENT_CALLBACK.lock().unwrap().take().is_some() {
-        log::info!("[InfLink-rs] 事件回调已注销");
-    }
+    EVENT_CALLBACK.lock().unwrap().take();
 }
 
 fn dispatch_event(event: SmtcEvent) {
-    if let Some(callback) = EVENT_CALLBACK.lock().unwrap().as_ref() {
-        let event_json = serde_json::to_string(&event).unwrap();
+    let event_json = match serde_json::to_string(&event) {
+        Ok(json) => json,
+        Err(e) => {
+            error!("反序列化SMTC事件失败: {}", e);
+            return;
+        }
+    };
 
-        let context_ptr = callback.v8_context.0;
-        let function_ptr = callback.v8_function.0;
+    let maybe_context = match EVENT_CALLBACK.lock() {
+        Ok(guard) => guard.as_ref().map(|cb| cb.v8_context.clone()),
+        Err(_) => {
+            error!("SMTC 事件回调锁毒化");
+            return;
+        }
+    };
 
-        let context_addr = context_ptr as usize;
-        let function_addr = function_ptr as usize;
+    if let Some(context) = maybe_context {
+        let success = unsafe {
+            renderer_post_task_in_v8_ctx(context, move || {
+                let guard = match EVENT_CALLBACK.lock() {
+                    Ok(g) => g,
+                    Err(_) => {
+                        error!("SMTC 事件回调锁在任务中毒化");
+                        return;
+                    }
+                };
 
-        renderer_post_task_in_v8_ctx(context_ptr, move || unsafe {
-            let func_ptr = function_addr as *mut cef_bindings::sys::cef_v8value_t;
-            let ctx_ptr = context_addr as *mut cef_bindings::sys::cef_v8context_t;
-
-            let func = CefV8Value::from_raw(func_ptr);
-            let ctx = CefV8Context(ctx_ptr);
-
-            let v8_context = ctx.0.as_mut().unwrap();
-            (v8_context.enter.unwrap())(v8_context);
-
-            let arg = CefV8Value::try_from(event_json.as_str()).unwrap();
-            func.execute_function(None, &[arg]);
-
-            (v8_context.exit.unwrap())(v8_context);
-        });
+                if let Some(callback) = guard.as_ref()
+                    && let Some(arg) = CefV8Value::try_from_str(&event_json)
+                    && callback
+                        .v8_function
+                        .execute_function(None, vec![arg])
+                        .is_none()
+                {
+                    error!("JS 回调函数执行失败");
+                }
+            })
+        };
+        if !success {
+            error!("向渲染线程发送任务失败");
+        }
     }
 }
 
@@ -238,7 +248,7 @@ pub fn update_metadata(
         let stream = InMemoryRandomAccessStream::new()?;
         let writer = DataWriter::CreateDataWriter(&stream)?;
         writer.WriteBytes(&bytes)?;
-        writer.StoreAsync()?;
+        writer.StoreAsync()?.GetResults()?;
         writer.DetachStream()?;
         stream.Seek(0)?;
         let stream_ref = RandomAccessStreamReference::CreateFromStream(&stream)?;

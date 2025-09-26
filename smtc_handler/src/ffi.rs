@@ -75,7 +75,7 @@ pub unsafe extern "C" fn inflink_shutdown(_args: *mut *mut c_void) -> *mut c_cha
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn inflink_register_event_callback(args: *mut *mut c_void) -> *mut c_char {
-    let v8_func = unsafe { *args.cast::<*mut cef_bindings::sys::cef_v8value_t>() };
+    let v8_func = unsafe { *args.cast::<*mut cef_safe::cef_sys::_cef_v8value_t>() };
     if !v8_func.is_null() {
         smtc_core::register_event_callback(v8_func);
     }
