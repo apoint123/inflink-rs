@@ -32,7 +32,7 @@ const buildRustPlugin = (): Plugin => {
 
 			const rustSrc = path.resolve(
 				__dirname,
-				"../smtc_handler/target/release/smtc_handler.dll",
+				"../target/release/smtc_handler.dll",
 			);
 
 			const rustDest = path.resolve(options.dir, "smtc_handler.dll");

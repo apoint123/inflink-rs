@@ -1,11 +1,9 @@
 import type { ControlMessage, SmtcEvent } from "src/types/smtc";
 
-// 暂时使用事件轮询来获取后端的更新，因为用rust实现cef的回调机制十分困难
-const POLLING_INTERVAL_MS = 100;
 const NATIVE_API_PREFIX = "inflink.";
 
 class SMTCNativeBackend {
-	private poll_interval_id: NodeJS.Timeout | null = null;
+	private is_active = false;
 
 	private call<T>(func: string, args: unknown[] = []): T {
 		return betterncm_native.native_plugin.call<T>(
@@ -18,34 +16,35 @@ class SMTCNativeBackend {
 		control_handler: (msg: ControlMessage) => void,
 		on_ready: () => void,
 	) {
+		if (this.is_active) return;
+		this.is_active = true;
 		this.call("initialize");
 
-		this.poll_interval_id = setInterval(() => {
-			const events_json = this.call<string | null>("poll_events");
-			if (events_json) {
-				try {
-					const events: SmtcEvent[] = JSON.parse(events_json);
-					for (const event of events) {
-						if (event.type === "Seek") {
-							control_handler({ type: "Seek", position: event.position_ms });
-						} else {
-							control_handler(event);
-						}
-					}
-				} catch (e) {
-					console.error("[InfLink-Native] 解析后端事件失败:", e);
+		const eventCallback = (eventJson: string) => {
+			try {
+				const event: SmtcEvent = JSON.parse(eventJson);
+				if (event.type === "Seek") {
+					control_handler({
+						type: "Seek",
+						position: event.position_ms,
+					});
+				} else {
+					control_handler(event);
 				}
+			} catch (e) {
+				console.error("[InfLink-Native] 解析后端事件失败:", e);
 			}
-		}, POLLING_INTERVAL_MS);
+		};
+
+		this.call("register_event_callback", [eventCallback]);
 
 		on_ready();
 	}
 
 	public disable() {
-		if (this.poll_interval_id) {
-			clearInterval(this.poll_interval_id);
-			this.poll_interval_id = null;
-		}
+		if (!this.is_active) return;
+		this.is_active = false;
+
 		this.call("shutdown");
 		console.log("[InfLink-Native] SMTC 已禁用");
 	}

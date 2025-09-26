@@ -11,6 +11,7 @@ const METADATA_ARGS: [NativeAPIType; 4] = [
     NativeAPIType::String,
     NativeAPIType::String,
 ];
+const CALLBACK_ARGS: [NativeAPIType; 1] = [NativeAPIType::V8Value];
 
 #[repr(i32)]
 #[derive(Debug, PartialEq)]
@@ -65,6 +66,7 @@ pub unsafe extern "C" fn inflink_initialize(_args: *mut *mut c_void) -> *mut c_c
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn inflink_shutdown(_args: *mut *mut c_void) -> *mut c_char {
+    smtc_core::unregister_event_callback();
     if let Err(e) = smtc_core::shutdown() {
         log::error!("[InfLink-rs] 关闭失败: {}", e);
     }
@@ -72,8 +74,12 @@ pub unsafe extern "C" fn inflink_shutdown(_args: *mut *mut c_void) -> *mut c_cha
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn inflink_poll_events(_args: *mut *mut c_void) -> *mut c_char {
-    smtc_core::poll_events() as *mut c_char
+pub unsafe extern "C" fn inflink_register_event_callback(args: *mut *mut c_void) -> *mut c_char {
+    let v8_func = unsafe { *args.cast::<*mut cef_bindings::sys::cef_v8value_t>() };
+    if !v8_func.is_null() {
+        smtc_core::register_event_callback(v8_func);
+    }
+    ptr::null_mut()
 }
 
 #[unsafe(no_mangle)]
@@ -222,7 +228,11 @@ pub unsafe extern "C" fn BetterNCMPluginMain(api: *mut PluginAPI) -> c_int {
 
         register_api!("inflink.initialize", inflink_initialize);
         register_api!("inflink.shutdown", inflink_shutdown);
-        register_api!("inflink.poll_events", inflink_poll_events);
+        register_api!(
+            "inflink.register_event_callback",
+            CALLBACK_ARGS,
+            inflink_register_event_callback
+        );
         register_api!(
             "inflink.update_play_state",
             STATE_ARGS,

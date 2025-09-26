@@ -1,6 +1,6 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use cef_bindings::{CefBaseRefCounted, CefV8Context, CefV8Value, renderer_post_task_in_v8_ctx};
 use serde::Serialize;
-use std::ffi::{CString, c_char};
 use std::sync::{LazyLock, Mutex};
 use windows::{
     Foundation::{TimeSpan, TypedEventHandler},
@@ -16,6 +16,16 @@ use windows::{
     core::{HSTRING, Ref, Result as WinResult},
 };
 
+struct SmtcCallback {
+    v8_context: CefV8Context,
+    v8_function: CefV8Value,
+    _v8_function_ref: CefBaseRefCounted,
+}
+
+unsafe impl Send for SmtcCallback {}
+
+static EVENT_CALLBACK: LazyLock<Mutex<Option<SmtcCallback>>> = LazyLock::new(|| Mutex::new(None));
+
 #[derive(Serialize, Clone, Debug)]
 #[serde(tag = "type")]
 enum SmtcEvent {
@@ -28,6 +38,59 @@ enum SmtcEvent {
     Seek { position_ms: f64 },
 }
 
+pub fn register_event_callback(v8_func_ptr: *mut cef_bindings::sys::cef_v8value_t) {
+    unsafe {
+        let v8_function = CefV8Value::from_raw(v8_func_ptr);
+        let v8_context = CefV8Context::current();
+
+        let base_ref = CefBaseRefCounted::from_raw(v8_func_ptr as _);
+        base_ref.add_ref();
+
+        let callback = SmtcCallback {
+            v8_context,
+            v8_function,
+            _v8_function_ref: base_ref,
+        };
+
+        *EVENT_CALLBACK.lock().unwrap() = Some(callback);
+        log::info!("[InfLink-rs] 事件回调注册成功");
+    }
+}
+
+pub fn unregister_event_callback() {
+    if EVENT_CALLBACK.lock().unwrap().take().is_some() {
+        log::info!("[InfLink-rs] 事件回调已注销");
+    }
+}
+
+fn dispatch_event(event: SmtcEvent) {
+    if let Some(callback) = EVENT_CALLBACK.lock().unwrap().as_ref() {
+        let event_json = serde_json::to_string(&event).unwrap();
+
+        let context_ptr = callback.v8_context.0;
+        let function_ptr = callback.v8_function.0;
+
+        let context_addr = context_ptr as usize;
+        let function_addr = function_ptr as usize;
+
+        renderer_post_task_in_v8_ctx(context_ptr, move || unsafe {
+            let func_ptr = function_addr as *mut cef_bindings::sys::cef_v8value_t;
+            let ctx_ptr = context_addr as *mut cef_bindings::sys::cef_v8context_t;
+
+            let func = CefV8Value::from_raw(func_ptr);
+            let ctx = CefV8Context(ctx_ptr);
+
+            let v8_context = ctx.0.as_mut().unwrap();
+            (v8_context.enter.unwrap())(v8_context);
+
+            let arg = CefV8Value::try_from(event_json.as_str()).unwrap();
+            func.execute_function(None, &[arg]);
+
+            (v8_context.exit.unwrap())(v8_context);
+        });
+    }
+}
+
 static MEDIA_PLAYER: LazyLock<Mutex<MediaPlayer>> = LazyLock::new(|| {
     let player = MediaPlayer::new().expect("无法创建 MediaPlayer 实例");
     let smtc = player
@@ -36,11 +99,6 @@ static MEDIA_PLAYER: LazyLock<Mutex<MediaPlayer>> = LazyLock::new(|| {
     smtc.SetIsEnabled(false).expect("无法禁用 SMTC");
     Mutex::new(player)
 });
-
-static EVENT_QUEUE: LazyLock<Mutex<Vec<SmtcEvent>>> = LazyLock::new(|| Mutex::new(Vec::new()));
-
-static JSON_BUFFER: LazyLock<Mutex<CString>> =
-    LazyLock::new(|| Mutex::new(CString::new("").unwrap()));
 
 pub fn initialize() -> WinResult<()> {
     let player = MEDIA_PLAYER.lock().unwrap();
@@ -64,7 +122,7 @@ pub fn initialize() -> WinResult<()> {
                     SystemMediaTransportControlsButton::Previous => SmtcEvent::PreviousSong,
                     _ => return Ok(()),
                 };
-                EVENT_QUEUE.lock().unwrap().push(event);
+                dispatch_event(event);
             }
             Ok(())
         },
@@ -75,7 +133,7 @@ pub fn initialize() -> WinResult<()> {
         move |_: Ref<SystemMediaTransportControls>,
               _: Ref<ShuffleEnabledChangeRequestedEventArgs>|
               -> WinResult<()> {
-            EVENT_QUEUE.lock().unwrap().push(SmtcEvent::ToggleShuffle);
+            dispatch_event(SmtcEvent::ToggleShuffle);
             Ok(())
         },
     );
@@ -85,7 +143,7 @@ pub fn initialize() -> WinResult<()> {
         move |_: Ref<SystemMediaTransportControls>,
               _: Ref<AutoRepeatModeChangeRequestedEventArgs>|
               -> WinResult<()> {
-            EVENT_QUEUE.lock().unwrap().push(SmtcEvent::ToggleRepeat);
+            dispatch_event(SmtcEvent::ToggleRepeat);
             Ok(())
         },
     );
@@ -98,10 +156,7 @@ pub fn initialize() -> WinResult<()> {
             if let Some(args) = args.as_ref() {
                 let position = args.RequestedPlaybackPosition()?;
                 let position_ms = (position.Duration as f64) / 10_000.0;
-                EVENT_QUEUE
-                    .lock()
-                    .unwrap()
-                    .push(SmtcEvent::Seek { position_ms });
+                dispatch_event(SmtcEvent::Seek { position_ms });
             }
             Ok(())
         },
@@ -116,30 +171,7 @@ pub fn shutdown() -> WinResult<()> {
     let player = MEDIA_PLAYER.lock().unwrap();
     let smtc = player.SystemMediaTransportControls()?;
     smtc.SetIsEnabled(false)?;
-    log::info!("[InfLink-rs] SMTC 已关闭");
     Ok(())
-}
-
-pub fn poll_events() -> *const c_char {
-    let mut queue = EVENT_QUEUE.lock().unwrap();
-    if queue.is_empty() {
-        return std::ptr::null();
-    }
-
-    let events_json = match serde_json::to_string(&*queue) {
-        Ok(json) => json,
-        Err(_) => return std::ptr::null(),
-    };
-    queue.clear();
-
-    match CString::new(events_json) {
-        Ok(c_string) => {
-            let mut buffer_guard = JSON_BUFFER.lock().unwrap();
-            *buffer_guard = c_string;
-            buffer_guard.as_ptr()
-        }
-        Err(_) => std::ptr::null(),
-    }
 }
 
 pub fn update_play_state(status_code: i32) -> WinResult<()> {
