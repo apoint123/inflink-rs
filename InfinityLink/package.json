@@ -2,7 +2,7 @@
 	"name": "inflink-rs",
 	"version": "2.0.0",
 	"main": "index.js",
-	"license": "MIT",
+	"license": "GPL-3.0-only",
 	"scripts": {
 		"build": "vite build",
 		"build:dev": "vite build --mode development --watch"
