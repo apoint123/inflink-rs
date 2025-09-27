@@ -1,20 +1,14 @@
-use crate::smtc_core;
+use tracing::{debug, error, info, instrument};
+
+use crate::{logger, smtc_core};
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::ptr;
 
-const STATE_ARGS: [NativeAPIType; 1] = [NativeAPIType::Int];
-const TIMELINE_ARGS: [NativeAPIType; 2] = [NativeAPIType::Double, NativeAPIType::Double];
-const PLAY_MODE_ARGS: [NativeAPIType; 2] = [NativeAPIType::Boolean, NativeAPIType::String];
-const METADATA_ARGS: [NativeAPIType; 4] = [
-    NativeAPIType::String,
-    NativeAPIType::String,
-    NativeAPIType::String,
-    NativeAPIType::String,
-];
+const DISPATCH_ARGS: [NativeAPIType; 1] = [NativeAPIType::String];
 const CALLBACK_ARGS: [NativeAPIType; 1] = [NativeAPIType::V8Value];
 
 #[repr(i32)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 #[allow(dead_code)]
 pub enum NCMProcessType {
     Undetected = 0x0,
@@ -41,6 +35,7 @@ pub type AddNativeApiFn = extern "C" fn(
     identifier: *const c_char,
     function: NativeFunction,
 ) -> c_int;
+
 #[repr(C)]
 pub struct PluginAPI {
     pub add_native_api: AddNativeApiFn,
@@ -56,146 +51,96 @@ unsafe fn c_char_to_string(s: *const c_char) -> String {
     unsafe { CStr::from_ptr(s).to_string_lossy().into_owned() }
 }
 
+#[instrument(skip(_args))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn inflink_initialize(_args: *mut *mut c_void) -> *mut c_char {
     if let Err(e) = smtc_core::initialize() {
-        log::error!("[InfLink-rs] 初始化失败: {}", e);
+        error!("[InfLink-rs] 初始化失败: {}", e);
     }
     ptr::null_mut()
 }
 
+#[instrument(skip(_args))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn inflink_shutdown(_args: *mut *mut c_void) -> *mut c_char {
-    smtc_core::unregister_event_callback();
+    smtc_core::clear_callback();
     if let Err(e) = smtc_core::shutdown() {
-        log::error!("[InfLink-rs] 关闭失败: {}", e);
+        error!("[InfLink-rs] 关闭失败: {}", e);
     }
     ptr::null_mut()
 }
 
+#[instrument(skip(args))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn inflink_register_event_callback(args: *mut *mut c_void) -> *mut c_char {
     let v8_func = unsafe { *args.cast::<*mut cef_safe::cef_sys::_cef_v8value_t>() };
     if !v8_func.is_null() {
+        info!("已注册事件回调");
         smtc_core::register_event_callback(v8_func);
     }
     ptr::null_mut()
 }
 
+#[instrument(skip(args))]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn inflink_update_play_state(args: *mut *mut c_void) -> *mut c_char {
+pub unsafe extern "C" fn inflink_dispatch(args: *mut *mut c_void) -> *mut c_char {
     if args.is_null() {
-        log::error!("[InfLink-rs] update_play_state 收到了空指针");
+        error!("[InfLink-rs] inflink_dispatch 收到了空指针");
         return ptr::null_mut();
     }
-    unsafe {
-        let status_ptr = *args.add(0);
-        if status_ptr.is_null() {
-            log::error!("[InfLink-rs] update_play_state 收到了空指针");
-            return ptr::null_mut();
-        }
-
-        let status_code = *status_ptr.cast::<i32>();
-        if let Err(e) = smtc_core::update_play_state(status_code) {
-            log::error!("[InfLink-rs] 更新播放状态失败: {}", e);
-        }
+    let command_ptr = unsafe { *args.add(0) };
+    if command_ptr.is_null() {
+        error!("[InfLink-rs] inflink_dispatch 收到了空命令指针");
+        return ptr::null_mut();
     }
 
-    ptr::null_mut()
+    let command_json = unsafe { c_char_to_string(command_ptr.cast::<c_char>()) };
+    tracing::trace!(command = %command_json, "收到前端命令");
+
+    let result_json = smtc_core::handle_command(&command_json);
+    tracing::trace!(result = %result_json, "发送执行结果到前端");
+
+    // betterncm 不会清理这块内存 (大概是忘了)，它会泄漏
+    match CString::new(result_json) {
+        Ok(s) => s.into_raw(),
+        Err(e) => {
+            error!("[InfLink-rs] 无法创建返回的 CString: {}", e);
+            ptr::null_mut()
+        }
+    }
 }
 
+#[instrument(skip(args))]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn inflink_update_timeline(args: *mut *mut c_void) -> *mut c_char {
-    if args.is_null() {
-        log::error!("[InfLink-rs] update_timeline 收到了空指针");
-        return ptr::null_mut();
-    }
-
-    unsafe {
-        let current_ms_ptr = *args.add(0);
-        let total_ms_ptr = *args.add(1);
-        if current_ms_ptr.is_null() || total_ms_ptr.is_null() {
-            log::error!("[InfLink-rs] update_timeline 收到了空指针");
-            return ptr::null_mut();
-        }
-
-        let current_ms = *current_ms_ptr.cast::<f64>();
-        let total_ms = *total_ms_ptr.cast::<f64>();
-        if let Err(e) = smtc_core::update_timeline(current_ms, total_ms) {
-            log::error!("[InfLink-rs] 更新时间线失败: {}", e);
-        }
+pub unsafe extern "C" fn inflink_register_logger(args: *mut *mut c_void) -> *mut c_char {
+    let v8_func = unsafe { *args.cast::<*mut cef_safe::cef_sys::_cef_v8value_t>() };
+    if !v8_func.is_null() {
+        info!("已注册日志回调");
+        logger::register_callback(v8_func);
     }
     ptr::null_mut()
 }
 
+#[instrument(skip(_args))]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn inflink_update_play_mode(args: *mut *mut c_void) -> *mut c_char {
-    if args.is_null() {
-        log::error!("[InfLink-rs] update_play_mode 收到了空指针");
-        return ptr::null_mut();
-    }
-
-    unsafe {
-        let is_shuffling_ptr = *args.add(0);
-        let repeat_mode_ptr = *args.add(1);
-        if is_shuffling_ptr.is_null() || repeat_mode_ptr.is_null() {
-            log::error!("[InfLink-rs] update_play_mode 收到了空指针");
-            return ptr::null_mut();
-        }
-
-        let is_shuffling = *is_shuffling_ptr.cast::<bool>();
-        let repeat_mode = c_char_to_string(repeat_mode_ptr.cast::<c_char>());
-        if let Err(e) = smtc_core::update_play_mode(is_shuffling, &repeat_mode) {
-            log::error!("[InfLink-rs] 更新播放模式失败: {}", e);
-        }
-    }
+pub unsafe extern "C" fn inflink_cleanup(_args: *mut *mut c_void) -> *mut c_char {
+    logger::clear_callback();
+    smtc_core::clear_callback();
     ptr::null_mut()
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn inflink_update_metadata(args: *mut *mut c_void) -> *mut c_char {
-    if args.is_null() {
-        log::error!("[InfLink-rs] update_metadata 收到了空指针");
-        return ptr::null_mut();
-    }
-    unsafe {
-        let title_ptr = *args.add(0);
-        let artist_ptr = *args.add(1);
-        let album_ptr = *args.add(2);
-        let thumbnail_ptr = *args.add(3);
-        if title_ptr.is_null()
-            || artist_ptr.is_null()
-            || album_ptr.is_null()
-            || thumbnail_ptr.is_null()
-        {
-            log::error!("[InfLink-rs] update_metadata 收到了空指针");
-            return ptr::null_mut();
-        }
-
-        let title = c_char_to_string(title_ptr.cast::<c_char>());
-        let artist = c_char_to_string(artist_ptr.cast::<c_char>());
-        let album = c_char_to_string(album_ptr.cast::<c_char>());
-        let thumbnail = c_char_to_string(thumbnail_ptr.cast::<c_char>());
-
-        if let Err(e) = smtc_core::update_metadata(&title, &artist, &album, &thumbnail) {
-            log::error!("[InfLink-rs] 更新元数据失败: {}", e);
-        }
-    }
-    ptr::null_mut()
-}
-
+#[instrument(skip(api))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn BetterNCMPluginMain(api: *mut PluginAPI) -> c_int {
     if api.is_null() {
         return -1;
     }
-    let _ = env_logger::builder()
-        .filter_level(log::LevelFilter::Info)
-        .try_init();
+
+    logger::init();
 
     let api = unsafe { &*api };
     if api.process_type == NCMProcessType::Renderer {
-        log::info!("[InfLink-rs] 正在注册 API...");
+        info!(process_type = ?api.process_type, "[InfLink-rs] 正在注册 API");
         let add_api = api.add_native_api;
 
         macro_rules! register_api {
@@ -203,7 +148,7 @@ pub unsafe extern "C" fn BetterNCMPluginMain(api: *mut PluginAPI) -> c_int {
                 let identifier = match CString::new($id) {
                     Ok(s) => s,
                     Err(e) => {
-                        log::error!("[InfLink-rs] 无法创建 CString '{}': {}", $id, e);
+                        error!("[InfLink-rs] 无法创建 CString '{}': {}", $id, e);
                         return -1;
                     }
                 };
@@ -218,7 +163,7 @@ pub unsafe extern "C" fn BetterNCMPluginMain(api: *mut PluginAPI) -> c_int {
                 let identifier = match CString::new($id) {
                     Ok(s) => s,
                     Err(e) => {
-                        log::error!("[InfLink-rs] 无法创建 CString '{}': {}", $id, e);
+                        error!("[InfLink-rs] 无法创建 CString '{}': {}", $id, e);
                         return -1;
                     }
                 };
@@ -227,32 +172,21 @@ pub unsafe extern "C" fn BetterNCMPluginMain(api: *mut PluginAPI) -> c_int {
         }
 
         register_api!("inflink.initialize", inflink_initialize);
+        register_api!(
+            "inflink.register_logger",
+            CALLBACK_ARGS,
+            inflink_register_logger
+        );
+        register_api!("inflink.cleanup", inflink_cleanup);
         register_api!("inflink.shutdown", inflink_shutdown);
         register_api!(
             "inflink.register_event_callback",
             CALLBACK_ARGS,
             inflink_register_event_callback
         );
-        register_api!(
-            "inflink.update_play_state",
-            STATE_ARGS,
-            inflink_update_play_state
-        );
-        register_api!(
-            "inflink.update_timeline",
-            TIMELINE_ARGS,
-            inflink_update_timeline
-        );
-        register_api!(
-            "inflink.update_play_mode",
-            PLAY_MODE_ARGS,
-            inflink_update_play_mode
-        );
-        register_api!(
-            "inflink.update_metadata",
-            METADATA_ARGS,
-            inflink_update_metadata
-        );
+        register_api!("inflink.dispatch", DISPATCH_ARGS, inflink_dispatch);
+    } else {
+        debug!(process_type = ?api.process_type, "插件在非渲染进程中加载, 跳过注册API");
     }
     0
 }

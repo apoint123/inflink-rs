@@ -7,11 +7,27 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
+anyhow = "1.0"
 base64 = "0.22.1"
-env_logger = "0.11.8"
-log = "0.4.27"
-
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-windows = { version = "0.62", features = ["Media_Playback", "Storage_Streams"] }
+windows = { version = "0.62.1", features = [
+    "Media_Playback",
+    "Storage_Streams",
+] }
 cef-safe = { path = "../cef-safe" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-log = "0.2"
+tracing-appender = "0.2"
+
+dirs = "6.0"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+
+cast_possible_wrap = "allow"
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+cast_precision_loss = "allow"

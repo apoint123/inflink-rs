@@ -42,7 +42,7 @@ export function useCompatibility(): boolean | null {
 			const majorVersion = parseInt(version.split(".")[0], 10);
 			setIsCompatible(majorVersion >= 3);
 		} catch (e) {
-			console.error("[InfLink] 无法检测网易云音乐版本。", e);
+			console.error("[InfLink-rs] 无法检测网易云音乐版本。", e);
 			setIsCompatible(false);
 		}
 	}, []);
@@ -93,8 +93,11 @@ export function useSmtcConnection(
 		}
 
 		const onUpdateSongInfo = (e: CustomEvent) => smtcImplObj.update(e.detail);
-		const onUpdatePlayState = (e: CustomEvent) =>
-			smtcImplObj.updatePlayState(e.detail === "Playing" ? 3 : 4);
+		const onUpdatePlayState = (e: CustomEvent) => {
+			const status = e.detail === "Playing" ? "Playing" : "Paused";
+			smtcImplObj.updatePlayState(status);
+		};
+
 		const onUpdateTimeline = (e: CustomEvent) =>
 			smtcImplObj.updateTimeline(e.detail);
 
@@ -114,10 +117,10 @@ export function useSmtcConnection(
 			infoProvider.forceDispatchFullState();
 		};
 
-		smtcImplObj.apply(onControl, connectCallback);
+		smtcImplObj.initialize(onControl, connectCallback);
 
 		return () => {
-			console.log("[InfLink] 清理事件监听...");
+			console.log("[InfLink-rs] 清理事件监听...");
 			infoProvider.removeEventListener("updateSongInfo", onUpdateSongInfo);
 			infoProvider.removeEventListener("updatePlayState", onUpdatePlayState);
 			infoProvider.removeEventListener("updateTimeline", onUpdateTimeline);

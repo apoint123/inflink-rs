@@ -1,11 +1,14 @@
 import mitt, { type Emitter } from "mitt";
-import type { ControlMessage, SongInfo, TimelineInfo } from "../types/smtc";
-
-export type PlayState = "Playing" | "Paused";
+import type {
+	ControlMessage,
+	PlaybackStatus,
+	SongInfo,
+	TimelineInfo,
+} from "../types/smtc";
 
 type ProviderEventMap = {
 	updateSongInfo: CustomEvent<SongInfo>;
-	updatePlayState: CustomEvent<PlayState>;
+	updatePlayState: CustomEvent<PlaybackStatus>;
 	updateTimeline: CustomEvent<TimelineInfo>;
 	control: CustomEvent<ControlMessage>;
 	disable: CustomEvent<void>;

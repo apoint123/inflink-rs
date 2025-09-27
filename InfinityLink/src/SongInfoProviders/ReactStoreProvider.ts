@@ -1,4 +1,5 @@
 import type React from "react";
+import type { PlaybackStatus } from "src/types/smtc";
 import type {
 	Artist,
 	AudioLoadInfo,
@@ -11,7 +12,7 @@ import type {
 	ReactRootElement,
 } from "../types/ncm-internal";
 import { throttle } from "../utils";
-import { BaseProvider, type PlayState } from "./BaseProvider";
+import { BaseProvider } from "./BaseProvider";
 
 /**
  * CSS 选择器常量
@@ -50,8 +51,8 @@ const CONSTANTS = {
 	NCM_PLAY_MODE_ONE: "playOneCycle",
 };
 
-declare const legacyNativeCmder: LegacyNativeCmder; // NCM 2.x
-declare const channel: Channel; // NCM 3.0+
+declare const legacyNativeCmder: LegacyNativeCmder; // 主要用于 NCM 2.x, 但 3.0+ 也有在用
+declare const channel: Channel; // 仅 NCM 3.0+
 
 /**
  * 模拟 React 事件点击。
@@ -192,10 +193,7 @@ class NcmEventAdapter {
 
 			callbackSet.add(callback);
 		} catch (e) {
-			console.error(
-				`[React Store Provider] Failed to register event ${eventName}`,
-				e,
-			);
+			console.error(`[React Store Provider] 注册事件 ${eventName}失败:`, e);
 		}
 	}
 }
@@ -204,7 +202,7 @@ export class ReactStoreProvider extends BaseProvider {
 	private audioId: string | null = null;
 	private musicDuration = 0;
 	private musicPlayProgress = 0;
-	private playState: PlayState = "Paused";
+	private playState: PlaybackStatus = "Paused";
 	private reduxStore: NCMStore | null = null;
 	private unsubscribeStore: (() => void) | null = null;
 	private lastProgress = 0;
@@ -270,7 +268,7 @@ export class ReactStoreProvider extends BaseProvider {
 				this.onStateChanged();
 			});
 		} else {
-			console.error("[React Store Provider] UI已加载但无法找到Store！");
+			console.error("[React Store Provider] UI已加载但无法找到Store!");
 		}
 
 		// 注册底层播放器事件和外部控制事件
@@ -516,7 +514,7 @@ export class ReactStoreProvider extends BaseProvider {
 		_audioId: string,
 		stateInfo: string | number,
 	): void {
-		let newPlayState: PlayState = this.playState;
+		let newPlayState: PlaybackStatus = this.playState;
 		if (typeof stateInfo === "string") {
 			const state = stateInfo.split("|")[1];
 			if (state === "pause") newPlayState = "Paused";
@@ -533,10 +531,10 @@ export class ReactStoreProvider extends BaseProvider {
 
 	public seekToPosition(timeMS: number): void {
 		if (!this.audioId) {
-			console.warn("[Provider] audioID 不可用，跳转失败");
+			console.warn("[React Store Provider] audioID 不可用，跳转失败");
 			return;
 		}
-		console.log(`[Provider] 正在跳转到: ${timeMS / 1000}s`);
+		console.log(`[React Store Provider] 正在跳转到: ${timeMS / 1000}s`);
 
 		this.musicPlayProgress = timeMS;
 		this.dispatchEvent(

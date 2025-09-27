@@ -2,3 +2,10 @@
 members = ["smtc_handler", "cef-safe"]
 
 resolver = "3"
+
+[profile.release]
+opt-level = 3
+debug = false
+lto = true
+codegen-units = 1
+panic = "abort"

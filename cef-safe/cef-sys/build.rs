@@ -21,6 +21,7 @@ fn main() {
         .allowlist_function("cef_v8context_get_current_context")
         .allowlist_function("cef_task_runner_get_for_thread")
         .allowlist_function("cef_string_utf16_set")
+        .allowlist_function("cef_string_userfree_utf16_free")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
         .expect("生成绑定文件失败");

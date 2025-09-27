@@ -1,9 +1,16 @@
-import type { ControlMessage, SmtcEvent } from "src/types/smtc";
+import type {
+	CommandResult,
+	ControlMessage,
+	LogEntry,
+	PlaybackStatus,
+	SmtcCommandPayloads,
+	SmtcEvent,
+} from "src/types/smtc";
 
 const NATIVE_API_PREFIX = "inflink.";
 
 class SMTCNativeBackend {
-	private is_active = false;
+	private isActive = false;
 
 	private call<T>(func: string, args: unknown[] = []): T {
 		return betterncm_native.native_plugin.call<T>(
@@ -12,12 +19,47 @@ class SMTCNativeBackend {
 		);
 	}
 
-	public apply(
+	private dispatch<T extends keyof SmtcCommandPayloads>(
+		type: T,
+		payload: SmtcCommandPayloads[T],
+	) {
+		const command = JSON.stringify({ type, payload });
+		const resultJson = this.call<string>("dispatch", [command]);
+
+		if (!resultJson) {
+			console.error(`[InfLink-Native] 命令 '${type}' 未收到任何返回结果。`);
+			return;
+		}
+
+		try {
+			const result: CommandResult = JSON.parse(resultJson);
+			if (result.status === "Error") {
+				console.error(
+					`[InfLink-Native] 后端执行命令 '${type}' 时发生错误:`,
+					result.message,
+				);
+			}
+		} catch (e) {
+			console.error(
+				`[InfLink-Native] 解析后端返回结果失败:`,
+				e,
+				"\n原始结果:",
+				resultJson,
+			);
+		}
+	}
+
+	public initialize(
 		control_handler: (msg: ControlMessage) => void,
 		on_ready: () => void,
 	) {
-		if (this.is_active) return;
-		this.is_active = true;
+		// betterncm 热重载时会直接销毁整个JS环境，并且不会运行我们的清理函数，
+		// 这会导致后端因为悬垂指针崩溃，所以必须每次运行之前都清理一次
+		this.call("cleanup");
+
+		if (this.isActive) return;
+		this.isActive = true;
+		this.registerLogger();
 		this.call("initialize");
 
 		const eventCallback = (eventJson: string) => {
@@ -41,10 +83,38 @@ class SMTCNativeBackend {
 		on_ready();
 	}
 
-	public disable() {
-		if (!this.is_active) return;
-		this.is_active = false;
+	private registerLogger() {
+		const logCallback = (logJson: string) => {
+			try {
+				const entry: LogEntry = JSON.parse(logJson);
+				const message = `[InfLink-rs backend|${entry.target}] ${entry.message}`;
 
+				switch (entry.level) {
+					case "ERROR":
+						console.error(message);
+						break;
+					case "WARN":
+						console.warn(message);
+						break;
+					case "INFO":
+						console.info(message);
+						break;
+					default:
+						console.log(message);
+						break;
+				}
+			} catch (e) {
+				console.error("[InfLink-Native] 解析后端日志失败:", e);
+			}
+		};
+		this.call("register_logger", [logCallback]);
+	}
+
+	public disable() {
+		if (!this.isActive) return;
+		this.isActive = false;
+
+		this.call("cleanup");
 		this.call("shutdown");
 		console.log("[InfLink-Native] SMTC 已禁用");
 	}
@@ -55,27 +125,25 @@ class SMTCNativeBackend {
 		albumName: string;
 		thumbnail_base64: string;
 	}) {
-		this.call("update_metadata", [
-			songInfo.songName,
-			songInfo.authorName,
-			songInfo.albumName ?? songInfo.songName,
-			songInfo.thumbnail_base64,
-		]);
+		this.dispatch("Metadata", {
+			...songInfo,
+			albumName: songInfo.albumName ?? songInfo.songName,
+		});
 	}
 
-	public updatePlayState(status_code: 3 | 4) {
-		this.call("update_play_state", [status_code]);
+	public updatePlayState(status: PlaybackStatus) {
+		this.dispatch("PlayState", { status });
 	}
 
 	public updateTimeline(timeline: { currentTime: number; totalTime: number }) {
-		this.call("update_timeline", [timeline.currentTime, timeline.totalTime]);
+		this.dispatch("Timeline", timeline);
 	}
 
 	public updatePlayMode(playMode: {
 		isShuffling: boolean;
 		repeatMode: string;
 	}) {
-		this.call("update_play_mode", [playMode.isShuffling, playMode.repeatMode]);
+		this.dispatch("PlayMode", playMode);
 	}
 }
 

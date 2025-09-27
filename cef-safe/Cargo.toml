@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 cef-sys = { path = "cef-sys" }
+thiserror = "2.0"
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }

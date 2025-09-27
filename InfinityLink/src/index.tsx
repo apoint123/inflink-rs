@@ -25,13 +25,12 @@ import { STORE_KEY_SMTC_ENABLED } from "./keys";
 const configElement = document.createElement("div");
 
 plugin.onLoad((selfPlugin) => {
-	console.log("[InfLink] 插件正在加载...", selfPlugin);
+	console.log("[InfLink-rs] 插件正在加载...", selfPlugin);
 
 	try {
 		createRoot(configElement).render(<Main />);
-		console.log("[InfLink] React 组件渲染成功");
 	} catch (error) {
-		console.error("[InfLink] React 组件渲染失败:", error);
+		console.error("[InfLink-rs] React 组件渲染失败:", error);
 	}
 });
 
