@@ -13,6 +13,7 @@ import {
 	Switch,
 	Typography,
 } from "@mui/material";
+import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { createRoot } from "react-dom/client";
 
 import {
@@ -26,11 +27,31 @@ import { STORE_KEY_SMTC_ENABLED } from "./keys";
 
 const configElement = document.createElement("div");
 
+const GITHUB_REPO = "apoint123/InfLink-rs";
+
+const theme = createTheme({
+	typography: {
+		fontFamily: [
+			'"Noto Sans SC"',
+			'"Microsoft YaHei"',
+			'"Segoe UI"',
+			"Roboto",
+			'"Helvetica Neue"',
+			"Arial",
+			"sans-serif",
+		].join(","),
+	},
+});
+
 plugin.onLoad((selfPlugin) => {
 	console.log("[InfLink-rs] 插件正在加载...", selfPlugin);
 
 	try {
-		createRoot(configElement).render(<Main />);
+		createRoot(configElement).render(
+			<ThemeProvider theme={theme}>
+				<Main />
+			</ThemeProvider>,
+		);
 	} catch (error) {
 		console.error("[InfLink-rs] React 组件渲染失败:", error);
 	}
