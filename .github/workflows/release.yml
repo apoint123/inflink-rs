@@ -12,6 +12,10 @@ jobs:
   build-and-release:
     runs-on: windows-latest
 
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
+
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
@@ -21,10 +25,18 @@ jobs:
       - name: 安装 pnpm
         uses: pnpm/action-setup@v4
 
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          cache: pnpm
+
       - name: 安装 Rust 工具链
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+
+      - name: 安装 sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: 安装依赖
         run: pnpm install
