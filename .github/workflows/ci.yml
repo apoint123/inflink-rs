@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  ci-checks:
+    runs-on: windows-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: clippy
+
+      - name: 安装依赖
+        run: pnpm install
+
+      - name: 检查格式
+        run: pnpm lint
+
+      - name: 检查类型
+        run: pnpm typecheck
+
+      - name: 检查 Clippy
+        run: cargo clippy --workspace -- -D warnings
