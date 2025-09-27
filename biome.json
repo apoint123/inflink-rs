@@ -15,7 +15,7 @@
 		"indentStyle": "tab",
 		"indentWidth": 2,
 		"lineWidth": 80,
-		"lineEnding": "lf"
+		"lineEnding": "crlf"
 	},
 	"javascript": {
 		"formatter": {
