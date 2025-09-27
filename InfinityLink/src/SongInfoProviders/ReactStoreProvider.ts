@@ -1,5 +1,4 @@
 import type React from "react";
-import type { PlaybackStatus } from "src/types/smtc";
 import type {
 	Artist,
 	AudioLoadInfo,
@@ -11,6 +10,7 @@ import type {
 	NcmEventName,
 	ReactRootElement,
 } from "../types/ncm-internal";
+import type { PlaybackStatus } from "../types/smtc";
 import { throttle } from "../utils";
 import { BaseProvider } from "./BaseProvider";
 

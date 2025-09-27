@@ -2,14 +2,10 @@
 	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
 	"files": {
 		"includes": [
-			"**/*.{js,ts,jsx,tsx,json,astro,mjs,cjs}",
+			"InfinityLink/src/**/*.{js,ts,jsx,tsx}",
 			"!**/node_modules",
 			"!**/dist",
-			"!**/build",
-			"!**/.next",
-			"!**/.astro",
-			"!**/.vercel",
-			"!**/coverage"
+			"!**/build"
 		]
 	},
 	"formatter": {

@@ -5,7 +5,7 @@ import type {
 	PlaybackStatus,
 	SmtcCommandPayloads,
 	SmtcEvent,
-} from "src/types/smtc";
+} from "../types/smtc";
 
 const NATIVE_API_PREFIX = "inflink.";
 
