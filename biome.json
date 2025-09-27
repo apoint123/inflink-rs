@@ -2,7 +2,7 @@
 	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
 	"files": {
 		"includes": [
-			"InfinityLink/src/**/*.{js,ts,jsx,tsx}",
+			"**/*.{js,ts,jsx,tsx,json,astro,mjs,cjs,css,jsonc}",
 			"!**/node_modules",
 			"!**/dist",
 			"!**/build"
