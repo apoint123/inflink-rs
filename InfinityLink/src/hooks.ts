@@ -129,3 +129,50 @@ export function useSmtcConnection(
 		};
 	}, [infoProvider, isEnabled]);
 }
+
+export interface NewVersionInfo {
+	version: string;
+	url: string;
+}
+
+export function useVersionCheck(repo: string): NewVersionInfo | null {
+	const [newVersionInfo, setNewVersionInfo] = useState<NewVersionInfo | null>(
+		null,
+	);
+
+	useEffect(() => {
+		const checkVersion = async () => {
+			try {
+				const res = await fetch(
+					`https://api.github.com/repos/${repo}/releases/latest`,
+				);
+				if (!res.ok) {
+					throw new Error(`GitHub API 请求失败, 错误码: ${res.status}`);
+				}
+				const latestRelease = await res.json();
+				const latestVersion = latestRelease.tag_name.replace(/^v/, "");
+				const currentVersion = __APP_VERSION__;
+
+				if (
+					latestVersion.localeCompare(currentVersion, undefined, {
+						numeric: true,
+					}) > 0
+				) {
+					console.log(`[InfLink-rs] 发现新版本: ${latestRelease.tag_name}`);
+					setNewVersionInfo({
+						version: latestRelease.tag_name,
+						url: latestRelease.html_url,
+					});
+				} else {
+					console.log("[InfLink-rs] 当前已是最新版本。");
+				}
+			} catch (error) {
+				console.error("[InfLink-rs] 检查更新失败:", error);
+			}
+		};
+
+		checkVersion();
+	}, [repo]);
+
+	return newVersionInfo;
+}

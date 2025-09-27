@@ -4,6 +4,10 @@ import path from "node:path";
 import react from "@vitejs/plugin-react-swc";
 import { defineConfig, type Plugin } from "vite";
 
+const packageJson = JSON.parse(
+	fs.readFileSync(path.resolve(__dirname, "package.json"), "utf-8"),
+);
+
 const buildRustPlugin = (mode: string): Plugin => {
 	const buildRust = () => {
 		console.log("构建rust程序...");
@@ -67,6 +71,7 @@ export default defineConfig(({ mode }) => ({
 	define: {
 		"process.env": {},
 		DEBUG: mode === "development",
+		__APP_VERSION__: JSON.stringify(packageJson.version),
 	},
 	build: {
 		target: "chrome91",

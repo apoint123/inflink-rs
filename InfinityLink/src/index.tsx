@@ -9,6 +9,7 @@ import {
 	CircularProgress,
 	FormControlLabel,
 	FormGroup,
+	Link,
 	Switch,
 	Typography,
 } from "@mui/material";
@@ -19,6 +20,7 @@ import {
 	useInfoProvider,
 	useLocalStorage,
 	useSmtcConnection,
+	useVersionCheck,
 } from "./hooks";
 import { STORE_KEY_SMTC_ENABLED } from "./keys";
 
@@ -40,6 +42,7 @@ function Main() {
 		STORE_KEY_SMTC_ENABLED,
 		true,
 	);
+	const newVersionInfo = useVersionCheck(GITHUB_REPO);
 	const infoProvider = useInfoProvider(isCompatible);
 	useSmtcConnection(infoProvider, SMTCEnabled);
 
@@ -59,6 +62,19 @@ function Main() {
 
 	return (
 		<div>
+			{newVersionInfo && (
+				<Alert severity="info" sx={{ mb: 2 }}>
+					<AlertTitle>发现新版本: {newVersionInfo.version} </AlertTitle>
+					下载新版本以获得最新功能和修复
+					<Link
+						onClick={() => betterncm.ncm.openUrl(newVersionInfo.url)}
+						sx={{ ml: 1, fontWeight: "bold", cursor: "pointer" }}
+					>
+						前往下载
+					</Link>
+				</Alert>
+			)}
+
 			<Typography variant="h6" gutterBottom>
 				InfLink-rs 设置
 			</Typography>

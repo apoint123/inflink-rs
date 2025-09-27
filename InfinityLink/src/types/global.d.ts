@@ -64,4 +64,7 @@ declare global {
 	const betterncm: Window["betterncm"];
 	const betterncm_native: Window["betterncm_native"];
 	const plugin: Window["plugin"];
+
+	const __APP_VERSION__: string;
+	const DEBUG: boolean;
 }
