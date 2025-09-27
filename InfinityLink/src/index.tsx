@@ -3,19 +3,21 @@
  * 此处的脚本将会在插件管理器加载插件期间被加载
  * 一般情况下只需要从这个入口点进行开发即可满足绝大部分需求
  */
+
+import UpgradeIcon from "@mui/icons-material/Upgrade";
 import {
 	Alert,
 	AlertTitle,
+	Box,
+	Button,
 	CircularProgress,
 	FormControlLabel,
 	FormGroup,
-	Link,
 	Switch,
 	Typography,
 } from "@mui/material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { createRoot } from "react-dom/client";
-
 import {
 	useCompatibility,
 	useInfoProvider,
@@ -85,14 +87,21 @@ function Main() {
 		<div>
 			{newVersionInfo && (
 				<Alert severity="info" sx={{ mb: 2 }}>
-					<AlertTitle>发现新版本: {newVersionInfo.version} </AlertTitle>
-					下载新版本以获得最新功能和修复
-					<Link
+					<AlertTitle>发现新版本: {newVersionInfo.version} !</AlertTitle>
+					<Box>
+						<Typography variant="body2" component="div">
+							下载新版本以获得最新功能和修复
+						</Typography>
+					</Box>
+					<Button
+						variant="contained"
+						size="medium"
+						startIcon={<UpgradeIcon />}
 						onClick={() => betterncm.ncm.openUrl(newVersionInfo.url)}
-						sx={{ ml: 1, fontWeight: "bold", cursor: "pointer" }}
+						sx={{ mt: 1.5 }}
 					>
 						前往下载
-					</Link>
+					</Button>
 				</Alert>
 			)}
 
