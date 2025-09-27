@@ -1,0 +1,45 @@
+name: 构建并发布
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: 安装依赖
+        run: pnpm install
+
+      - name: 构建项目
+        run: pnpm build
+
+      - name: 打包产物
+        run: |
+          Compress-Archive -Path InfinityLink/dist/* -DestinationPath InfLink-rs.zip
+          Rename-Item -Path InfLink-rs.zip -NewName InfLink-rs.plugin
+        shell: powershell
+
+      - name: 创建 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: CHANGELOG.md
+          files: InfLink-rs.plugin
