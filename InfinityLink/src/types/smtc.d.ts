@@ -54,8 +54,9 @@ export interface TimelinePayload {
 }
 export interface PlayModePayload {
 	isShuffling: boolean;
-	repeatMode: string;
+	repeatMode: RepeatMode;
 }
+export type RepeatMode = "None" | "Track" | "List";
 
 export type SmtcCommandPayloads = {
 	Metadata: MetadataPayload;

@@ -3,6 +3,7 @@ import type {
 	ControlMessage,
 	LogEntry,
 	PlaybackStatus,
+	RepeatMode,
 	SmtcCommandPayloads,
 	SmtcEvent,
 } from "../types/smtc";
@@ -141,7 +142,7 @@ class SMTCNativeBackend {
 
 	public updatePlayMode(playMode: {
 		isShuffling: boolean;
-		repeatMode: string;
+		repeatMode: RepeatMode;
 	}) {
 		this.dispatch("PlayMode", playMode);
 	}

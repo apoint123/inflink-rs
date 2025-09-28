@@ -50,6 +50,13 @@ pub enum PlaybackStatus {
     Paused,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum RepeatMode {
+    None,
+    Track,
+    List,
+}
+
 #[derive(Deserialize, Debug)]
 pub struct PlayStatePayload {
     pub status: PlaybackStatus,
@@ -64,15 +71,13 @@ pub struct TimelinePayload {
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct PlayModePayload {
-    #[serde(rename = "isShuffling")]
     pub is_shuffling: bool,
-    #[serde(rename = "repeatMode")]
-    pub repeat_mode: String,
+    pub repeat_mode: RepeatMode,
 }
 
 #[derive(Serialize, Debug)]
-#[serde(rename_all = "PascalCase")]
 pub enum CommandStatus {
     Success,
     Error,

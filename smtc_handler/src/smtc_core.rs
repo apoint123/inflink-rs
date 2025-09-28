@@ -18,7 +18,7 @@ use windows::{
     core::{HSTRING, Ref},
 };
 
-use crate::model::{CommandResult, CommandStatus, PlaybackStatus, SmtcCommand};
+use crate::model::{CommandResult, CommandStatus, PlaybackStatus, RepeatMode, SmtcCommand};
 
 const HNS_PER_MILLISECOND: f64 = 10_000.0;
 
@@ -134,84 +134,92 @@ static MEDIA_PLAYER: LazyLock<Mutex<MediaPlayer>> = LazyLock::new(|| {
     Mutex::new(player)
 });
 
-#[instrument]
-pub fn initialize() -> Result<()> {
+fn with_smtc<F, R>(context_msg: &str, f: F) -> Result<R>
+where
+    F: FnOnce(&SystemMediaTransportControls) -> Result<R>,
+{
     let smtc = MEDIA_PLAYER
         .lock()
-        .map_err(|e| anyhow::anyhow!("初始化时 SMTC 锁中毒: {e}"))?
+        .map_err(|e| anyhow::anyhow!("获取 SMTC 锁失败 ({context_msg}): {e}"))?
         .SystemMediaTransportControls()?;
+    f(&smtc)
+}
 
-    smtc.SetIsEnabled(true)?;
-    smtc.SetIsPlayEnabled(true)?;
-    smtc.SetIsPauseEnabled(true)?;
-    smtc.SetIsNextEnabled(true)?;
-    smtc.SetIsPreviousEnabled(true)?;
-    info!("已启用各个 SMTC 控制能力");
+#[instrument]
+pub fn initialize() -> Result<()> {
+    with_smtc("初始化", |smtc| {
+        smtc.SetIsEnabled(true)?;
+        smtc.SetIsPlayEnabled(true)?;
+        smtc.SetIsPauseEnabled(true)?;
+        smtc.SetIsNextEnabled(true)?;
+        smtc.SetIsPreviousEnabled(true)?;
+        debug!("已启用各个 SMTC 控制能力");
 
-    let handler = TypedEventHandler::new(
-        move |_sender: Ref<SystemMediaTransportControls>,
-              args: Ref<SystemMediaTransportControlsButtonPressedEventArgs>|
-              -> windows::core::Result<()> {
-            if let Some(args) = args.as_ref() {
-                let event = match args.Button()? {
-                    SystemMediaTransportControlsButton::Play => SmtcEvent::Play,
-                    SystemMediaTransportControlsButton::Pause => SmtcEvent::Pause,
-                    SystemMediaTransportControlsButton::Next => SmtcEvent::NextSong,
-                    SystemMediaTransportControlsButton::Previous => SmtcEvent::PreviousSong,
-                    _ => return Ok(()),
-                };
-                dispatch_event(&event);
-            }
-            Ok(())
-        },
-    );
-    smtc.ButtonPressed(&handler)?;
+        let handler = TypedEventHandler::new(
+            move |_sender: Ref<SystemMediaTransportControls>,
+                  args: Ref<SystemMediaTransportControlsButtonPressedEventArgs>|
+                  -> windows::core::Result<()> {
+                if let Some(args) = args.as_ref() {
+                    let event = match args.Button()? {
+                        SystemMediaTransportControlsButton::Play => SmtcEvent::Play,
+                        SystemMediaTransportControlsButton::Pause => SmtcEvent::Pause,
+                        SystemMediaTransportControlsButton::Next => SmtcEvent::NextSong,
+                        SystemMediaTransportControlsButton::Previous => SmtcEvent::PreviousSong,
+                        _ => return Ok(()),
+                    };
+                    dispatch_event(&event);
+                }
+                Ok(())
+            },
+        );
+        smtc.ButtonPressed(&handler)?;
 
-    let shuffle_handler = TypedEventHandler::new(
-        move |_: Ref<SystemMediaTransportControls>,
-              _: Ref<ShuffleEnabledChangeRequestedEventArgs>|
-              -> windows::core::Result<()> {
-            dispatch_event(&SmtcEvent::ToggleShuffle);
-            Ok(())
-        },
-    );
-    smtc.ShuffleEnabledChangeRequested(&shuffle_handler)?;
+        let shuffle_handler = TypedEventHandler::new(
+            move |_: Ref<SystemMediaTransportControls>,
+                  _: Ref<ShuffleEnabledChangeRequestedEventArgs>|
+                  -> windows::core::Result<()> {
+                dispatch_event(&SmtcEvent::ToggleShuffle);
+                Ok(())
+            },
+        );
+        smtc.ShuffleEnabledChangeRequested(&shuffle_handler)?;
 
-    let repeat_handler = TypedEventHandler::new(
-        move |_: Ref<SystemMediaTransportControls>,
-              _: Ref<AutoRepeatModeChangeRequestedEventArgs>|
-              -> windows::core::Result<()> {
-            dispatch_event(&SmtcEvent::ToggleRepeat);
-            Ok(())
-        },
-    );
-    smtc.AutoRepeatModeChangeRequested(&repeat_handler)?;
+        let repeat_handler = TypedEventHandler::new(
+            move |_: Ref<SystemMediaTransportControls>,
+                  _: Ref<AutoRepeatModeChangeRequestedEventArgs>|
+                  -> windows::core::Result<()> {
+                dispatch_event(&SmtcEvent::ToggleRepeat);
+                Ok(())
+            },
+        );
+        smtc.AutoRepeatModeChangeRequested(&repeat_handler)?;
 
-    let seek_handler = TypedEventHandler::new(
-        move |_: Ref<SystemMediaTransportControls>,
-              args: Ref<PlaybackPositionChangeRequestedEventArgs>|
-              -> windows::core::Result<()> {
-            if let Some(args) = args.as_ref() {
-                let position = args.RequestedPlaybackPosition()?;
-                let position_ms = (position.Duration as f64) / HNS_PER_MILLISECOND;
-                dispatch_event(&SmtcEvent::Seek { position_ms });
-            }
-            Ok(())
-        },
-    );
-    smtc.PlaybackPositionChangeRequested(&seek_handler)?;
+        let seek_handler = TypedEventHandler::new(
+            move |_: Ref<SystemMediaTransportControls>,
+                  args: Ref<PlaybackPositionChangeRequestedEventArgs>|
+                  -> windows::core::Result<()> {
+                if let Some(args) = args.as_ref() {
+                    let position = args.RequestedPlaybackPosition()?;
+                    let position_ms = (position.Duration as f64) / HNS_PER_MILLISECOND;
+                    dispatch_event(&SmtcEvent::Seek { position_ms });
+                }
+                Ok(())
+            },
+        );
+        smtc.PlaybackPositionChangeRequested(&seek_handler)?;
+        Ok(())
+    })?;
 
-    info!("SMTC 已初始化");
+    debug!("SMTC 已初始化");
     Ok(())
 }
 
 #[instrument]
 pub fn shutdown() -> Result<()> {
-    MEDIA_PLAYER
-        .lock()
-        .map_err(|e| anyhow::anyhow!("关闭时 SMTC 锁中毒: {e}"))?
-        .SystemMediaTransportControls()?
-        .SetIsEnabled(false)?;
+    with_smtc("关闭", |smtc| {
+        smtc.SetIsEnabled(false)?;
+        Ok(())
+    })?;
     clear_callback();
     Ok(())
 }
@@ -222,19 +230,17 @@ pub fn update_play_state(status: &PlaybackStatus) -> Result<()> {
         PlaybackStatus::Playing => MediaPlaybackStatus::Playing,
         PlaybackStatus::Paused => MediaPlaybackStatus::Paused,
     };
-    info!(new_status = ?status, "正在更新 SMTC 播放状态");
+    debug!(new_status = ?status, "正在更新 SMTC 播放状态");
 
-    MEDIA_PLAYER
-        .lock()
-        .map_err(|e| anyhow::anyhow!("更新播放状态时 SMTC 锁中毒: {e}"))?
-        .SystemMediaTransportControls()?
-        .SetPlaybackStatus(win_status)?;
-    Ok(())
+    with_smtc("更新播放状态", |smtc| {
+        smtc.SetPlaybackStatus(win_status)?;
+        Ok(())
+    })
 }
 
 #[instrument]
 pub fn update_timeline(current_ms: f64, total_ms: f64) -> Result<()> {
-    info!(current_ms, total_ms, "正在更新 SMTC 时间线");
+    debug!(current_ms, total_ms, "正在更新 SMTC 时间线");
 
     let props = SystemMediaTransportControlsTimelineProperties::new()?;
     props.SetStartTime(TimeSpan { Duration: 0 })?;
@@ -245,36 +251,27 @@ pub fn update_timeline(current_ms: f64, total_ms: f64) -> Result<()> {
         Duration: (total_ms * HNS_PER_MILLISECOND) as i64,
     })?;
 
-    MEDIA_PLAYER
-        .lock()
-        .map_err(|e| anyhow::anyhow!("更新时间线时 SMTC 锁中毒: {e}"))?
-        .SystemMediaTransportControls()?
-        .UpdateTimelineProperties(&props)?;
-    Ok(())
+    with_smtc("更新时间线", |smtc| {
+        smtc.UpdateTimelineProperties(&props)?;
+        Ok(())
+    })
 }
 
 #[instrument]
-pub fn update_play_mode(is_shuffling: bool, repeat_mode_str: &str) -> Result<()> {
-    info!(
-        is_shuffling,
-        repeat_mode = repeat_mode_str,
-        "正在更新 SMTC 播放模式"
-    );
+pub fn update_play_mode(is_shuffling: bool, repeat_mode: &RepeatMode) -> Result<()> {
+    debug!(is_shuffling, ?repeat_mode, "正在更新 SMTC 播放模式");
 
-    let smtc = MEDIA_PLAYER
-        .lock()
-        .map_err(|e| anyhow::anyhow!("更新播放模式时 SMTC 锁中毒: {e}"))?
-        .SystemMediaTransportControls()?;
+    with_smtc("更新播放模式", |smtc| {
+        smtc.SetShuffleEnabled(is_shuffling)?;
 
-    smtc.SetShuffleEnabled(is_shuffling)?;
-
-    let repeat_mode = match repeat_mode_str {
-        "Track" => MediaPlaybackAutoRepeatMode::Track,
-        "List" => MediaPlaybackAutoRepeatMode::List,
-        _ => MediaPlaybackAutoRepeatMode::None,
-    };
-    smtc.SetAutoRepeatMode(repeat_mode)?;
-    Ok(())
+        let repeat_mode_win = match repeat_mode {
+            RepeatMode::Track => MediaPlaybackAutoRepeatMode::Track,
+            RepeatMode::List => MediaPlaybackAutoRepeatMode::List,
+            RepeatMode::None => MediaPlaybackAutoRepeatMode::None,
+        };
+        smtc.SetAutoRepeatMode(repeat_mode_win)?;
+        Ok(())
+    })
 }
 
 pub fn update_metadata(
@@ -291,36 +288,34 @@ pub fn update_metadata(
         "正在更新 SMTC 歌曲元数据"
     );
 
-    let updater = MEDIA_PLAYER
-        .lock()
-        .map_err(|e| anyhow::anyhow!("更新元数据时 SMTC 锁中毒: {e}"))?
-        .SystemMediaTransportControls()?
-        .DisplayUpdater()?;
+    with_smtc("更新元数据", |smtc| {
+        let updater = smtc.DisplayUpdater()?;
 
-    updater.SetType(MediaPlaybackType::Music)?;
+        updater.SetType(MediaPlaybackType::Music)?;
 
-    let props = updater.MusicProperties()?;
-    props.SetTitle(&HSTRING::from(title))?;
-    props.SetArtist(&HSTRING::from(artist))?;
-    props.SetAlbumTitle(&HSTRING::from(album))?;
+        let props = updater.MusicProperties()?;
+        props.SetTitle(&HSTRING::from(title))?;
+        props.SetArtist(&HSTRING::from(artist))?;
+        props.SetAlbumTitle(&HSTRING::from(album))?;
 
-    if let Ok(bytes) = STANDARD.decode(thumbnail_base64) {
-        debug!(bytes_len = bytes.len(), "封面数据已准备好, 长度:");
+        if let Ok(bytes) = STANDARD.decode(thumbnail_base64) {
+            debug!(bytes_len = bytes.len(), "封面数据已准备好, 长度:");
 
-        let stream = InMemoryRandomAccessStream::new()?;
-        let writer = DataWriter::CreateDataWriter(&stream)?;
-        writer.WriteBytes(&bytes)?;
-        writer.StoreAsync()?.GetResults()?;
-        writer.DetachStream()?;
-        stream.Seek(0)?;
-        let stream_ref = RandomAccessStreamReference::CreateFromStream(&stream)?;
-        updater.SetThumbnail(&stream_ref)?;
-    } else if !thumbnail_base64.is_empty() {
-        warn!("解码 Base64 字符串失败");
-    }
+            let stream = InMemoryRandomAccessStream::new()?;
+            let writer = DataWriter::CreateDataWriter(&stream)?;
+            writer.WriteBytes(&bytes)?;
+            writer.StoreAsync()?.GetResults()?;
+            writer.DetachStream()?;
+            stream.Seek(0)?;
+            let stream_ref = RandomAccessStreamReference::CreateFromStream(&stream)?;
+            updater.SetThumbnail(&stream_ref)?;
+        } else if !thumbnail_base64.is_empty() {
+            warn!("解码 Base64 字符串失败");
+        }
 
-    updater.Update()?;
-    Ok(())
+        updater.Update()?;
+        Ok(())
+    })
 }
 
 fn handle_command_inner(command_json: &str) -> Result<()> {

@@ -10,7 +10,7 @@ import type {
 	NcmEventName,
 	ReactRootElement,
 } from "../types/ncm-internal";
-import type { PlaybackStatus } from "../types/smtc";
+import type { PlaybackStatus, RepeatMode } from "../types/smtc";
 import { throttle } from "../utils";
 import { BaseProvider } from "./BaseProvider";
 
@@ -220,7 +220,7 @@ export class ReactStoreProvider extends BaseProvider {
 	private resolveReady!: () => void;
 
 	public onPlayModeChange:
-		| ((detail: { isShuffling: boolean; repeatMode: string }) => void)
+		| ((detail: { isShuffling: boolean; repeatMode: RepeatMode }) => void)
 		| null = null;
 
 	constructor() {
@@ -397,7 +397,7 @@ export class ReactStoreProvider extends BaseProvider {
 			this.lastPlayMode = newNcmMode || undefined;
 
 			let isShuffling = newNcmMode === CONSTANTS.NCM_PLAY_MODE_SHUFFLE;
-			let repeatMode = "None";
+			let repeatMode: RepeatMode = "None";
 
 			switch (newNcmMode) {
 				case CONSTANTS.NCM_PLAY_MODE_SHUFFLE:

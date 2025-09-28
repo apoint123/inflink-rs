@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
 import { ReactStoreProvider } from "./SongInfoProviders/ReactStoreProvider";
 import type { ControlMessage } from "./types/smtc";
@@ -53,14 +53,14 @@ export function useCompatibility(): boolean | null {
 export function useInfoProvider(
 	isCompatible: boolean | null,
 ): ReactStoreProvider | null {
-	const [infoProvider, setInfoProvider] = useState<ReactStoreProvider | null>(
-		null,
-	);
+	const providerRef = useRef<ReactStoreProvider | null>(null);
+	const [isReady, setIsReady] = useState(false);
 
 	useEffect(() => {
 		if (isCompatible) {
 			const provider = new ReactStoreProvider();
-			setInfoProvider(provider);
+			providerRef.current = provider;
+			setIsReady(true);
 
 			return () => {
 				provider.disabled = true;
@@ -68,12 +68,13 @@ export function useInfoProvider(
 				if ("dispose" in provider && typeof provider.dispose === "function") {
 					provider.dispose();
 				}
-				setInfoProvider(null);
+				providerRef.current = null;
+				setIsReady(false);
 			};
 		}
 	}, [isCompatible]);
 
-	return infoProvider;
+	return isReady ? providerRef.current : null;
 }
 
 export function useSmtcConnection(
