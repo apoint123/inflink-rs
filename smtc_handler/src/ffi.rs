@@ -1,8 +1,8 @@
-use tracing::{debug, error, info, instrument};
-
 use crate::{logger, smtc_core};
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::ptr;
+use std::sync::Once;
+use tracing::{debug, error, instrument, trace};
 
 const DISPATCH_ARGS: [NativeAPIType; 1] = [NativeAPIType::String];
 const CALLBACK_ARGS: [NativeAPIType; 1] = [NativeAPIType::V8Value];
@@ -44,6 +44,26 @@ pub struct PluginAPI {
     pub ncm_version: *const [u16; 3],
 }
 
+unsafe fn register_api(
+    add_api_fn: AddNativeApiFn,
+    identifier_str: &str,
+    args: Option<&[NativeAPIType]>,
+    function: NativeFunction,
+) -> Result<(), c_int> {
+    let identifier = match CString::new(identifier_str) {
+        Ok(s) => s,
+        Err(e) => {
+            error!("[InfLink-rs] 无法创建 CString '{}': {}", identifier_str, e);
+            return Err(-1);
+        }
+    };
+
+    let (args_ptr, args_len) = args.map_or((ptr::null(), 0), |a| (a.as_ptr(), a.len() as c_int));
+
+    add_api_fn(args_ptr, args_len, identifier.as_ptr(), function);
+    Ok(())
+}
+
 unsafe fn c_char_to_string(s: *const c_char) -> String {
     if s.is_null() {
         return String::new();
@@ -75,7 +95,7 @@ pub unsafe extern "C" fn inflink_shutdown(_args: *mut *mut c_void) -> *mut c_cha
 pub unsafe extern "C" fn inflink_register_event_callback(args: *mut *mut c_void) -> *mut c_char {
     let v8_func = unsafe { *args.cast::<*mut cef_safe::cef_sys::_cef_v8value_t>() };
     if !v8_func.is_null() {
-        info!("已注册事件回调");
+        debug!("已注册事件回调");
         smtc_core::register_event_callback(v8_func);
     }
     ptr::null_mut()
@@ -115,7 +135,7 @@ pub unsafe extern "C" fn inflink_dispatch(args: *mut *mut c_void) -> *mut c_char
 pub unsafe extern "C" fn inflink_register_logger(args: *mut *mut c_void) -> *mut c_char {
     let v8_func = unsafe { *args.cast::<*mut cef_safe::cef_sys::_cef_v8value_t>() };
     if !v8_func.is_null() {
-        info!("已注册日志回调");
+        debug!("已注册日志回调");
         logger::register_callback(v8_func);
     }
     ptr::null_mut()
@@ -129,64 +149,57 @@ pub unsafe extern "C" fn inflink_cleanup(_args: *mut *mut c_void) -> *mut c_char
     ptr::null_mut()
 }
 
+static LOGGER_INIT: Once = Once::new();
+
 #[instrument(skip(api))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn BetterNCMPluginMain(api: *mut PluginAPI) -> c_int {
+    LOGGER_INIT.call_once(|| {
+        logger::init();
+    });
+
     if api.is_null() {
+        error!("BetterNCMPluginMain 收到了一个 null api 指针");
         return -1;
     }
 
-    logger::init();
+    unsafe {
+        let api_ref = &*api;
+        if api_ref.process_type == NCMProcessType::Renderer {
+            trace!(process_type = ?api_ref.process_type, "[InfLink-rs] 正在注册 API");
+            let add_api = api_ref.add_native_api;
 
-    let api = unsafe { &*api };
-    if api.process_type == NCMProcessType::Renderer {
-        info!(process_type = ?api.process_type, "[InfLink-rs] 正在注册 API");
-        let add_api = api.add_native_api;
-
-        macro_rules! register_api {
-            ($id:expr, $args:expr, $func:ident) => {
-                let identifier = match CString::new($id) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        error!("[InfLink-rs] 无法创建 CString '{}': {}", $id, e);
-                        return -1;
-                    }
-                };
-                add_api(
-                    $args.as_ptr(),
-                    $args.len() as c_int,
-                    identifier.as_ptr(),
-                    $func,
-                );
-            };
-            ($id:expr, $func:ident) => {
-                let identifier = match CString::new($id) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        error!("[InfLink-rs] 无法创建 CString '{}': {}", $id, e);
-                        return -1;
-                    }
-                };
-                add_api(ptr::null(), 0, identifier.as_ptr(), $func);
-            };
+            let registrations = [
+                register_api(add_api, "inflink.initialize", None, inflink_initialize),
+                register_api(
+                    add_api,
+                    "inflink.register_logger",
+                    Some(&CALLBACK_ARGS),
+                    inflink_register_logger,
+                ),
+                register_api(add_api, "inflink.cleanup", None, inflink_cleanup),
+                register_api(add_api, "inflink.shutdown", None, inflink_shutdown),
+                register_api(
+                    add_api,
+                    "inflink.register_event_callback",
+                    Some(&CALLBACK_ARGS),
+                    inflink_register_event_callback,
+                ),
+                register_api(
+                    add_api,
+                    "inflink.dispatch",
+                    Some(&DISPATCH_ARGS),
+                    inflink_dispatch,
+                ),
+            ];
+            for result in registrations {
+                if let Err(code) = result {
+                    return code;
+                }
+            }
+        } else {
+            debug!(process_type = ?api_ref.process_type, "插件在非渲染进程中加载, 跳过注册API");
         }
-
-        register_api!("inflink.initialize", inflink_initialize);
-        register_api!(
-            "inflink.register_logger",
-            CALLBACK_ARGS,
-            inflink_register_logger
-        );
-        register_api!("inflink.cleanup", inflink_cleanup);
-        register_api!("inflink.shutdown", inflink_shutdown);
-        register_api!(
-            "inflink.register_event_callback",
-            CALLBACK_ARGS,
-            inflink_register_event_callback
-        );
-        register_api!("inflink.dispatch", DISPATCH_ARGS, inflink_dispatch);
-    } else {
-        debug!(process_type = ?api.process_type, "插件在非渲染进程中加载, 跳过注册API");
     }
     0
 }
