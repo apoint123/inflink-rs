@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.1.0](https://github.com/apoint123/inflink-rs/compare/v2.0.1...v2.1.0) (2025-09-28)
+
+
+### 🚚 Chores
+
+* 统一版本 ([0fc3ad4](https://github.com/apoint123/inflink-rs/commit/0fc3ad448309b0b3aec60ae54b42665815984272))
+* 修复行尾问题 ([9e9811e](https://github.com/apoint123/inflink-rs/commit/9e9811e543c13a8239fa5a4ba68b8e0416c54b97))
+
+
+### ✨ Features
+
+* 检查更新功能 ([b438758](https://github.com/apoint123/inflink-rs/commit/b4387584bf5476216bdb515269f4fc90e3bac5e4))
+* 使用按钮代替超链接 ([d60d9b8](https://github.com/apoint123/inflink-rs/commit/d60d9b81a30e7495314108d49feddf00bd2ed634))
+* 使用更好的字体 ([5781997](https://github.com/apoint123/inflink-rs/commit/57819979d8fae793e9d4245ac2453795ba88c307))
+
+
+### ♻️ Code Refactoring
+
+* 改进 API 注册 ([faecffc](https://github.com/apoint123/inflink-rs/commit/faecffc6e43f68626e7747b4e5b5772c896150d8))
+* 优化前后端的数据结构 ([704a839](https://github.com/apoint123/inflink-rs/commit/704a83996088fee05d6b37ab2a56d2bc8abdf0cc))
+* 优化日志记录 ([88f9abd](https://github.com/apoint123/inflink-rs/commit/88f9abd28a88d52fde8e6551661d78a856c58803))
+
 ### 2.0.1 (2025-09-27)
 
 
