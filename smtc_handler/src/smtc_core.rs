@@ -59,7 +59,7 @@ pub fn register_event_callback(v8_func_ptr: *mut cef_safe::cef_sys::_cef_v8value
         match callback_result {
             Ok(callback) => {
                 *guard = Some(callback);
-                info!("SMTC 事件回调已成功注册");
+                debug!("SMTC 事件回调已成功注册");
             }
             Err(e) => {
                 error!("注册 SMTC 事件回调失败: {:?}", e);

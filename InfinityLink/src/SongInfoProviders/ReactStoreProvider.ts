@@ -279,7 +279,6 @@ export class ReactStoreProvider extends BaseProvider {
 		this.onStateChanged();
 
 		this.resolveReady();
-		console.log("[React Store Provider] 初始化完成");
 	}
 
 	private registerAudioPlayerEvents(): void {

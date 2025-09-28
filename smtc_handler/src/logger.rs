@@ -1,7 +1,8 @@
 use serde::Serialize;
 use std::fs;
-use std::sync::{LazyLock, Mutex};
-use tracing::{Subscriber, info};
+use std::sync::{LazyLock, Mutex, OnceLock};
+use tracing::{Subscriber, trace};
+use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling::RollingFileAppender;
 use tracing_subscriber::{
     EnvFilter, Layer, fmt::format::FmtSpan, layer::SubscriberExt, util::SubscriberInitExt,
@@ -40,7 +41,7 @@ pub fn register_callback(v8_func_ptr: *mut cef_safe::cef_sys::_cef_v8value_t) {
     match callback_result {
         Ok(callback) => {
             *LOGGING_CALLBACK.lock().unwrap() = Some(callback);
-            info!("JS 日志回调注册成功。");
+            trace!("JS 日志回调注册成功。");
         }
         Err(e) => {
             eprintln!("JS 日志回调注册失败: {e}");
@@ -125,7 +126,7 @@ impl tracing::field::Visit for MessageVisitor {
     }
 }
 
-static mut LOG_GUARD: Option<tracing_appender::non_blocking::WorkerGuard> = None;
+static LOG_GUARD: OnceLock<WorkerGuard> = OnceLock::new();
 
 pub fn init() {
     let default_filter = EnvFilter::new("info");
@@ -141,15 +142,17 @@ pub fn init() {
                     .rotation(rotation)
                     .filename_prefix("inflink-rs")
                     .filename_suffix("log")
+                    .max_log_files(7)
                     .build(&path)
                     .expect("初始化日志文件失败");
 
                 let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
-                unsafe {
-                    LOG_GUARD = Some(guard);
+
+                if LOG_GUARD.set(guard).is_err() {
+                    tracing::error!("[InfLink-rs] Logger Guard 已经被初始化，不应重复调用 init()");
                 }
 
-                info!(log_path = ?path, "文件日志已初始化。");
+                trace!(log_path = ?path, "文件日志已初始化。");
                 Some(
                     tracing_subscriber::fmt::layer()
                         .with_writer(non_blocking)
@@ -170,7 +173,7 @@ pub fn init() {
         .with(frontend_layer)
         .init();
 
-    info!("Tracing subscriber 已初始化");
+    trace!("Tracing subscriber 已初始化");
 }
 
 pub fn clear_callback() {

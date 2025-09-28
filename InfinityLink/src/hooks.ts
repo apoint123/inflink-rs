@@ -120,7 +120,6 @@ export function useSmtcConnection(
 		smtcImplObj.initialize(onControl, connectCallback);
 
 		return () => {
-			console.log("[InfLink-rs] 清理事件监听...");
 			infoProvider.removeEventListener("updateSongInfo", onUpdateSongInfo);
 			infoProvider.removeEventListener("updatePlayState", onUpdatePlayState);
 			infoProvider.removeEventListener("updateTimeline", onUpdateTimeline);
@@ -163,8 +162,6 @@ export function useVersionCheck(repo: string): NewVersionInfo | null {
 						version: latestRelease.tag_name,
 						url: latestRelease.html_url,
 					});
-				} else {
-					console.log("[InfLink-rs] 当前已是最新版本。");
 				}
 			} catch (error) {
 				console.error("[InfLink-rs] 检查更新失败:", error);
