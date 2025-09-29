@@ -5,7 +5,8 @@
 			"**/*.{js,ts,jsx,tsx,json,astro,mjs,cjs,css,jsonc}",
 			"!**/node_modules",
 			"!**/dist",
-			"!**/build"
+			"!**/build",
+			"!**/target"
 		]
 	},
 	"formatter": {
