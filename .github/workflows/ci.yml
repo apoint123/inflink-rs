@@ -8,10 +8,6 @@ jobs:
   ci-checks:
     runs-on: windows-latest
 
-    env:
-      SCCACHE_GHA_ENABLED: "true"
-      RUSTC_WRAPPER: "sccache"
-
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
@@ -32,8 +28,8 @@ jobs:
           toolchain: stable
           components: clippy
 
-      - name: 安装 sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+      - name: 缓存 Rust 依赖
+        uses: Swatinem/rust-cache@v2
 
       - name: 安装依赖
         run: pnpm install
