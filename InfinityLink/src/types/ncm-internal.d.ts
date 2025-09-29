@@ -50,25 +50,6 @@ export interface ReactRootElement extends HTMLElement {
 	};
 }
 
-export interface LegacyNativeCmder {
-	appendRegisterCall: (
-		name: string,
-		namespace: string,
-		callback: (...args: unknown[]) => void,
-	) => void;
-	_envAdapter: {
-		callAdapter: (
-			method: string,
-			callback: () => void,
-			args: unknown[],
-		) => void;
-	};
-}
-
-export interface Channel {
-	registerCall: (name: string, callback: (...args: unknown[]) => void) => void;
-}
-
 export interface AudioLoadInfo {
 	/** 音频总时长，单位：秒 */
 	duration: number;
