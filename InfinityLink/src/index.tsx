@@ -11,12 +11,17 @@ import {
 	Box,
 	Button,
 	CircularProgress,
+	FormControl,
 	FormControlLabel,
 	FormGroup,
+	InputLabel,
+	MenuItem,
+	Select,
 	Switch,
 	Typography,
 } from "@mui/material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
+import { useEffect, useId } from "react";
 import { createRoot } from "react-dom/client";
 import {
 	useCompatibility,
@@ -25,7 +30,13 @@ import {
 	useSmtcConnection,
 	useVersionCheck,
 } from "./hooks";
-import { STORE_KEY_SMTC_ENABLED } from "./keys";
+import {
+	STORE_KEY_BACKEND_LOG_LEVEL,
+	STORE_KEY_FRONTEND_LOG_LEVEL,
+	STORE_KEY_SMTC_ENABLED,
+} from "./keys";
+import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
+import logger, { type LogLevel, setLogLevel } from "./utils/logger";
 
 const configElement = document.createElement("div");
 
@@ -46,7 +57,7 @@ const theme = createTheme({
 });
 
 plugin.onLoad((selfPlugin) => {
-	console.log("[InfLink-rs] 插件正在加载...", selfPlugin);
+	logger.debug("[InfLink-rs] 插件正在加载...", selfPlugin);
 
 	try {
 		createRoot(configElement).render(
@@ -55,9 +66,11 @@ plugin.onLoad((selfPlugin) => {
 			</ThemeProvider>,
 		);
 	} catch (error) {
-		console.error("[InfLink-rs] React 组件渲染失败:", error);
+		logger.error("[InfLink-rs] React 组件渲染失败:", error);
 	}
 });
+
+const logLevels: LogLevel[] = ["trace", "debug", "info", "warn", "error"];
 
 function Main() {
 	const isCompatible = useCompatibility();
@@ -65,9 +78,50 @@ function Main() {
 		STORE_KEY_SMTC_ENABLED,
 		true,
 	);
+	const [frontendLogLevel, setFrontendLogLevel] = useLocalStorage<LogLevel>(
+		STORE_KEY_FRONTEND_LOG_LEVEL,
+		"info",
+	);
+	const [backendLogLevel, setBackendLogLevel] = useLocalStorage<LogLevel>(
+		STORE_KEY_BACKEND_LOG_LEVEL,
+		"info",
+	);
+
+	const frontendId = useId();
+	const backendId = useId();
+
 	const newVersionInfo = useVersionCheck(GITHUB_REPO);
 	const infoProvider = useInfoProvider(isCompatible);
 	useSmtcConnection(infoProvider, SMTCEnabled);
+
+	useEffect(() => {
+		if (isCompatible !== null) {
+			logger.debug(
+				`[InfLink] 兼容性检查结果: ${
+					isCompatible ? "Compatible" : "Incompatible"
+				}`,
+			);
+		}
+	}, [isCompatible]);
+
+	useEffect(() => {
+		logger.debug(`[InfLink] SMTC 支持: ${SMTCEnabled}`);
+	}, [SMTCEnabled]);
+
+	useEffect(() => {
+		if (newVersionInfo) {
+			logger.info(`[InfLink] New version detected: ${newVersionInfo.version}`);
+		}
+	}, [newVersionInfo]);
+
+	useEffect(() => {
+		setLogLevel(frontendLogLevel);
+		logger.debug(`[InfLink] 设置前端日志级别为: ${frontendLogLevel}`);
+	}, [frontendLogLevel]);
+
+	useEffect(() => {
+		SMTCNativeBackendInstance.setBackendLogLevel(backendLogLevel);
+	}, [backendLogLevel]);
 
 	if (isCompatible === null) {
 		return <CircularProgress size={24} />;
@@ -119,6 +173,41 @@ function Main() {
 					label="启用 SMTC 支持"
 				/>
 			</FormGroup>
+
+			<Box sx={{ mt: 2, display: "flex", gap: 2 }}>
+				<FormControl size="small">
+					<InputLabel id={frontendId}>前端日志级别</InputLabel>
+					<Select
+						labelId={frontendId}
+						value={frontendLogLevel}
+						label="前端日志级别"
+						onChange={(e) => setFrontendLogLevel(e.target.value as LogLevel)}
+						sx={{ minWidth: 120 }}
+					>
+						{logLevels.map((level) => (
+							<MenuItem key={level} value={level}>
+								{level}
+							</MenuItem>
+						))}
+					</Select>
+				</FormControl>
+				<FormControl size="small">
+					<InputLabel id={backendId}>后端日志级别</InputLabel>
+					<Select
+						labelId={backendId}
+						value={backendLogLevel}
+						label="后端日志级别"
+						onChange={(e) => setBackendLogLevel(e.target.value as LogLevel)}
+						sx={{ minWidth: 120 }}
+					>
+						{logLevels.map((level) => (
+							<MenuItem key={level} value={level}>
+								{level}
+							</MenuItem>
+						))}
+					</Select>
+				</FormControl>
+			</Box>
 		</div>
 	);
 }

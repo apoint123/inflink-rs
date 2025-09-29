@@ -1,11 +1,14 @@
 use serde::Serialize;
 use std::fs;
-use std::sync::{LazyLock, Mutex, OnceLock};
+use std::str::FromStr;
+use std::sync::OnceLock;
+use std::sync::{LazyLock, Mutex};
 use tracing::{Subscriber, trace};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling::RollingFileAppender;
 use tracing_subscriber::{
-    EnvFilter, Layer, fmt::format::FmtSpan, layer::SubscriberExt, util::SubscriberInitExt,
+    EnvFilter, Layer, filter::LevelFilter, fmt::format::FmtSpan, layer::SubscriberExt,
+    util::SubscriberInitExt,
 };
 
 #[derive(Serialize)]
@@ -127,9 +130,37 @@ impl tracing::field::Visit for MessageVisitor {
 }
 
 static LOG_GUARD: OnceLock<WorkerGuard> = OnceLock::new();
+static FRONTEND_FILTER_LEVEL: LazyLock<Mutex<LevelFilter>> =
+    LazyLock::new(|| Mutex::new(LevelFilter::INFO));
+
+struct FrontendFilter;
+
+impl<S: Subscriber> tracing_subscriber::layer::Filter<S> for FrontendFilter {
+    fn enabled(
+        &self,
+        meta: &tracing::Metadata<'_>,
+        _ctx: &tracing_subscriber::layer::Context<'_, S>,
+    ) -> bool {
+        let guard = FRONTEND_FILTER_LEVEL.lock().expect("日志级别锁已毒化");
+        meta.level() <= &*guard
+    }
+}
+
+pub fn set_frontend_log_level(level_str: &str) -> Result<(), String> {
+    let level = LevelFilter::from_str(level_str)
+        .map_err(|e| format!("无效的日志级别 '{level_str}': {e}"))?;
+
+    {
+        let mut guard = FRONTEND_FILTER_LEVEL.lock().expect("日志级别锁已毒化");
+        *guard = level;
+    }
+
+    trace!("前端日志级别已设置为 {}", level_str);
+    Ok(())
+}
 
 pub fn init() {
-    let default_filter = EnvFilter::new("info");
+    let default_filter = EnvFilter::new("trace");
 
     let file_layer = dirs::data_dir().map_or_else(
         || None,
@@ -157,7 +188,8 @@ pub fn init() {
                     tracing_subscriber::fmt::layer()
                         .with_writer(non_blocking)
                         .with_span_events(FmtSpan::CLOSE)
-                        .with_ansi(false),
+                        .with_ansi(false)
+                        .with_filter(EnvFilter::new("info")),
                 )
             } else {
                 None
@@ -165,7 +197,7 @@ pub fn init() {
         },
     );
 
-    let frontend_layer = FrontendTracingLayer;
+    let frontend_layer = FrontendTracingLayer.with_filter(FrontendFilter);
 
     tracing_subscriber::registry()
         .with(default_filter)

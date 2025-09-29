@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
 import { ReactStoreProvider } from "./SongInfoProviders/ReactStoreProvider";
 import type { ControlMessage } from "./types/smtc";
+import logger from "./utils/logger";
 
 export function useLocalStorage<T>(
 	key: string,
@@ -14,7 +15,7 @@ export function useLocalStorage<T>(
 			const item = window.localStorage.getItem(key);
 			return item ? parse(item) : initialValue;
 		} catch (error) {
-			console.log(error);
+			logger.error(error);
 			return initialValue;
 		}
 	});
@@ -26,7 +27,7 @@ export function useLocalStorage<T>(
 			setStoredValue(valueToStore);
 			window.localStorage.setItem(key, stringify(valueToStore));
 		} catch (error) {
-			console.log(error);
+			logger.error(error);
 		}
 	};
 
@@ -42,7 +43,7 @@ export function useCompatibility(): boolean | null {
 			const majorVersion = parseInt(version.split(".")[0], 10);
 			setIsCompatible(majorVersion >= 3);
 		} catch (e) {
-			console.error("[InfLink-rs] 无法检测网易云音乐版本。", e);
+			logger.error("[InfLink-rs] 无法检测网易云音乐版本。", e);
 			setIsCompatible(false);
 		}
 	}, []);
@@ -158,14 +159,14 @@ export function useVersionCheck(repo: string): NewVersionInfo | null {
 						numeric: true,
 					}) > 0
 				) {
-					console.log(`[InfLink-rs] 发现新版本: ${latestRelease.tag_name}`);
+					logger.info(`[InfLink-rs] 发现新版本: ${latestRelease.tag_name}`);
 					setNewVersionInfo({
 						version: latestRelease.tag_name,
 						url: latestRelease.html_url,
 					});
 				}
 			} catch (error) {
-				console.error("[InfLink-rs] 检查更新失败:", error);
+				logger.error("[InfLink-rs] 检查更新失败:", error);
 			}
 		};
 

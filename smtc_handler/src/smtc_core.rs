@@ -3,7 +3,7 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use cef_safe::{CefResult, CefV8Context, CefV8Value, renderer_post_task_in_v8_ctx};
 use serde::Serialize;
 use std::sync::{LazyLock, Mutex};
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 use windows::{
     Foundation::{TimeSpan, TypedEventHandler},
     Media::Playback::MediaPlayer,
@@ -73,6 +73,9 @@ pub fn register_event_callback(v8_func_ptr: *mut cef_safe::cef_sys::_cef_v8value
 
 pub fn clear_callback() {
     if let Ok(mut guard) = EVENT_CALLBACK.lock() {
+        if guard.is_some() {
+            debug!("SMTC 事件回调已清理");
+        }
         *guard = None;
     } else {
         error!("清理 SMTC 回调时锁中毒");
@@ -100,6 +103,7 @@ fn dispatch_event(event: &SmtcEvent) {
 
     if let Some(context) = maybe_context {
         let post_result = renderer_post_task_in_v8_ctx(context, move || {
+            debug!("执行 SMTC 事件回调...");
             let Ok(guard) = EVENT_CALLBACK.lock() else {
                 error!("SMTC 事件回调锁在任务中毒化");
                 return;
@@ -116,16 +120,21 @@ fn dispatch_event(event: &SmtcEvent) {
                         error!("创建 V8 字符串参数失败: {e:?}");
                     }
                 }
+            } else {
+                warn!("回调任务执行时，回调函数已不存在");
             }
         });
 
         if post_result.is_err() {
             error!("向渲染线程发送任务失败");
         }
+    } else {
+        warn!("无法分发 SMTC 事件，因为没有注册回调函数");
     }
 }
 
 static MEDIA_PLAYER: LazyLock<Mutex<MediaPlayer>> = LazyLock::new(|| {
+    info!("创建 MediaPlayer 和 SMTC 实例...");
     let player = MediaPlayer::new().expect("无法创建 MediaPlayer 实例");
     let smtc = player
         .SystemMediaTransportControls()
@@ -147,6 +156,7 @@ where
 
 #[instrument]
 pub fn initialize() -> Result<()> {
+    info!("正在初始化 SMTC...");
     with_smtc("初始化", |smtc| {
         smtc.SetIsEnabled(true)?;
         smtc.SetIsPlayEnabled(true)?;
@@ -160,7 +170,9 @@ pub fn initialize() -> Result<()> {
                   args: Ref<SystemMediaTransportControlsButtonPressedEventArgs>|
                   -> windows::core::Result<()> {
                 if let Some(args) = args.as_ref() {
-                    let event = match args.Button()? {
+                    let button = args.Button()?;
+                    debug!(?button, "SMTC 按钮被按下");
+                    let event = match button {
                         SystemMediaTransportControlsButton::Play => SmtcEvent::Play,
                         SystemMediaTransportControlsButton::Pause => SmtcEvent::Pause,
                         SystemMediaTransportControlsButton::Next => SmtcEvent::NextSong,
@@ -178,6 +190,7 @@ pub fn initialize() -> Result<()> {
             move |_: Ref<SystemMediaTransportControls>,
                   _: Ref<ShuffleEnabledChangeRequestedEventArgs>|
                   -> windows::core::Result<()> {
+                debug!("SMTC 请求切换随机播放模式");
                 dispatch_event(&SmtcEvent::ToggleShuffle);
                 Ok(())
             },
@@ -188,6 +201,7 @@ pub fn initialize() -> Result<()> {
             move |_: Ref<SystemMediaTransportControls>,
                   _: Ref<AutoRepeatModeChangeRequestedEventArgs>|
                   -> windows::core::Result<()> {
+                debug!("SMTC 请求切换重复播放模式");
                 dispatch_event(&SmtcEvent::ToggleRepeat);
                 Ok(())
             },
@@ -201,12 +215,14 @@ pub fn initialize() -> Result<()> {
                 if let Some(args) = args.as_ref() {
                     let position = args.RequestedPlaybackPosition()?;
                     let position_ms = (position.Duration as f64) / HNS_PER_MILLISECOND;
+                    debug!(position_ms, "SMTC 请求跳转播放位置");
                     dispatch_event(&SmtcEvent::Seek { position_ms });
                 }
                 Ok(())
             },
         );
         smtc.PlaybackPositionChangeRequested(&seek_handler)?;
+        debug!("SMTC 事件处理器已全部附加");
         Ok(())
     })?;
 
@@ -221,6 +237,7 @@ pub fn shutdown() -> Result<()> {
         Ok(())
     })?;
     clear_callback();
+    debug!("SMTC 已关闭");
     Ok(())
 }
 
@@ -234,6 +251,7 @@ pub fn update_play_state(status: &PlaybackStatus) -> Result<()> {
 
     with_smtc("更新播放状态", |smtc| {
         smtc.SetPlaybackStatus(win_status)?;
+        debug!("SMTC 播放状态更新成功");
         Ok(())
     })
 }
@@ -253,6 +271,7 @@ pub fn update_timeline(current_ms: f64, total_ms: f64) -> Result<()> {
 
     with_smtc("更新时间线", |smtc| {
         smtc.UpdateTimelineProperties(&props)?;
+        trace!("SMTC 时间线更新成功");
         Ok(())
     })
 }
@@ -270,6 +289,7 @@ pub fn update_play_mode(is_shuffling: bool, repeat_mode: &RepeatMode) -> Result<
             RepeatMode::None => MediaPlaybackAutoRepeatMode::None,
         };
         smtc.SetAutoRepeatMode(repeat_mode_win)?;
+        debug!("SMTC 播放模式更新成功");
         Ok(())
     })
 }
@@ -311,9 +331,12 @@ pub fn update_metadata(
             updater.SetThumbnail(&stream_ref)?;
         } else if !thumbnail_base64.is_empty() {
             warn!("解码 Base64 字符串失败");
+        } else {
+            warn!("未提供封面或封面为空");
         }
 
         updater.Update()?;
+        debug!("SMTC 元数据更新成功");
         Ok(())
     })
 }
@@ -354,7 +377,7 @@ pub fn handle_command(command_json: &str) -> String {
             message: None,
         },
         Err(e) => {
-            let error_msg = format!("解析命令失败: {e}");
+            let error_msg = format!("处理命令失败: {e:?}");
             error!("{error_msg}");
             CommandResult {
                 status: CommandStatus::Error,

@@ -437,7 +437,6 @@ dependencies = [
  "serde_json",
  "tracing",
  "tracing-appender",
- "tracing-log",
  "tracing-subscriber",
  "windows",
 ]

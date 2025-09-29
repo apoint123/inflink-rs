@@ -5,6 +5,7 @@ import type {
 	SongInfo,
 	TimelineInfo,
 } from "../types/smtc";
+import logger from "../utils/logger";
 
 type ProviderEventMap = {
 	updateSongInfo: CustomEvent<SongInfo>;
@@ -48,6 +49,6 @@ export class BaseProvider {
 
 	public dispose(): void {
 		this.emitter.all.clear();
-		console.log("[BaseProvider] Disposed.");
+		logger.debug("[BaseProvider] Disposed.");
 	}
 }

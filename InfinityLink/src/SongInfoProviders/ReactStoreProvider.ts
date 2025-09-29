@@ -2,8 +2,6 @@ import type React from "react";
 import type {
 	Artist,
 	AudioLoadInfo,
-	Channel,
-	LegacyNativeCmder,
 	NCMPlayMode,
 	NCMStore,
 	NcmEventMap,
@@ -12,6 +10,7 @@ import type {
 } from "../types/ncm-internal";
 import type { PlaybackStatus, RepeatMode } from "../types/smtc";
 import { throttle } from "../utils";
+import logger from "../utils/logger";
 import { BaseProvider } from "./BaseProvider";
 
 /**
@@ -51,15 +50,15 @@ const CONSTANTS = {
 	NCM_PLAY_MODE_ONE: "playOneCycle",
 };
 
-declare const legacyNativeCmder: LegacyNativeCmder; // 主要用于 NCM 2.x, 但 3.0+ 也有在用
-declare const channel: Channel; // 仅 NCM 3.0+
-
 /**
  * 模拟 React 事件点击。
  * @param element 要点击的 HTML 元素。
  */
 function triggerReactClick(element: HTMLElement | null): void {
-	if (!element) return;
+	if (!element) {
+		logger.warn("[React TriggerClick] Element not found.");
+		return;
+	}
 
 	const reactPropsKey = Object.keys(element).find((key) =>
 		key.startsWith(CONSTANTS.REACT_PROPS_PREFIX),
@@ -71,11 +70,16 @@ function triggerReactClick(element: HTMLElement | null): void {
 		] as React.HTMLAttributes<HTMLElement> | undefined;
 
 		if (props?.onClick) {
+			logger.debug(
+				"[React TriggerClick] Triggering click via React props.",
+				element,
+			);
 			props.onClick({} as React.MouseEvent<HTMLElement>);
 			return;
 		}
 	}
 
+	logger.debug("[React TriggerClick] Falling back to native click.", element);
 	// 如果找不到 React 属性，则尝试原生点击
 	element.click();
 }
@@ -96,13 +100,16 @@ async function imageUrlToBase64(url: string): Promise<string> {
 			const reader = new FileReader();
 			reader.onloadend = () => {
 				const base64data = (reader.result as string).split(",")[1];
+				logger.debug(
+					`[React Store Provider] Successfully converted ${url} to base64.`,
+				);
 				resolve(base64data);
 			};
 			reader.onerror = reject;
 			reader.readAsDataURL(blob);
 		});
 	} catch (error) {
-		console.error(`[React Store Provider] 将 ${url} 转换为 base64 失败`, error);
+		logger.error(`[React Store Provider] 将 ${url} 转换为 base64 失败`, error);
 		return "";
 	}
 }
@@ -122,24 +129,28 @@ function genRandomString(length: number): string {
  */
 class DOMController {
 	public play(): void {
+		logger.debug("[DOMController] Attempting to play.");
 		triggerReactClick(
 			document.querySelector<HTMLButtonElement>(SELECTORS.PLAY_BUTTON),
 		);
 	}
 
 	public pause(): void {
+		logger.debug("[DOMController] Attempting to pause.");
 		triggerReactClick(
 			document.querySelector<HTMLButtonElement>(SELECTORS.PAUSE_BUTTON),
 		);
 	}
 
 	public nextSong(): void {
+		logger.debug("[DOMController] Attempting to play next song.");
 		triggerReactClick(
 			document.querySelector<HTMLButtonElement>(SELECTORS.NEXT_BUTTON),
 		);
 	}
 
 	public previousSong(): void {
+		logger.debug("[DOMController] Attempting to play previous song.");
 		triggerReactClick(
 			document.querySelector<HTMLButtonElement>(SELECTORS.PREV_BUTTON),
 		);
@@ -152,6 +163,7 @@ class DOMController {
 		const mode = playModeButton
 			?.querySelector<HTMLSpanElement>(SELECTORS.PLAY_MODE_ICON)
 			?.getAttribute("aria-label");
+		logger.debug(`[DOMController] Current play mode from DOM: ${mode}`);
 		return (mode as NCMPlayMode) || null;
 	}
 }
@@ -178,10 +190,15 @@ class NcmEventAdapter {
 			if (!this.registeredEvt.has(fullName)) {
 				this.registeredEvt.add(fullName);
 				channel.registerCall(fullName, (...args: unknown[]) => {
+					// logger.debug(
+					// 	`[NcmEventAdapter] Received event '${fullName}' with args:`,
+					// 	args,
+					// );
 					this.callbacks?.get(fullName)?.forEach((cb) => {
 						(cb as (...args: unknown[]) => void)(...args);
 					});
 				});
+				logger.debug(`[NcmEventAdapter] Event '${fullName}' registered.`);
 			}
 
 			let callbackSet = this.callbacks.get(fullName);
@@ -193,7 +210,7 @@ class NcmEventAdapter {
 
 			callbackSet.add(callback);
 		} catch (e) {
-			console.error(`[React Store Provider] 注册事件 ${eventName}失败:`, e);
+			logger.error(`[React Store Provider] 注册事件 ${eventName}失败:`, e);
 		}
 	}
 }
@@ -246,13 +263,15 @@ export class ReactStoreProvider extends BaseProvider {
 		}, CONSTANTS.TIMELINE_THROTTLE_INTERVAL_MS)[0];
 
 		this.initialize().catch((e) => {
-			console.error("[React Store Provider] 初始化失败:", e);
+			logger.error("[React Store Provider] 初始化失败:", e);
 		});
 	}
 
 	private async initialize(): Promise<void> {
+		logger.trace("[React Store Provider] Initializing...");
 		// 等待 UI 加载完成
 		await betterncm.utils.waitForElement(SELECTORS.PLAYER_BAR_READY);
+		logger.trace("[React Store Provider] Player bar ready.");
 
 		// 挂载 Redux Store 监听器
 		const rootEl = document.getElementById(
@@ -263,12 +282,14 @@ export class ReactStoreProvider extends BaseProvider {
 				?.memoizedProps?.store;
 
 		if (rootStore) {
+			logger.trace("[React Store Provider] Redux store found.");
 			this.reduxStore = rootStore;
 			this.unsubscribeStore = this.reduxStore.subscribe(() => {
 				this.onStateChanged();
 			});
+			logger.trace("[React Store Provider] Subscribed to Redux store updates.");
 		} else {
-			console.error("[React Store Provider] UI已加载但无法找到Store!");
+			logger.error("[React Store Provider] UI已加载但无法找到Store!");
 		}
 
 		// 注册底层播放器事件和外部控制事件
@@ -279,9 +300,11 @@ export class ReactStoreProvider extends BaseProvider {
 		this.onStateChanged();
 
 		this.resolveReady();
+		logger.debug("[React Store Provider] Initialization complete.");
 	}
 
 	private registerAudioPlayerEvents(): void {
+		logger.debug("[React Store Provider] Registering audio player events...");
 		this.eventAdapter.on("Load", (audioId: string, info: AudioLoadInfo) =>
 			this.onMusicLoad(audioId, info),
 		);
@@ -303,10 +326,17 @@ export class ReactStoreProvider extends BaseProvider {
 			return;
 		}
 		if (!this.reduxStore) {
+			logger.warn(
+				"[React Store Provider] Control event received but Redux store is not available.",
+			);
 			return;
 		}
 
 		const msg = e.detail;
+		logger.info(
+			`[React Store Provider] Handling control event: ${msg.type}`,
+			msg,
+		);
 		const currentMode = this.reduxStore.getState()?.playing?.playingMode;
 
 		switch (msg.type) {
@@ -343,6 +373,10 @@ export class ReactStoreProvider extends BaseProvider {
 					? this.lastModeBeforeShuffle || CONSTANTS.NCM_PLAY_MODE_LOOP
 					: CONSTANTS.NCM_PLAY_MODE_SHUFFLE;
 
+				logger.info(
+					`[React Store Provider] Toggling shuffle. Current: ${currentMode}, Target: ${targetMode}`,
+				);
+
 				if (!isShuffleOn && currentMode) {
 					this.lastModeBeforeShuffle = currentMode;
 				} else {
@@ -373,7 +407,9 @@ export class ReactStoreProvider extends BaseProvider {
 							break;
 					}
 				}
-
+				logger.info(
+					`[React Store Provider] Toggling repeat. Current: ${currentMode}, Target: ${targetMode}`,
+				);
 				this.reduxStore.dispatch({
 					type: "playing/switchPlayingMode",
 					payload: { playingMode: targetMode },
@@ -384,6 +420,7 @@ export class ReactStoreProvider extends BaseProvider {
 	}
 
 	private registerControlListeners(): void {
+		logger.debug("[React Store Provider] Registering control event listeners.");
 		this.addEventListener("control", this.handleControlEvent);
 	}
 
@@ -394,6 +431,9 @@ export class ReactStoreProvider extends BaseProvider {
 		const newNcmMode = playingState?.playingMode;
 
 		if (this.lastPlayMode !== newNcmMode || forceDispatchPlayMode) {
+			logger.info(
+				`[React Store Provider] Play mode changed from '${this.lastPlayMode}' to '${newNcmMode}'.`,
+			);
 			this.lastPlayMode = newNcmMode || undefined;
 
 			let isShuffling = newNcmMode === CONSTANTS.NCM_PLAY_MODE_SHUFFLE;
@@ -438,6 +478,9 @@ export class ReactStoreProvider extends BaseProvider {
 			currentTrackId !== "0" &&
 			currentTrackId !== this.lastTrackId
 		) {
+			logger.info(
+				`[React Store Provider] Track changed. New track ID: ${currentTrackId}, Name: ${playingInfo.resourceName}`,
+			);
 			this.lastTrackId = currentTrackId;
 			if (playingInfo.curTrack?.duration) {
 				this.musicDuration = playingInfo.curTrack.duration;
@@ -466,6 +509,9 @@ export class ReactStoreProvider extends BaseProvider {
 		// 处理播放/暂停状态变化
 		const isPlaying = !!playingInfo.playing;
 		if (this.lastIsPlaying !== isPlaying) {
+			logger.info(
+				`[React Store Provider] Play state changed to: ${isPlaying ? "Playing" : "Paused"}`,
+			);
 			this.lastIsPlaying = isPlaying;
 			this.playState = isPlaying ? "Playing" : "Paused";
 			this.dispatchEvent(
@@ -475,17 +521,26 @@ export class ReactStoreProvider extends BaseProvider {
 
 		// 初始化播放进度
 		if (playingInfo.progress !== undefined && this.musicPlayProgress === 0) {
+			logger.debug(
+				`[React Store Provider] Initializing progress: ${playingInfo.progress * 1000}ms`,
+			);
 			this.musicPlayProgress = Math.floor(playingInfo.progress * 1000);
 			this.dispatchTimelineThrottled();
 		}
 	}
 
 	private onMusicLoad(audioId: string, info: AudioLoadInfo): void {
+		logger.debug(
+			`[React Store Provider] Event 'Load' received for audioId: ${audioId}. Duration: ${info.duration}s`,
+		);
 		this.audioId = audioId;
 		this.musicDuration = (info.duration * 1000) | 0;
 	}
 
 	private onMusicUnload(_audioId: string): void {
+		logger.debug(
+			`[React Store Provider] Event 'End' received for audioId: ${_audioId}. Setting state to Paused.`,
+		);
 		if (this.playState !== "Paused") {
 			this.playState = "Paused";
 			this.dispatchEvent(
@@ -501,6 +556,9 @@ export class ReactStoreProvider extends BaseProvider {
 				CONSTANTS.PROGRESS_JUMP_THRESHOLD_S &&
 			progress > 0.01
 		) {
+			logger.debug(
+				`[React Store Provider] Progress jump detected and ignored. From ${this.lastProgress} to ${progress}.`,
+			);
 			this.lastProgress = progress;
 			return;
 		}
@@ -521,6 +579,9 @@ export class ReactStoreProvider extends BaseProvider {
 		}
 
 		if (this.playState !== newPlayState) {
+			logger.debug(
+				`[React Store Provider] Event 'PlayState' changed state from '${this.playState}' to '${newPlayState}'.`,
+			);
 			this.playState = newPlayState;
 			this.dispatchEvent(
 				new CustomEvent("updatePlayState", { detail: this.playState }),
@@ -528,12 +589,12 @@ export class ReactStoreProvider extends BaseProvider {
 		}
 	}
 
-	public seekToPosition(timeMS: number): void {
+	public async seekToPosition(timeMS: number): Promise<void> {
 		if (!this.audioId) {
-			console.warn("[React Store Provider] audioID 不可用，跳转失败");
+			logger.warn("[React Store Provider] audioID 不可用，跳转失败");
 			return;
 		}
-		console.log(`[React Store Provider] 正在跳转到: ${timeMS / 1000}s`);
+		logger.info(`[React Store Provider] 正在跳转到: ${timeMS / 1000}s`);
 
 		this.musicPlayProgress = timeMS;
 		this.dispatchEvent(
@@ -545,16 +606,24 @@ export class ReactStoreProvider extends BaseProvider {
 			}),
 		);
 
-		legacyNativeCmder._envAdapter.callAdapter("audioplayer.seek", () => {}, [
-			this.audioId,
-			`${this.audioId}|seek|${genRandomString(6)}`,
-			timeMS / 1000,
-		]);
+		try {
+			await legacyNativeCmder.call("audioplayer.seek", [
+				this.audioId,
+				`${this.audioId}|seek|${genRandomString(6)}`,
+				timeMS / 1000,
+			]);
+			logger.trace(`[React Store Provider] Seek call successful.`);
+		} catch (e) {
+			logger.error("[React Store Provider] 调用 seek 失败:", e);
+		}
 	}
 
 	public async forceDispatchFullState(): Promise<void> {
+		logger.debug(
+			"[React Store Provider] Forcing dispatch of full current state.",
+		);
 		if (!this.reduxStore?.getState().playing || !this.lastTrackId) {
-			console.warn("[React Store Provider] 没有缓存的状态可以分发。");
+			logger.warn("[React Store Provider] 没有缓存的状态可以分发。");
 			return;
 		}
 		const playingInfo = this.reduxStore.getState().playing;
@@ -594,14 +663,16 @@ export class ReactStoreProvider extends BaseProvider {
 				detail: this.domController.getCurrentPlayMode(),
 			}),
 		);
+		logger.trace("[React Store Provider] Full state dispatch complete.");
 	}
 
 	public override dispose(): void {
 		if (this.unsubscribeStore) {
 			this.unsubscribeStore();
 			this.unsubscribeStore = null;
+			logger.trace("[React Store Provider] Unsubscribed from Redux store.");
 		}
 		this.removeEventListener("control", this.handleControlEvent);
-		console.log("[React Store Provider] Disposed.");
+		logger.debug("[React Store Provider] Disposed.");
 	}
 }

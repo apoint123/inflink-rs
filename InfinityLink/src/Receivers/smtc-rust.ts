@@ -7,6 +7,8 @@ import type {
 	SmtcCommandPayloads,
 	SmtcEvent,
 } from "../types/smtc";
+import type { LogLevel } from "../utils/logger";
+import logger from "../utils/logger";
 
 const NATIVE_API_PREFIX = "inflink.";
 
@@ -28,20 +30,20 @@ class SMTCNativeBackend {
 		const resultJson = this.call<string>("dispatch", [command]);
 
 		if (!resultJson) {
-			console.error(`[InfLink-Native] 命令 '${type}' 未收到任何返回结果。`);
+			logger.error(`[InfLink-Native] 命令 '${type}' 未收到任何返回结果。`);
 			return;
 		}
 
 		try {
 			const result: CommandResult = JSON.parse(resultJson);
 			if (result.status === "Error") {
-				console.error(
+				logger.error(
 					`[InfLink-Native] 后端执行命令 '${type}' 时发生错误:`,
 					result.message,
 				);
 			}
 		} catch (e) {
-			console.error(
+			logger.error(
 				`[InfLink-Native] 解析后端返回结果失败:`,
 				e,
 				"\n原始结果:",
@@ -75,7 +77,7 @@ class SMTCNativeBackend {
 					control_handler(event);
 				}
 			} catch (e) {
-				console.error("[InfLink-Native] 解析后端事件失败:", e);
+				logger.error("[InfLink-Native] 解析后端事件失败:", e);
 			}
 		};
 
@@ -84,28 +86,39 @@ class SMTCNativeBackend {
 		on_ready();
 	}
 
+	public setBackendLogLevel(level: LogLevel) {
+		this.call("set_log_level", [level]);
+		logger.info(`[InfLink] 设置后端日志级别为: ${level}`);
+	}
+
 	private registerLogger() {
 		const logCallback = (logJson: string) => {
 			try {
 				const entry: LogEntry = JSON.parse(logJson);
 				const message = `[InfLink-rs backend|${entry.target}] ${entry.message}`;
 
-				switch (entry.level) {
-					case "ERROR":
-						console.error(message);
+				switch (entry.level.toLowerCase() as LogLevel) {
+					case "error":
+						logger.error(message);
 						break;
-					case "WARN":
-						console.warn(message);
+					case "warn":
+						logger.warn(message);
 						break;
-					case "INFO":
-						console.info(message);
+					case "info":
+						logger.info(message);
+						break;
+					case "debug":
+						logger.debug(message);
+						break;
+					case "trace":
+						logger.trace(message);
 						break;
 					default:
-						console.log(message);
+						logger.log(message);
 						break;
 				}
 			} catch (e) {
-				console.error("[InfLink-Native] 解析后端日志失败:", e);
+				logger.error("[InfLink-Native] 解析后端日志失败:", e);
 			}
 		};
 		this.call("register_logger", [logCallback]);
@@ -117,7 +130,7 @@ class SMTCNativeBackend {
 
 		this.call("cleanup");
 		this.call("shutdown");
-		console.log("[InfLink-Native] SMTC 已禁用");
+		logger.info("[InfLink-Native] SMTC 已禁用");
 	}
 
 	public update(songInfo: {

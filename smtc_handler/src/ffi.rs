@@ -149,6 +149,27 @@ pub unsafe extern "C" fn inflink_cleanup(_args: *mut *mut c_void) -> *mut c_char
     ptr::null_mut()
 }
 
+#[instrument(skip(args))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn inflink_set_log_level(args: *mut *mut c_void) -> *mut c_char {
+    if args.is_null() {
+        error!("[InfLink-rs] inflink_set_log_level 收到了空指针");
+        return ptr::null_mut();
+    }
+    let level_pointer = unsafe { *args.add(0) };
+    if level_pointer.is_null() {
+        error!("[InfLink-rs] inflink_set_log_level 收到了空日志级别指针");
+        return ptr::null_mut();
+    }
+
+    let level_string = unsafe { c_char_to_string(level_pointer.cast::<c_char>()) };
+    if let Err(e) = logger::set_frontend_log_level(&level_string) {
+        error!("[InfLink-rs] 设置日志级别失败: {}", e);
+    }
+
+    ptr::null_mut()
+}
+
 static LOGGER_INIT: Once = Once::new();
 
 #[instrument(skip(api))]
@@ -176,6 +197,12 @@ pub unsafe extern "C" fn BetterNCMPluginMain(api: *mut PluginAPI) -> c_int {
                     "inflink.register_logger",
                     Some(&CALLBACK_ARGS),
                     inflink_register_logger,
+                ),
+                register_api(
+                    add_api,
+                    "inflink.set_log_level",
+                    Some(&DISPATCH_ARGS),
+                    inflink_set_log_level,
                 ),
                 register_api(add_api, "inflink.cleanup", None, inflink_cleanup),
                 register_api(add_api, "inflink.shutdown", None, inflink_shutdown),
