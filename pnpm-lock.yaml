@@ -57,9 +57,6 @@ importers:
       '@biomejs/biome':
         specifier: ^2.2.4
         version: 2.2.4
-      '@types/loglevel':
-        specifier: ^1.6.3
-        version: 1.6.3
       '@types/node':
         specifier: ^24.5.2
         version: 24.5.2
@@ -765,10 +762,6 @@ packages:
 
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
-
-  '@types/loglevel@1.6.3':
-    resolution: {integrity: sha512-v2YWQQgqtNXAzybOT9qV3CIJqSeoaMUwmBfIMTQdvhsWUybYic/zNGccKH494naWKJ7zUm+VTgFepJfTrbCCJQ==}
-    deprecated: This is a stub types definition. loglevel provides its own type definitions, so you do not need this installed.
 
   '@types/minimist@1.2.5':
     resolution: {integrity: sha512-hov8bUuiLiyFPGyFPE1lwWhmzYbirOXQNNo40+y3zow8aFVTeyn3VWL0VFFfdNddA8S4Vf0Tc062rzyNr7Paag==}
@@ -2465,10 +2458,6 @@ snapshots:
       '@types/node': 24.5.2
 
   '@types/estree@1.0.8': {}
-
-  '@types/loglevel@1.6.3':
-    dependencies:
-      loglevel: 1.9.2
 
   '@types/minimist@1.2.5': {}
 
