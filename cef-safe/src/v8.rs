@@ -75,33 +75,35 @@ impl CefV8Value {
     }
 }
 
+pub type CefV8Exception = CefRefPtr<cef_sys::_cef_v8exception_t>;
+
 /// 从 `CefV8Exception` 指针中提取错误信息并转换为 `CefError`。
 ///
 /// 此函数会消耗掉 `exception_ptr`
 unsafe fn error_from_exception_ptr(exception_ptr: *mut _cef_v8exception_t) -> CefError {
-    if exception_ptr.is_null() {
+    let Ok(exception) = (unsafe { CefV8Exception::from_raw(exception_ptr) }) else {
         return CefError::V8FunctionExecutionFailed;
-    }
-    unsafe {
-        let exception = &*exception_ptr;
-        let message = exception
-            .get_message
-            .map_or_else(String::new, |f| string_from_cef_userfree(f(exception_ptr)));
-        let script = exception
-            .get_script_resource_name
-            .map_or_else(String::new, |f| string_from_cef_userfree(f(exception_ptr)));
-        let line = exception.get_line_number.map_or(0, |f| f(exception_ptr));
-        let column = exception.get_start_column.map_or(0, |f| f(exception_ptr));
+    };
 
-        if let Some(release) = (*exception_ptr).base.release {
-            release(&raw mut (*exception_ptr).base);
-        }
+    let message = exception.get_message.map_or_else(String::new, |f| unsafe {
+        string_from_cef_userfree(f(exception.as_raw()))
+    });
+    let script = exception
+        .get_script_resource_name
+        .map_or_else(String::new, |f| unsafe {
+            string_from_cef_userfree(f(exception.as_raw()))
+        });
+    let line = exception
+        .get_line_number
+        .map_or(0, |f| unsafe { f(exception.as_raw()) });
+    let column = exception
+        .get_start_column
+        .map_or(0, |f| unsafe { f(exception.as_raw()) });
 
-        CefError::V8Exception {
-            message,
-            script,
-            line,
-            column,
-        }
+    CefError::V8Exception {
+        message,
+        script,
+        line,
+        column,
     }
 }

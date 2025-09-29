@@ -27,6 +27,12 @@ unsafe impl CefStruct for cef_sys::_cef_v8context_t {
     }
 }
 
+unsafe impl CefStruct for cef_sys::_cef_v8exception_t {
+    fn get_base(&self) -> *mut cef_sys::_cef_base_ref_counted_t {
+        (&raw const self.base).cast_mut()
+    }
+}
+
 /// 一个用于管理 CEF 引用计数对象的智能指针
 #[repr(transparent)]
 pub struct CefRefPtr<T: CefStruct> {
@@ -83,6 +89,10 @@ impl<T: CefStruct> CefRefPtr<T> {
         std::mem::forget(self);
         ptr
     }
+
+    fn get_base(&self) -> *mut cef_sys::_cef_base_ref_counted_t {
+        unsafe { self.ptr.as_ref().get_base() }
+    }
 }
 
 impl<T: CefStruct> Clone for CefRefPtr<T> {
@@ -119,11 +129,5 @@ impl<T: CefStruct> Deref for CefRefPtr<T> {
 
     fn deref(&self) -> &Self::Target {
         unsafe { self.ptr.as_ref() }
-    }
-}
-
-impl<T: CefStruct> CefRefPtr<T> {
-    fn get_base(&self) -> *mut cef_sys::_cef_base_ref_counted_t {
-        unsafe { self.ptr.as_ref().get_base() }
     }
 }

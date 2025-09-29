@@ -3,7 +3,7 @@ use cef_sys::{cef_string_t, cef_string_userfree_utf16_free, cef_string_utf16_set
 use std::ops::Deref;
 
 pub struct CefString16 {
-    pub cef_string: cef_string_t,
+    cef_string: cef_string_t,
 }
 
 impl CefString16 {
@@ -34,6 +34,24 @@ impl CefString16 {
     }
 }
 
+impl TryFrom<&str> for CefString16 {
+    type Error = CefError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        Self::from_str(s)
+    }
+}
+
+impl Drop for CefString16 {
+    fn drop(&mut self) {
+        unsafe {
+            if let Some(dtor) = self.cef_string.dtor {
+                dtor(self.cef_string.str_);
+            }
+        }
+    }
+}
+
 impl Deref for CefString16 {
     type Target = cef_string_t;
 
@@ -51,13 +69,25 @@ impl Deref for CefString16 {
 ///
 /// 必须保证 `cef_str` 是一个需要释放的有效指针，或者是一个 `null` 指针
 pub unsafe fn string_from_cef_userfree(cef_str: *mut cef_string_t) -> String {
+    struct CefUserFreeGuard(*mut cef_string_t);
+    impl Drop for CefUserFreeGuard {
+        fn drop(&mut self) {
+            if !self.0.is_null() {
+                unsafe {
+                    cef_string_userfree_utf16_free(self.0);
+                }
+            }
+        }
+    }
+
     if cef_str.is_null() {
         return String::new();
     }
-    let rust_str = unsafe { string_from_cef(&*cef_str) };
-    unsafe { cef_string_userfree_utf16_free(cef_str) };
 
-    rust_str
+    let guard = CefUserFreeGuard(cef_str);
+
+    // Safety: 调用者保证指针是有效的
+    unsafe { string_from_cef(&*guard.0) }
 }
 
 /// 从一个 `&cef_string_t` 引用创建一个 Rust `String`，不释放内存
@@ -67,10 +97,11 @@ pub unsafe fn string_from_cef_userfree(cef_str: *mut cef_string_t) -> String {
 /// 必须保证 `s` 指向一个有效的 `cef_string_t` 结构体，并且其
 /// `str_` 字段和 `length` 字段是有效的
 pub unsafe fn string_from_cef(s: &cef_string_t) -> String {
-    if s.str_.is_null() {
+    if s.str_.is_null() || s.length == 0 {
         return String::new();
     }
-    let len = s.length;
-    let slice = unsafe { std::slice::from_raw_parts(s.str_, len) };
+
+    // Safety: 调用者保证指针是有效的
+    let slice = unsafe { std::slice::from_raw_parts(s.str_, s.length) };
     String::from_utf16_lossy(slice)
 }
