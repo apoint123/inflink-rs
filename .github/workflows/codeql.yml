@@ -25,7 +25,7 @@ jobs:
                     - language: javascript-typescript
                       build-mode: none
                     - language: rust
-                      build-mode: autobuild
+                      build-mode: none
 
         steps:
             - name: Checkout repository
@@ -39,10 +39,6 @@ jobs:
                   languages: ${{ matrix.language }}
                   build-mode: ${{ matrix.build-mode }}
                   queries: security-extended,security-and-quality
-
-            - name: Autobuild
-              if: matrix.build-mode == 'autobuild'
-              uses: github/codeql-action/autobuild@v3
 
             - name: Perform CodeQL Analysis
               uses: github/codeql-action/analyze@v3
