@@ -9,7 +9,7 @@ import type {
 	ReactRootElement,
 } from "../types/ncm-internal";
 import type { PlaybackStatus, RepeatMode } from "../types/smtc";
-import { throttle } from "../utils";
+import { throttle, waitForElement } from "../utils";
 import logger from "../utils/logger";
 import { BaseProvider } from "./BaseProvider";
 
@@ -29,10 +29,6 @@ const SELECTORS = {
 
 	// React 应用根节点
 	REACT_ROOT: "#root",
-
-	// 用于判断是否加载完成的元素
-	PLAYER_BAR_READY:
-		"footer > * > * > .middle > *:nth-child(1) > button:nth-child(4)",
 };
 
 const CONSTANTS = {
@@ -121,6 +117,37 @@ function genRandomString(length: number): string {
 		result += words.charAt(Math.floor(Math.random() * words.length));
 	}
 	return result;
+}
+
+async function waitForReduxStore(timeoutMs = 10000): Promise<NCMStore> {
+	const rootEl = (await waitForElement(
+		SELECTORS.REACT_ROOT,
+	)) as ReactRootElement;
+	if (!rootEl) {
+		throw new Error("React root element (#root) not found on the page.");
+	}
+
+	return new Promise((resolve, reject) => {
+		const interval = 100;
+		let elapsedTime = 0;
+
+		const checkStore = () => {
+			const store =
+				rootEl._reactRootContainer?._internalRoot?.current?.child?.child
+					?.memoizedProps?.store;
+
+			if (store) {
+				resolve(store);
+			} else if (elapsedTime >= timeoutMs) {
+				reject(new Error(`waitForReduxStore timed out after ${timeoutMs}ms.`));
+			} else {
+				elapsedTime += interval;
+				setTimeout(checkStore, interval);
+			}
+		};
+
+		checkStore();
+	});
 }
 
 /**
@@ -269,27 +296,18 @@ export class ReactStoreProvider extends BaseProvider {
 
 	private async initialize(): Promise<void> {
 		logger.trace("[React Store Provider] Initializing...");
-		// 等待 UI 加载完成
-		await betterncm.utils.waitForElement(SELECTORS.PLAYER_BAR_READY);
-		logger.trace("[React Store Provider] Player bar ready.");
 
-		// 挂载 Redux Store 监听器
-		const rootEl = document.getElementById(
-			SELECTORS.REACT_ROOT.slice(1),
-		) as ReactRootElement | null;
-		const rootStore =
-			rootEl?._reactRootContainer?._internalRoot?.current?.child?.child
-				?.memoizedProps?.store;
-
-		if (rootStore) {
+		try {
+			const store = await waitForReduxStore();
 			logger.trace("[React Store Provider] Redux store found.");
-			this.reduxStore = rootStore;
+			this.reduxStore = store;
 			this.unsubscribeStore = this.reduxStore.subscribe(() => {
 				this.onStateChanged();
 			});
 			logger.trace("[React Store Provider] Subscribed to Redux store updates.");
-		} else {
-			logger.error("[React Store Provider] UI已加载但无法找到Store!");
+		} catch (error) {
+			logger.error("[React Store Provider] Could not find Redux store:", error);
+			return;
 		}
 
 		// 注册底层播放器事件和外部控制事件
