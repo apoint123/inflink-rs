@@ -95,15 +95,6 @@ async function imageUrlToBase64(url: string): Promise<string> {
 	}
 }
 
-function genRandomString(length: number): string {
-	const words = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXTZabcdefghiklmnopqrstuvwxyz";
-	let result = "";
-	for (let i = 0; i < length; i++) {
-		result += words.charAt(Math.floor(Math.random() * words.length));
-	}
-	return result;
-}
-
 /**
  * NCM 事件适配器
  */
@@ -152,7 +143,6 @@ class NcmEventAdapter {
 }
 
 export class ReactStoreProvider extends BaseProvider {
-	private audioId: string | null = null;
 	private musicDuration = 0;
 	private musicPlayProgress = 0;
 	private playState: PlaybackStatus = "Paused";
@@ -475,7 +465,6 @@ export class ReactStoreProvider extends BaseProvider {
 		logger.debug(
 			`[React Store Provider] Event 'Load' received for audioId: ${audioId}. Duration: ${info.duration}s`,
 		);
-		this.audioId = audioId;
 		this.musicDuration = (info.duration * 1000) | 0;
 	}
 
@@ -532,11 +521,13 @@ export class ReactStoreProvider extends BaseProvider {
 	}
 
 	public seekToPosition(timeMS: number): void {
-		if (!this.audioId) {
-			logger.warn("[React Store Provider] audioID 不可用，跳转失败");
+		if (!this.reduxStore) {
+			logger.warn(
+				"[React Store Provider] Redux store is not available, cannot seek.",
+			);
 			return;
 		}
-		logger.info(`[React Store Provider] 正在跳转到: ${timeMS / 1000}s`);
+		logger.info(`[React Store Provider] Seeking to: ${timeMS / 1000}s`);
 
 		this.musicPlayProgress = timeMS;
 		this.dispatchEvent(
@@ -548,15 +539,9 @@ export class ReactStoreProvider extends BaseProvider {
 			}),
 		);
 
-		const seekPromise = legacyNativeCmder.call(
-			"audioplayer.seek",
-			this.audioId,
-			`${this.audioId}|seek|${genRandomString(6)}`,
-			timeMS / 1000,
-		);
-
-		seekPromise.catch((error) => {
-			console.error("调用 seek 失败:", error);
+		this.reduxStore.dispatch({
+			type: "playing/setPlayingPosition",
+			payload: { duration: timeMS / 1000 },
 		});
 	}
 
