@@ -22,7 +22,8 @@ tracing-appender = "0.2"
 
 dirs = "6.0"
 
-reqwest = { version = "0.12", features = ["blocking"] }
+reqwest = { version = "0.12" }
+tokio = { version = "1", features = ["full"] }
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }

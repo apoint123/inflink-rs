@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use cef_safe::{CefResult, CefV8Context, CefV8Value, renderer_post_task_in_v8_ctx};
-use reqwest::blocking::get;
 use serde::Serialize;
 use std::sync::{LazyLock, Mutex};
 use tracing::{debug, error, info, instrument, trace, warn};
@@ -21,6 +20,11 @@ use windows::{
 use crate::model::{CommandResult, CommandStatus, PlaybackStatus, RepeatMode, SmtcCommand};
 
 const HNS_PER_MILLISECOND: f64 = 10_000.0;
+
+use tokio::runtime::Runtime;
+
+static TOKIO_RUNTIME: LazyLock<Runtime> =
+    LazyLock::new(|| Runtime::new().expect("创建 Tokio 运行时失败"));
 
 struct SmtcCallback {
     v8_context: CefV8Context,
@@ -332,7 +336,7 @@ pub fn update_play_mode(is_shuffling: bool, repeat_mode: &RepeatMode) -> Result<
     })
 }
 
-pub fn update_metadata(title: &str, artist: &str, album: &str, thumbnail_url: &str) -> Result<()> {
+pub fn update_metadata(title: &str, artist: &str, album: &str, thumbnail_url: &str) {
     info!(
         title = %title,
         artist = %artist,
@@ -341,52 +345,60 @@ pub fn update_metadata(title: &str, artist: &str, album: &str, thumbnail_url: &s
         "正在更新 SMTC 歌曲元数据"
     );
 
-    let maybe_bytes = if thumbnail_url.is_empty() {
-        warn!("未提供封面URL");
-        None
-    } else {
-        debug!("正在从 URL 下载封面: {}", thumbnail_url);
-        match get(thumbnail_url) {
-            Ok(response) => match response.bytes() {
-                Ok(bytes) => Some(bytes.to_vec()),
+    let title = title.to_string();
+    let artist = artist.to_string();
+    let album = album.to_string();
+    let thumbnail_url = thumbnail_url.to_string();
+
+    TOKIO_RUNTIME.spawn(async move {
+        let maybe_bytes = if thumbnail_url.is_empty() {
+            warn!("未提供封面URL");
+            None
+        } else {
+            debug!("正在从 URL 下载封面: {}", thumbnail_url);
+            match reqwest::get(&thumbnail_url).await {
+                Ok(response) => match response.bytes().await {
+                    Ok(bytes) => Some(bytes.to_vec()),
+                    Err(e) => {
+                        warn!("读取封面响应失败: {}", e);
+                        None
+                    }
+                },
                 Err(e) => {
-                    warn!("读取封面响应失败: {}", e);
+                    warn!("下载封面失败: {}", e);
                     None
                 }
-            },
-            Err(e) => {
-                warn!("下载封面失败: {}", e);
-                None
             }
+        };
+
+        let result = with_smtc("更新元数据", |smtc| {
+            let updater = smtc.DisplayUpdater()?;
+            updater.SetType(MediaPlaybackType::Music)?;
+
+            let props = updater.MusicProperties()?;
+            props.SetTitle(&HSTRING::from(&title))?;
+            props.SetArtist(&HSTRING::from(&artist))?;
+            props.SetAlbumTitle(&HSTRING::from(&album))?;
+
+            if let Some(bytes) = maybe_bytes {
+                let stream = InMemoryRandomAccessStream::new()?;
+                let writer = DataWriter::CreateDataWriter(&stream)?;
+                writer.WriteBytes(&bytes)?;
+                writer.StoreAsync()?.GetResults()?;
+                writer.DetachStream()?;
+                stream.Seek(0)?;
+                let stream_ref = RandomAccessStreamReference::CreateFromStream(&stream)?;
+                updater.SetThumbnail(&stream_ref)?;
+            }
+
+            updater.Update()?;
+            Ok(())
+        });
+
+        if let Err(e) = result {
+            error!("更新SMTC元数据失败: {e:?}");
         }
-    };
-
-    with_smtc("更新元数据", |smtc| {
-        let updater = smtc.DisplayUpdater()?;
-        updater.SetType(MediaPlaybackType::Music)?;
-
-        let props = updater.MusicProperties()?;
-        props.SetTitle(&HSTRING::from(title))?;
-        props.SetArtist(&HSTRING::from(artist))?;
-        props.SetAlbumTitle(&HSTRING::from(album))?;
-
-        if let Some(bytes) = maybe_bytes {
-            let stream = InMemoryRandomAccessStream::new()?;
-            let writer = DataWriter::CreateDataWriter(&stream)?;
-            writer.WriteBytes(&bytes)?;
-            writer.StoreAsync()?.GetResults()?;
-            writer.DetachStream()?;
-            stream.Seek(0)?;
-            let stream_ref = RandomAccessStreamReference::CreateFromStream(&stream)?;
-            updater.SetThumbnail(&stream_ref)?;
-        } else {
-            warn!("未提供封面URL或下载失败");
-        }
-
-        updater.Update()?;
-        debug!("SMTC 元数据更新成功");
-        Ok(())
-    })
+    });
 }
 
 fn handle_command_inner(command_json: &str) -> Result<()> {
@@ -400,8 +412,7 @@ fn handle_command_inner(command_json: &str) -> Result<()> {
             &payload.author_name,
             &payload.album_name,
             &payload.thumbnail_url,
-        )
-        .context("更新元数据失败")?,
+        ),
         SmtcCommand::PlayState(payload) => {
             update_play_state(&payload.status).context("更新播放状态失败")?;
         }
