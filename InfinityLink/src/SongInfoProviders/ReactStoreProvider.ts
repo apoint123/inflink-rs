@@ -158,6 +158,15 @@ export class ReactStoreProvider extends BaseProvider {
 
 	private readonly eventAdapter: NcmEventAdapter;
 
+	private readonly playerActions: {
+		resume: () => void;
+		pause: () => void;
+		next: () => void;
+		prev: () => void;
+		seek: (timeMS: number) => void;
+		switchMode: (mode: string) => void;
+	};
+
 	public ready: Promise<void>;
 	private resolveReady!: () => void;
 
@@ -168,6 +177,64 @@ export class ReactStoreProvider extends BaseProvider {
 	constructor() {
 		super();
 		this.eventAdapter = new NcmEventAdapter();
+
+		this.playerActions = {
+			resume: () => {
+				// triggerScene 应该是用来做数据分析的，大概有 45 种
+				// 这里如果刚启动时不提供这个，就会因为 undefined 而报错
+				logger.trace("[PlayerActions] Dispatching 'playing/resume'");
+				this.reduxStore?.dispatch({
+					type: "playing/resume",
+					payload: { triggerScene: "track" },
+				});
+			},
+			pause: () => {
+				// 网易云点击暂停后会有一两秒的淡出效果，此时还没有暂停
+				// 要立刻认为已暂停并更新，不然会有延迟感
+				logger.trace("[PlayerActions] Dispatching 'playing/pause'");
+				this.reduxStore?.dispatch({ type: "playing/pause" });
+				if (this.playState !== "Paused") {
+					this.playState = "Paused";
+					this.dispatchEvent(
+						new CustomEvent("updatePlayState", { detail: this.playState }),
+					);
+				}
+			},
+			next: () => {
+				logger.trace("[PlayerActions] Dispatching 'playingList/jump2Track'");
+				this.reduxStore?.dispatch({
+					type: "playingList/jump2Track",
+					payload: { flag: 1, type: "call", triggerScene: "track" },
+				});
+			},
+			prev: () => {
+				logger.trace("[PlayerActions] Dispatching 'playingList/jump2Track'");
+				this.reduxStore?.dispatch({
+					type: "playingList/jump2Track",
+					payload: { flag: -1, type: "call", triggerScene: "track" },
+				});
+			},
+			seek: (timeMS: number) => {
+				logger.trace(
+					`[PlayerActions] Dispatching 'playing/setPlayingPosition' to: ${
+						timeMS / 1000
+					}s`,
+				);
+				this.reduxStore?.dispatch({
+					type: "playing/setPlayingPosition",
+					payload: { duration: timeMS / 1000 },
+				});
+			},
+			switchMode: (mode: string) => {
+				logger.trace(
+					`[PlayerActions] Dispatching 'playing/switchPlayingMode' to: ${mode}`,
+				);
+				this.reduxStore?.dispatch({
+					type: "playing/switchPlayingMode",
+					payload: { playingMode: mode },
+				});
+			},
+		};
 
 		this.ready = new Promise((resolve) => {
 			this.resolveReady = resolve;
@@ -237,13 +304,7 @@ export class ReactStoreProvider extends BaseProvider {
 	}
 
 	private handleControlEvent(e: CustomEvent): void {
-		if (this.isUpdatingFromProvider) {
-			return;
-		}
-		if (!this.reduxStore) {
-			logger.warn(
-				"[React Store Provider] Control event received but Redux store is not available.",
-			);
+		if (this.isUpdatingFromProvider || !this.reduxStore) {
 			return;
 		}
 
@@ -252,76 +313,40 @@ export class ReactStoreProvider extends BaseProvider {
 			`[React Store Provider] Handling control event: ${msg.type}`,
 			msg,
 		);
-		const currentMode = this.reduxStore.getState()?.playing?.playingMode;
 
 		switch (msg.type) {
 			case "Play":
-				logger.trace(
-					"[React Store Provider] Dispatching 'playing/resume' with payload",
-				);
-				// 这里的 triggerScene 应该是用来做数据分析的，大概有 45 种
-				// 如果刚启动时不提供这个，就会因为 undefined 而报错
-				this.reduxStore.dispatch({
-					type: "playing/resume",
-					payload: { triggerScene: "track" },
-				});
+				this.playerActions.resume();
 				break;
 			case "Pause":
-				logger.trace("[React Store Provider] Dispatching 'playing/pause'");
-				this.reduxStore.dispatch({ type: "playing/pause" });
-				// 网易云点击暂停后会有一两秒的淡出效果，此时还没有暂停
-				// 要立刻认为已暂停并更新，不然会有延迟感
-				if (this.playState !== "Paused") {
-					this.playState = "Paused";
-					this.dispatchEvent(
-						new CustomEvent("updatePlayState", { detail: this.playState }),
-					);
-				}
+				this.playerActions.pause();
 				break;
 			case "NextSong":
-				logger.trace(
-					"[React Store Provider] Dispatching 'playingList/jump2Track'",
-				);
-				this.reduxStore.dispatch({
-					type: "playingList/jump2Track",
-					payload: { flag: 1, type: "call", triggerScene: "track" },
-				});
+				this.playerActions.next();
 				break;
 			case "PreviousSong":
-				logger.trace(
-					"[React Store Provider] Dispatching 'playingList/jump2Track'",
-				);
-				this.reduxStore.dispatch({
-					type: "playingList/jump2Track",
-					payload: { flag: -1, type: "call", triggerScene: "track" },
-				});
+				this.playerActions.prev();
 				break;
 			case "Seek":
 				if (typeof msg.position === "number") this.seekToPosition(msg.position);
 				break;
 			case "ToggleShuffle": {
+				const currentMode = this.reduxStore.getState()?.playing?.playingMode;
 				const isShuffleOn = currentMode === CONSTANTS.NCM_PLAY_MODE_SHUFFLE;
 				const targetMode = isShuffleOn
 					? this.lastModeBeforeShuffle || CONSTANTS.NCM_PLAY_MODE_LOOP
 					: CONSTANTS.NCM_PLAY_MODE_SHUFFLE;
-
-				logger.info(
-					`[React Store Provider] Toggling shuffle. Current: ${currentMode}, Target: ${targetMode}`,
-				);
 
 				if (!isShuffleOn && currentMode) {
 					this.lastModeBeforeShuffle = currentMode;
 				} else {
 					this.lastModeBeforeShuffle = null;
 				}
-
-				this.reduxStore.dispatch({
-					type: "playing/switchPlayingMode",
-					payload: { playingMode: targetMode },
-				});
+				this.playerActions.switchMode(targetMode);
 				break;
 			}
 			case "ToggleRepeat": {
+				const currentMode = this.reduxStore.getState()?.playing?.playingMode;
 				let targetMode: string;
 				if (currentMode === CONSTANTS.NCM_PLAY_MODE_SHUFFLE) {
 					targetMode = CONSTANTS.NCM_PLAY_MODE_ORDER;
@@ -339,13 +364,7 @@ export class ReactStoreProvider extends BaseProvider {
 							break;
 					}
 				}
-				logger.info(
-					`[React Store Provider] Toggling repeat. Current: ${currentMode}, Target: ${targetMode}`,
-				);
-				this.reduxStore.dispatch({
-					type: "playing/switchPlayingMode",
-					payload: { playingMode: targetMode },
-				});
+				this.playerActions.switchMode(targetMode);
 				break;
 			}
 		}
@@ -527,7 +546,6 @@ export class ReactStoreProvider extends BaseProvider {
 			);
 			return;
 		}
-		logger.info(`[React Store Provider] Seeking to: ${timeMS / 1000}s`);
 
 		this.musicPlayProgress = timeMS;
 		this.dispatchEvent(
@@ -539,10 +557,7 @@ export class ReactStoreProvider extends BaseProvider {
 			}),
 		);
 
-		this.reduxStore.dispatch({
-			type: "playing/setPlayingPosition",
-			payload: { duration: timeMS / 1000 },
-		});
+		this.playerActions.seek(timeMS);
 	}
 
 	public async forceDispatchFullState(): Promise<void> {
