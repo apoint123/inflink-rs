@@ -11,6 +11,8 @@ import { throttle, waitForElement } from "../utils";
 import logger from "../utils/logger";
 import { BaseProvider } from "./BaseProvider";
 
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function waitForReduxStore(timeoutMs = 10000): Promise<NCMStore> {
 	const rootEl = (await waitForElement(
 		SELECTORS.REACT_ROOT,
@@ -19,39 +21,27 @@ async function waitForReduxStore(timeoutMs = 10000): Promise<NCMStore> {
 		throw new Error("React root element (#root) not found on the page.");
 	}
 
-	return new Promise((resolve, reject) => {
-		const interval = 100;
-		let elapsedTime = 0;
+	const interval = 100;
+	let elapsedTime = 0;
 
-		const checkStore = () => {
-			let store: NCMStore | null = null;
-
-			try {
-				store =
-					rootEl._reactRootContainer?._internalRoot?.current?.child?.child
-						?.memoizedProps?.store ?? null;
-			} catch {
-				// 让慢速路径接管
-			}
-
+	while (elapsedTime < timeoutMs) {
+		try {
 			// 网易云使用了很多年的react16了，几乎没有可能在不大规模重构的情况下更改上面这个固定的路径，
 			// 但是保险起见，失败时可以遍历搜索一下
-			if (!store) {
-				store = findStoreFromRootElement(rootEl);
-			}
+			const store =
+				rootEl._reactRootContainer?._internalRoot?.current?.child?.child
+					?.memoizedProps?.store ?? findStoreFromRootElement(rootEl);
 
 			if (store) {
-				resolve(store);
-			} else if (elapsedTime >= timeoutMs) {
-				reject(new Error(`waitForReduxStore timed out after ${timeoutMs}ms.`));
-			} else {
-				elapsedTime += interval;
-				setTimeout(checkStore, interval);
+				return store;
 			}
-		};
+		} catch {}
 
-		checkStore();
-	});
+		await delay(interval);
+		elapsedTime += interval;
+	}
+
+	throw new Error(`waitForReduxStore timed out after ${timeoutMs}ms.`);
 }
 
 interface FiberNode {
