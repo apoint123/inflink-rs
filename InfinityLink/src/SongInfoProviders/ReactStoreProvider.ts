@@ -229,9 +229,11 @@ export class ReactStoreProvider extends BaseProvider {
 				logger.trace(
 					`[PlayerActions] Dispatching 'playing/switchPlayingMode' to: ${mode}`,
 				);
+				// 这里的 triggerScene 用来确保在所有模式切换中都能工作
+				// 尤其是心动模式 (虽然我们当前不会切换到心动模式)
 				this.reduxStore?.dispatch({
 					type: "playing/switchPlayingMode",
-					payload: { playingMode: mode },
+					payload: { playingMode: mode, triggerScene: "track" },
 				});
 			},
 		};
