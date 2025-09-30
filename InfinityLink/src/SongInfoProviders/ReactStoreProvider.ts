@@ -531,7 +531,7 @@ export class ReactStoreProvider extends BaseProvider {
 		}
 	}
 
-	public async seekToPosition(timeMS: number): Promise<void> {
+	public seekToPosition(timeMS: number): void {
 		if (!this.audioId) {
 			logger.warn("[React Store Provider] audioID 不可用，跳转失败");
 			return;
@@ -548,16 +548,16 @@ export class ReactStoreProvider extends BaseProvider {
 			}),
 		);
 
-		try {
-			await legacyNativeCmder.call("audioplayer.seek", [
-				this.audioId,
-				`${this.audioId}|seek|${genRandomString(6)}`,
-				timeMS / 1000,
-			]);
-			logger.trace(`[React Store Provider] Seek call successful.`);
-		} catch (e) {
-			logger.error("[React Store Provider] 调用 seek 失败:", e);
-		}
+		const seekPromise = legacyNativeCmder.call(
+			"audioplayer.seek",
+			this.audioId,
+			`${this.audioId}|seek|${genRandomString(6)}`,
+			timeMS / 1000,
+		);
+
+		seekPromise.catch((error) => {
+			console.error("调用 seek 失败:", error);
+		});
 	}
 
 	public async forceDispatchFullState(): Promise<void> {
