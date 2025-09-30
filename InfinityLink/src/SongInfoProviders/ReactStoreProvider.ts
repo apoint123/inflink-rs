@@ -279,6 +279,14 @@ export class ReactStoreProvider extends BaseProvider {
 			case "Pause":
 				logger.trace("[React Store Provider] Dispatching 'playing/pause'");
 				this.reduxStore.dispatch({ type: "playing/pause" });
+				// 网易云点击暂停后会有一两秒的淡出效果，此时还没有暂停
+				// 要立刻认为已暂停并更新，不然会有延迟感
+				if (this.playState !== "Paused") {
+					this.playState = "Paused";
+					this.dispatchEvent(
+						new CustomEvent("updatePlayState", { detail: this.playState }),
+					);
+				}
 				break;
 			case "NextSong":
 				logger.trace(
