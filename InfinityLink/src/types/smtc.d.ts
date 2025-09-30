@@ -4,7 +4,7 @@ export interface SongInfo {
 	songName: string;
 	albumName: string;
 	authorName: string;
-	thumbnail_base64: string;
+	thumbnailUrl: string;
 }
 
 export interface TimelineInfo {

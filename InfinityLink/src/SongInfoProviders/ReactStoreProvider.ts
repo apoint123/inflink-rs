@@ -437,9 +437,6 @@ export class ReactStoreProvider extends BaseProvider {
 			}
 
 			const thumbnailUrl = playingInfo.resourceCoverUrl || "";
-			const thumbnailBase64 = thumbnailUrl
-				? await imageUrlToBase64(thumbnailUrl)
-				: "";
 
 			this.dispatchEvent(
 				new CustomEvent("updateSongInfo", {
@@ -450,7 +447,7 @@ export class ReactStoreProvider extends BaseProvider {
 								?.map((v: Artist) => v.name)
 								.join(" / ") || "",
 						albumName: playingInfo.musicAlbumName ?? playingInfo.resourceName,
-						thumbnail_base64: thumbnailBase64,
+						thumbnailUrl: thumbnailUrl,
 					},
 				}),
 			);

@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
-use base64::{Engine as _, engine::general_purpose::STANDARD};
 use cef_safe::{CefResult, CefV8Context, CefV8Value, renderer_post_task_in_v8_ctx};
+use reqwest::blocking::get;
 use serde::Serialize;
 use std::sync::{LazyLock, Mutex};
 use tracing::{debug, error, info, instrument, trace, warn};
@@ -294,23 +294,37 @@ pub fn update_play_mode(is_shuffling: bool, repeat_mode: &RepeatMode) -> Result<
     })
 }
 
-pub fn update_metadata(
-    title: &str,
-    artist: &str,
-    album: &str,
-    thumbnail_base64: &str,
-) -> Result<()> {
+pub fn update_metadata(title: &str, artist: &str, album: &str, thumbnail_url: &str) -> Result<()> {
     info!(
         title = %title,
         artist = %artist,
         album = %album,
-        // thumbnail_provided = !thumbnail_base64.is_empty(),
+        thumbnail_url = %thumbnail_url,
         "正在更新 SMTC 歌曲元数据"
     );
 
+    let maybe_bytes = if thumbnail_url.is_empty() {
+        warn!("未提供封面URL");
+        None
+    } else {
+        debug!("正在从 URL 下载封面: {}", thumbnail_url);
+        match get(thumbnail_url) {
+            Ok(response) => match response.bytes() {
+                Ok(bytes) => Some(bytes.to_vec()),
+                Err(e) => {
+                    warn!("读取封面响应失败: {}", e);
+                    None
+                }
+            },
+            Err(e) => {
+                warn!("下载封面失败: {}", e);
+                None
+            }
+        }
+    };
+
     with_smtc("更新元数据", |smtc| {
         let updater = smtc.DisplayUpdater()?;
-
         updater.SetType(MediaPlaybackType::Music)?;
 
         let props = updater.MusicProperties()?;
@@ -318,9 +332,7 @@ pub fn update_metadata(
         props.SetArtist(&HSTRING::from(artist))?;
         props.SetAlbumTitle(&HSTRING::from(album))?;
 
-        if let Ok(bytes) = STANDARD.decode(thumbnail_base64) {
-            debug!(bytes_len = bytes.len(), "封面数据已准备好, 长度:");
-
+        if let Some(bytes) = maybe_bytes {
             let stream = InMemoryRandomAccessStream::new()?;
             let writer = DataWriter::CreateDataWriter(&stream)?;
             writer.WriteBytes(&bytes)?;
@@ -329,10 +341,8 @@ pub fn update_metadata(
             stream.Seek(0)?;
             let stream_ref = RandomAccessStreamReference::CreateFromStream(&stream)?;
             updater.SetThumbnail(&stream_ref)?;
-        } else if !thumbnail_base64.is_empty() {
-            warn!("解码 Base64 字符串失败");
         } else {
-            warn!("未提供封面或封面为空");
+            warn!("未提供封面URL或下载失败");
         }
 
         updater.Update()?;
@@ -351,7 +361,7 @@ fn handle_command_inner(command_json: &str) -> Result<()> {
             &payload.song_name,
             &payload.author_name,
             &payload.album_name,
-            &payload.thumbnail_base64,
+            &payload.thumbnail_url,
         )
         .context("更新元数据失败")?,
         SmtcCommand::PlayState(payload) => {

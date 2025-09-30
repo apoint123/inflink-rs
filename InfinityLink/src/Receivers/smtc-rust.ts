@@ -137,7 +137,7 @@ class SMTCNativeBackend {
 		songName: string;
 		authorName: string;
 		albumName: string;
-		thumbnail_base64: string;
+		thumbnailUrl: string;
 	}) {
 		this.dispatch("Metadata", {
 			...songInfo,

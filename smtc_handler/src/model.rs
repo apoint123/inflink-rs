@@ -1,5 +1,3 @@
-use std::fmt;
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Debug)]
@@ -11,7 +9,7 @@ pub enum SmtcCommand {
     PlayMode(PlayModePayload),
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct MetadataPayload {
     #[serde(rename = "songName")]
     pub song_name: String,
@@ -19,29 +17,8 @@ pub struct MetadataPayload {
     pub author_name: String,
     #[serde(rename = "albumName")]
     pub album_name: String,
-    #[serde(rename = "thumbnail_base64")]
-    pub thumbnail_base64: String,
-}
-
-impl fmt::Debug for MetadataPayload {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut debug_struct = f.debug_struct("MetadataPayload");
-
-        debug_struct.field("song_name", &self.song_name);
-        debug_struct.field("author_name", &self.author_name);
-        debug_struct.field("album_name", &self.album_name);
-
-        if self.thumbnail_base64.is_empty() {
-            debug_struct.field("thumbnail_base64", &"<empty>");
-        } else {
-            debug_struct.field(
-                "thumbnail_base64",
-                &format_args!("<已省略... 长度:{}>", self.thumbnail_base64.len()),
-            );
-        }
-
-        debug_struct.finish()
-    }
+    #[serde(rename = "thumbnailUrl")]
+    pub thumbnail_url: String,
 }
 
 #[derive(Deserialize, Debug)]
