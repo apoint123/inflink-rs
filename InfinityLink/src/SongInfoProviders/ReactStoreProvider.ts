@@ -2,7 +2,6 @@ import type React from "react";
 import type {
 	Artist,
 	AudioLoadInfo,
-	NCMPlayMode,
 	NCMStore,
 	NcmEventMap,
 	NcmEventName,
@@ -181,17 +180,6 @@ class DOMController {
 		triggerReactClick(
 			document.querySelector<HTMLButtonElement>(SELECTORS.PREV_BUTTON),
 		);
-	}
-
-	public getCurrentPlayMode(): NCMPlayMode | null {
-		const playModeButton = document.querySelector<HTMLButtonElement>(
-			SELECTORS.PLAY_MODE_BUTTON,
-		);
-		const mode = playModeButton
-			?.querySelector<HTMLSpanElement>(SELECTORS.PLAY_MODE_ICON)
-			?.getAttribute("aria-label");
-		logger.debug(`[DOMController] Current play mode from DOM: ${mode}`);
-		return (mode as NCMPlayMode) || null;
 	}
 }
 
@@ -676,9 +664,11 @@ export class ReactStoreProvider extends BaseProvider {
 				},
 			}),
 		);
+
+		const currentPlayMode = this.reduxStore.getState().playing?.playingMode;
 		this.dispatchEvent(
 			new CustomEvent("updatePlayMode", {
-				detail: this.domController.getCurrentPlayMode(),
+				detail: currentPlayMode,
 			}),
 		);
 		logger.trace("[React Store Provider] Full state dispatch complete.");
