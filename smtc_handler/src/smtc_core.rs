@@ -158,25 +158,27 @@ fn cleanup_smtc_handlers(smtc: &SystemMediaTransportControls) -> Result<()> {
     Ok(())
 }
 
-static MEDIA_PLAYER: LazyLock<Mutex<MediaPlayer>> = LazyLock::new(|| {
-    info!("创建 MediaPlayer 和 SMTC 实例...");
-    let player = MediaPlayer::new().expect("无法创建 MediaPlayer 实例");
-    let smtc = player
-        .SystemMediaTransportControls()
-        .expect("无法获取 SMTC");
-    smtc.SetIsEnabled(false).expect("无法禁用 SMTC");
-    Mutex::new(player)
+static MEDIA_PLAYER: LazyLock<Result<Mutex<MediaPlayer>>> = LazyLock::new(|| {
+    let player = MediaPlayer::new()?;
+    let smtc = player.SystemMediaTransportControls()?;
+    smtc.SetIsEnabled(false)?;
+    Ok(Mutex::new(player))
 });
 
 fn with_smtc<F, R>(context_msg: &str, f: F) -> Result<R>
 where
     F: FnOnce(&SystemMediaTransportControls) -> Result<R>,
 {
-    let smtc = MEDIA_PLAYER
-        .lock()
-        .map_err(|e| anyhow::anyhow!("获取 SMTC 锁失败 ({context_msg}): {e}"))?
-        .SystemMediaTransportControls()?;
-    f(&smtc)
+    match MEDIA_PLAYER.as_ref() {
+        Ok(player_mutex) => {
+            let smtc = player_mutex
+                .lock()
+                .map_err(|e| anyhow::anyhow!("获取 SMTC 锁失败 ({context_msg}): {e}"))?
+                .SystemMediaTransportControls()?;
+            f(&smtc)
+        }
+        Err(e) => Err(anyhow::anyhow!("SMTC 初始化失败 ({context_msg}): {e:?}")),
+    }
 }
 
 #[instrument]
