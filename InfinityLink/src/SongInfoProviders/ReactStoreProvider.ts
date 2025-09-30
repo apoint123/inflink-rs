@@ -266,8 +266,15 @@ export class ReactStoreProvider extends BaseProvider {
 
 		switch (msg.type) {
 			case "Play":
-				logger.trace("[React Store Provider] Dispatching 'playing/resume'");
-				this.reduxStore.dispatch({ type: "playing/resume" });
+				logger.trace(
+					"[React Store Provider] Dispatching 'playing/resume' with payload",
+				);
+				// 这里的 triggerScene 应该是用来做数据分析的，大概有 45 种
+				// 如果刚启动时不提供这个，就会因为 undefined 而报错
+				this.reduxStore.dispatch({
+					type: "playing/resume",
+					payload: { triggerScene: "track" },
+				});
 				break;
 			case "Pause":
 				logger.trace("[React Store Provider] Dispatching 'playing/pause'");
