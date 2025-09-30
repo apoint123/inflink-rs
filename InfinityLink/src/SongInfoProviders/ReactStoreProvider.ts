@@ -290,20 +290,20 @@ export class ReactStoreProvider extends BaseProvider {
 				break;
 			case "NextSong":
 				logger.trace(
-					"[React Store Provider] Dispatching 'playingList/jump2Track' with flag 'next'",
+					"[React Store Provider] Dispatching 'playingList/jump2Track'",
 				);
 				this.reduxStore.dispatch({
 					type: "playingList/jump2Track",
-					payload: { flag: "next" },
+					payload: { flag: 1, type: "call", triggerScene: "track" },
 				});
 				break;
 			case "PreviousSong":
 				logger.trace(
-					"[React Store Provider] Dispatching 'playingList/jump2Track' with flag 'prev'",
+					"[React Store Provider] Dispatching 'playingList/jump2Track'",
 				);
 				this.reduxStore.dispatch({
 					type: "playingList/jump2Track",
-					payload: { flag: "prev" },
+					payload: { flag: -1, type: "call", triggerScene: "track" },
 				});
 				break;
 			case "Seek":
