@@ -1,4 +1,3 @@
-import type React from "react";
 import type {
 	Artist,
 	AudioLoadInfo,
@@ -12,20 +11,41 @@ import { throttle, waitForElement } from "../utils";
 import logger from "../utils/logger";
 import { BaseProvider } from "./BaseProvider";
 
+async function waitForReduxStore(timeoutMs = 10000): Promise<NCMStore> {
+	const rootEl = (await waitForElement(
+		SELECTORS.REACT_ROOT,
+	)) as ReactRootElement;
+	if (!rootEl) {
+		throw new Error("React root element (#root) not found on the page.");
+	}
+
+	return new Promise((resolve, reject) => {
+		const interval = 100;
+		let elapsedTime = 0;
+
+		const checkStore = () => {
+			const store =
+				rootEl._reactRootContainer?._internalRoot?.current?.child?.child
+					?.memoizedProps?.store;
+
+			if (store) {
+				resolve(store);
+			} else if (elapsedTime >= timeoutMs) {
+				reject(new Error(`waitForReduxStore timed out after ${timeoutMs}ms.`));
+			} else {
+				elapsedTime += interval;
+				setTimeout(checkStore, interval);
+			}
+		};
+
+		checkStore();
+	});
+}
+
 /**
  * CSS 选择器常量
  */
 const SELECTORS = {
-	// 控制按钮
-	PLAY_BUTTON: "#btn_pc_minibar_play:not(.play-pause-btn)",
-	PAUSE_BUTTON: "#btn_pc_minibar_play.play-pause-btn",
-	NEXT_BUTTON: 'button[data-log*="btn_pc_next"]',
-	PREV_BUTTON: 'button[data-log*="btn_pc_prev"]',
-	PLAY_MODE_BUTTON: 'div[data-log*="btn_pc_playmode"] button',
-
-	// 状态指示器
-	PLAY_MODE_ICON: "span[role='img']",
-
 	// React 应用根节点
 	REACT_ROOT: "#root",
 };
@@ -44,40 +64,6 @@ const CONSTANTS = {
 	NCM_PLAY_MODE_SHUFFLE: "playRandom",
 	NCM_PLAY_MODE_ONE: "playOneCycle",
 };
-
-/**
- * 模拟 React 事件点击。
- * @param element 要点击的 HTML 元素。
- */
-function triggerReactClick(element: HTMLElement | null): void {
-	if (!element) {
-		logger.warn("[React TriggerClick] Element not found.");
-		return;
-	}
-
-	const reactPropsKey = Object.keys(element).find((key) =>
-		key.startsWith(CONSTANTS.REACT_PROPS_PREFIX),
-	);
-
-	if (reactPropsKey) {
-		const props = (element as unknown as Record<string, unknown>)[
-			reactPropsKey
-		] as React.HTMLAttributes<HTMLElement> | undefined;
-
-		if (props?.onClick) {
-			logger.debug(
-				"[React TriggerClick] Triggering click via React props.",
-				element,
-			);
-			props.onClick({} as React.MouseEvent<HTMLElement>);
-			return;
-		}
-	}
-
-	logger.debug("[React TriggerClick] Falling back to native click.", element);
-	// 如果找不到 React 属性，则尝试原生点击
-	element.click();
-}
 
 /**
  * 将图片 URL 转换为 Base64 字符串。
@@ -116,71 +102,6 @@ function genRandomString(length: number): string {
 		result += words.charAt(Math.floor(Math.random() * words.length));
 	}
 	return result;
-}
-
-async function waitForReduxStore(timeoutMs = 10000): Promise<NCMStore> {
-	const rootEl = (await waitForElement(
-		SELECTORS.REACT_ROOT,
-	)) as ReactRootElement;
-	if (!rootEl) {
-		throw new Error("React root element (#root) not found on the page.");
-	}
-
-	return new Promise((resolve, reject) => {
-		const interval = 100;
-		let elapsedTime = 0;
-
-		const checkStore = () => {
-			const store =
-				rootEl._reactRootContainer?._internalRoot?.current?.child?.child
-					?.memoizedProps?.store;
-
-			if (store) {
-				resolve(store);
-			} else if (elapsedTime >= timeoutMs) {
-				reject(new Error(`waitForReduxStore timed out after ${timeoutMs}ms.`));
-			} else {
-				elapsedTime += interval;
-				setTimeout(checkStore, interval);
-			}
-		};
-
-		checkStore();
-	});
-}
-
-/**
- * DOM 控制器
- * 封装所有与 DOM 交互的操作。
- */
-class DOMController {
-	public play(): void {
-		logger.debug("[DOMController] Attempting to play.");
-		triggerReactClick(
-			document.querySelector<HTMLButtonElement>(SELECTORS.PLAY_BUTTON),
-		);
-	}
-
-	public pause(): void {
-		logger.debug("[DOMController] Attempting to pause.");
-		triggerReactClick(
-			document.querySelector<HTMLButtonElement>(SELECTORS.PAUSE_BUTTON),
-		);
-	}
-
-	public nextSong(): void {
-		logger.debug("[DOMController] Attempting to play next song.");
-		triggerReactClick(
-			document.querySelector<HTMLButtonElement>(SELECTORS.NEXT_BUTTON),
-		);
-	}
-
-	public previousSong(): void {
-		logger.debug("[DOMController] Attempting to play previous song.");
-		triggerReactClick(
-			document.querySelector<HTMLButtonElement>(SELECTORS.PREV_BUTTON),
-		);
-	}
 }
 
 /**
@@ -238,14 +159,13 @@ export class ReactStoreProvider extends BaseProvider {
 	private reduxStore: NCMStore | null = null;
 	private unsubscribeStore: (() => void) | null = null;
 	private lastProgress = 0;
-	private dispatchTimelineThrottled: () => void;
+	private readonly dispatchTimelineThrottled: () => void;
 	private lastTrackId: string | null = null;
 	private lastIsPlaying: boolean | null = null;
 	private lastPlayMode: string | undefined = undefined;
 	private lastModeBeforeShuffle: string | null = null;
 	private isUpdatingFromProvider = false;
 
-	private readonly domController: DOMController;
 	private readonly eventAdapter: NcmEventAdapter;
 
 	public ready: Promise<void>;
@@ -257,7 +177,6 @@ export class ReactStoreProvider extends BaseProvider {
 
 	constructor() {
 		super();
-		this.domController = new DOMController();
 		this.eventAdapter = new NcmEventAdapter();
 
 		this.ready = new Promise((resolve) => {
@@ -347,28 +266,30 @@ export class ReactStoreProvider extends BaseProvider {
 
 		switch (msg.type) {
 			case "Play":
-				this.domController.play();
-				if (this.playState !== "Playing") {
-					this.playState = "Playing";
-					this.dispatchEvent(
-						new CustomEvent("updatePlayState", { detail: this.playState }),
-					);
-				}
+				logger.trace("[React Store Provider] Dispatching 'playing/resume'");
+				this.reduxStore.dispatch({ type: "playing/resume" });
 				break;
 			case "Pause":
-				this.domController.pause();
-				if (this.playState !== "Paused") {
-					this.playState = "Paused";
-					this.dispatchEvent(
-						new CustomEvent("updatePlayState", { detail: this.playState }),
-					);
-				}
+				logger.trace("[React Store Provider] Dispatching 'playing/pause'");
+				this.reduxStore.dispatch({ type: "playing/pause" });
 				break;
 			case "NextSong":
-				this.domController.nextSong();
+				logger.trace(
+					"[React Store Provider] Dispatching 'playingList/jump2Track' with flag 'next'",
+				);
+				this.reduxStore.dispatch({
+					type: "playingList/jump2Track",
+					payload: { flag: "next" },
+				});
 				break;
 			case "PreviousSong":
-				this.domController.previousSong();
+				logger.trace(
+					"[React Store Provider] Dispatching 'playingList/jump2Track' with flag 'prev'",
+				);
+				this.reduxStore.dispatch({
+					type: "playingList/jump2Track",
+					payload: { flag: "prev" },
+				});
 				break;
 			case "Seek":
 				if (typeof msg.position === "number") this.seekToPosition(msg.position);
@@ -628,14 +549,13 @@ export class ReactStoreProvider extends BaseProvider {
 		logger.debug(
 			"[React Store Provider] Forcing dispatch of full current state.",
 		);
-		if (!this.reduxStore?.getState().playing || !this.lastTrackId) {
+		const playingState = this.reduxStore?.getState().playing;
+		if (!playingState || !this.lastTrackId) {
 			logger.warn("[React Store Provider] 没有缓存的状态可以分发。");
 			return;
 		}
-		const playingInfo = this.reduxStore.getState().playing;
-		if (!playingInfo) return;
 
-		const thumbnailUrl = playingInfo.resourceCoverUrl || "";
+		const thumbnailUrl = playingState.resourceCoverUrl || "";
 		const thumbnailBase64 = thumbnailUrl
 			? await imageUrlToBase64(thumbnailUrl)
 			: "";
@@ -643,10 +563,12 @@ export class ReactStoreProvider extends BaseProvider {
 		this.dispatchEvent(
 			new CustomEvent("updateSongInfo", {
 				detail: {
-					songName: playingInfo.resourceName || "未知歌名",
+					songName: playingState.resourceName || "未知歌名",
 					authorName:
-						playingInfo.resourceArtists?.map((v) => v.name).join(" / ") || "",
-					albumName: playingInfo.musicAlbumName ?? playingInfo.resourceName,
+						playingState.resourceArtists
+							?.map((v: Artist) => v.name)
+							.join(" / ") || "",
+					albumName: playingState.musicAlbumName ?? playingState.resourceName,
 					thumbnail_base64: thumbnailBase64,
 				},
 			}),
@@ -665,7 +587,7 @@ export class ReactStoreProvider extends BaseProvider {
 			}),
 		);
 
-		const currentPlayMode = this.reduxStore.getState().playing?.playingMode;
+		const currentPlayMode = playingState.playingMode;
 		this.dispatchEvent(
 			new CustomEvent("updatePlayMode", {
 				detail: currentPlayMode,
