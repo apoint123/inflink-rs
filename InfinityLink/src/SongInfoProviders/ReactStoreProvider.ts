@@ -292,9 +292,6 @@ export class ReactStoreProvider extends BaseProvider {
 		this.eventAdapter.on("Load", (audioId: string, info: AudioLoadInfo) =>
 			this.onMusicLoad(audioId, info),
 		);
-		this.eventAdapter.on("End", (audioId: string) =>
-			this.onMusicUnload(audioId),
-		);
 		this.eventAdapter.on("PlayProgress", (audioId: string, progress: number) =>
 			this.onPlayProgress(audioId, progress),
 		);
@@ -487,18 +484,6 @@ export class ReactStoreProvider extends BaseProvider {
 			`[React Store Provider] Event 'Load' received for audioId: ${audioId}. Duration: ${info.duration}s`,
 		);
 		this.musicDuration = (info.duration * 1000) | 0;
-	}
-
-	private onMusicUnload(_audioId: string): void {
-		logger.debug(
-			`[React Store Provider] Event 'End' received for audioId: ${_audioId}. Setting state to Paused.`,
-		);
-		if (this.playState !== "Paused") {
-			this.playState = "Paused";
-			this.dispatchEvent(
-				new CustomEvent("updatePlayState", { detail: this.playState }),
-			);
-		}
 	}
 
 	private onPlayProgress(_audioId: string, progress: number): void {
