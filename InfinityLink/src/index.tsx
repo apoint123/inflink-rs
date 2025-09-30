@@ -80,11 +80,11 @@ function Main() {
 	);
 	const [frontendLogLevel, setFrontendLogLevel] = useLocalStorage<LogLevel>(
 		STORE_KEY_FRONTEND_LOG_LEVEL,
-		"info",
+		"warn",
 	);
 	const [backendLogLevel, setBackendLogLevel] = useLocalStorage<LogLevel>(
 		STORE_KEY_BACKEND_LOG_LEVEL,
-		"info",
+		"warn",
 	);
 
 	const frontendId = useId();
