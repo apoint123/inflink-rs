@@ -24,9 +24,21 @@ async function waitForReduxStore(timeoutMs = 10000): Promise<NCMStore> {
 		let elapsedTime = 0;
 
 		const checkStore = () => {
-			const store =
-				rootEl._reactRootContainer?._internalRoot?.current?.child?.child
-					?.memoizedProps?.store;
+			let store: NCMStore | null = null;
+
+			try {
+				store =
+					rootEl._reactRootContainer?._internalRoot?.current?.child?.child
+						?.memoizedProps?.store ?? null;
+			} catch {
+				// 让慢速路径接管
+			}
+
+			// 网易云使用了很多年的react16了，几乎没有可能在不大规模重构的情况下更改上面这个固定的路径，
+			// 但是保险起见，失败时可以遍历搜索一下
+			if (!store) {
+				store = findStoreFromRootElement(rootEl);
+			}
 
 			if (store) {
 				resolve(store);
@@ -40,6 +52,50 @@ async function waitForReduxStore(timeoutMs = 10000): Promise<NCMStore> {
 
 		checkStore();
 	});
+}
+
+interface FiberNode {
+	memoizedProps?: {
+		store?: NCMStore;
+	};
+	return: FiberNode | null;
+}
+
+function findReduxStoreInFiberTree(node: FiberNode | null): NCMStore | null {
+	let currentNode = node;
+	while (currentNode) {
+		if (currentNode.memoizedProps?.store) {
+			return currentNode.memoizedProps.store;
+		}
+		currentNode = currentNode.return;
+	}
+	return null;
+}
+
+function findStoreFromRootElement(rootEl: HTMLElement): NCMStore | null {
+	const appEl = rootEl.firstElementChild;
+	if (!appEl) {
+		logger.warn("[React Store Provider] #root 元素没有子元素");
+		return null;
+	}
+
+	const fiberKey = Object.keys(appEl).find(
+		(key) =>
+			key.startsWith("__reactFiber$") || // >= react 17
+			key.startsWith("__reactInternalInstance$"), // < react 17, 网易云使用 react 16.14
+	);
+	if (!fiberKey) {
+		logger.warn("[React Store Provider] 找不到 React Fiber key");
+		return null;
+	}
+
+	const startNode = (appEl as unknown as Record<string, FiberNode>)[fiberKey];
+	if (!startNode) {
+		logger.warn("[React Store Provider] 找不到起始 Fiber 节点");
+		return null;
+	}
+
+	return findReduxStoreInFiberTree(startNode);
 }
 
 /**
