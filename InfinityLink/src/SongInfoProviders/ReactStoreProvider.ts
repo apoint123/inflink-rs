@@ -66,36 +66,6 @@ const CONSTANTS = {
 };
 
 /**
- * 将图片 URL 转换为 Base64 字符串。
- * @param url 图片的 URL.
- * @returns Base64 格式的图片数据，如果失败则返回空字符串。
- */
-async function imageUrlToBase64(url: string): Promise<string> {
-	try {
-		const response = await fetch(url);
-		if (!response.ok) {
-			throw new Error(`获取图像失败: ${response.statusText}`);
-		}
-		const blob = await response.blob();
-		return new Promise((resolve, reject) => {
-			const reader = new FileReader();
-			reader.onloadend = () => {
-				const base64data = (reader.result as string).split(",")[1];
-				logger.debug(
-					`[React Store Provider] Successfully converted ${url} to base64.`,
-				);
-				resolve(base64data);
-			};
-			reader.onerror = reject;
-			reader.readAsDataURL(blob);
-		});
-	} catch (error) {
-		logger.error(`[React Store Provider] 将 ${url} 转换为 base64 失败`, error);
-		return "";
-	}
-}
-
-/**
  * NCM 事件适配器
  */
 class NcmEventAdapter {
@@ -374,16 +344,54 @@ export class ReactStoreProvider extends BaseProvider {
 		this.addEventListener("control", this.handleControlEvent);
 	}
 
-	private async onStateChanged(forceDispatchPlayMode = false): Promise<void> {
-		if (!this.reduxStore) return;
+	private _dispatchSongInfoUpdate(force = false): void {
+		const playingInfo = this.reduxStore?.getState().playing;
+		if (!playingInfo) return;
 
-		const playingState = this.reduxStore.getState().playing;
-		const newNcmMode = playingState?.playingMode;
+		const currentTrackId = String(playingInfo.resourceTrackId || "").trim();
+		if (
+			force ||
+			(currentTrackId &&
+				currentTrackId !== "0" &&
+				currentTrackId !== this.lastTrackId)
+		) {
+			this.lastTrackId = currentTrackId;
+			if (playingInfo.curTrack?.duration) {
+				this.musicDuration = playingInfo.curTrack.duration;
+			}
 
-		if (this.lastPlayMode !== newNcmMode || forceDispatchPlayMode) {
-			logger.info(
-				`[React Store Provider] Play mode changed from '${this.lastPlayMode}' to '${newNcmMode}'.`,
+			const thumbnailUrl = playingInfo.resourceCoverUrl || "";
+
+			this.dispatchEvent(
+				new CustomEvent("updateSongInfo", {
+					detail: {
+						songName: playingInfo.resourceName || "未知歌名",
+						authorName:
+							playingInfo.resourceArtists
+								?.map((v: Artist) => v.name)
+								.join(" / ") || "",
+						albumName: playingInfo.musicAlbumName ?? playingInfo.resourceName,
+						thumbnailUrl: thumbnailUrl,
+					},
+				}),
 			);
+		}
+	}
+
+	private _dispatchPlayStateUpdate(force = false): void {
+		const isPlaying = !!this.reduxStore?.getState().playing?.playing;
+		if (force || this.lastIsPlaying !== isPlaying) {
+			this.lastIsPlaying = isPlaying;
+			this.playState = isPlaying ? "Playing" : "Paused";
+			this.dispatchEvent(
+				new CustomEvent("updatePlayState", { detail: this.playState }),
+			);
+		}
+	}
+
+	private _dispatchPlayModeUpdate(force = false): void {
+		const newNcmMode = this.reduxStore?.getState().playing?.playingMode;
+		if (force || this.lastPlayMode !== newNcmMode) {
 			this.lastPlayMode = newNcmMode || undefined;
 
 			let isShuffling = newNcmMode === CONSTANTS.NCM_PLAY_MODE_SHUFFLE;
@@ -418,56 +426,27 @@ export class ReactStoreProvider extends BaseProvider {
 				new CustomEvent("updatePlayMode", { detail: newNcmMode }),
 			);
 		}
+	}
 
+	private _dispatchTimelineUpdate(): void {
+		this.dispatchEvent(
+			new CustomEvent("updateTimeline", {
+				detail: {
+					currentTime: this.musicPlayProgress,
+					totalTime: this.musicDuration,
+				},
+			}),
+		);
+	}
+
+	private async onStateChanged(): Promise<void> {
+		if (!this.reduxStore) return;
+
+		this._dispatchPlayModeUpdate();
+		this._dispatchSongInfoUpdate();
+		this._dispatchPlayStateUpdate();
 		const playingInfo = this.reduxStore.getState().playing;
-		if (!playingInfo) return;
-		// 处理歌曲信息变化
-		const currentTrackId = String(playingInfo.resourceTrackId || "").trim();
-		if (
-			currentTrackId &&
-			currentTrackId !== "0" &&
-			currentTrackId !== this.lastTrackId
-		) {
-			logger.info(
-				`[React Store Provider] Track changed. New track ID: ${currentTrackId}, Name: ${playingInfo.resourceName}`,
-			);
-			this.lastTrackId = currentTrackId;
-			if (playingInfo.curTrack?.duration) {
-				this.musicDuration = playingInfo.curTrack.duration;
-			}
-
-			const thumbnailUrl = playingInfo.resourceCoverUrl || "";
-
-			this.dispatchEvent(
-				new CustomEvent("updateSongInfo", {
-					detail: {
-						songName: playingInfo.resourceName || "未知歌名",
-						authorName:
-							playingInfo.resourceArtists
-								?.map((v: Artist) => v.name)
-								.join(" / ") || "",
-						albumName: playingInfo.musicAlbumName ?? playingInfo.resourceName,
-						thumbnailUrl: thumbnailUrl,
-					},
-				}),
-			);
-		}
-
-		// 处理播放/暂停状态变化
-		const isPlaying = !!playingInfo.playing;
-		if (this.lastIsPlaying !== isPlaying) {
-			logger.info(
-				`[React Store Provider] Play state changed to: ${isPlaying ? "Playing" : "Paused"}`,
-			);
-			this.lastIsPlaying = isPlaying;
-			this.playState = isPlaying ? "Playing" : "Paused";
-			this.dispatchEvent(
-				new CustomEvent("updatePlayState", { detail: this.playState }),
-			);
-		}
-
-		// 初始化播放进度
-		if (playingInfo.progress !== undefined && this.musicPlayProgress === 0) {
+		if (playingInfo?.progress !== undefined && this.musicPlayProgress === 0) {
 			logger.debug(
 				`[React Store Provider] Initializing progress: ${playingInfo.progress * 1000}ms`,
 			);
@@ -544,54 +523,19 @@ export class ReactStoreProvider extends BaseProvider {
 		this.playerActions.seek(timeMS);
 	}
 
-	public async forceDispatchFullState(): Promise<void> {
+	public forceDispatchFullState(): void {
 		logger.debug(
 			"[React Store Provider] Forcing dispatch of full current state.",
 		);
-		const playingState = this.reduxStore?.getState().playing;
-		if (!playingState || !this.lastTrackId) {
+		if (!this.reduxStore?.getState().playing || !this.lastTrackId) {
 			logger.warn("[React Store Provider] 没有缓存的状态可以分发。");
 			return;
 		}
+		this._dispatchSongInfoUpdate(true);
+		this._dispatchPlayStateUpdate(true);
+		this._dispatchPlayModeUpdate(true);
+		this._dispatchTimelineUpdate();
 
-		const thumbnailUrl = playingState.resourceCoverUrl || "";
-		const thumbnailBase64 = thumbnailUrl
-			? await imageUrlToBase64(thumbnailUrl)
-			: "";
-
-		this.dispatchEvent(
-			new CustomEvent("updateSongInfo", {
-				detail: {
-					songName: playingState.resourceName || "未知歌名",
-					authorName:
-						playingState.resourceArtists
-							?.map((v: Artist) => v.name)
-							.join(" / ") || "",
-					albumName: playingState.musicAlbumName ?? playingState.resourceName,
-					thumbnail_base64: thumbnailBase64,
-				},
-			}),
-		);
-
-		this.dispatchEvent(
-			new CustomEvent("updatePlayState", { detail: this.playState }),
-		);
-
-		this.dispatchEvent(
-			new CustomEvent("updateTimeline", {
-				detail: {
-					currentTime: this.musicPlayProgress,
-					totalTime: this.musicDuration,
-				},
-			}),
-		);
-
-		const currentPlayMode = playingState.playingMode;
-		this.dispatchEvent(
-			new CustomEvent("updatePlayMode", {
-				detail: currentPlayMode,
-			}),
-		);
 		logger.trace("[React Store Provider] Full state dispatch complete.");
 	}
 
