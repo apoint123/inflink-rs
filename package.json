@@ -55,6 +55,24 @@
 				"type": "test",
 				"section": "🚨 Tests"
 			}
+		],
+		"bumpFiles": [
+			{
+				"filename": "package.json",
+				"type": "json"
+			},
+			{
+				"filename": "InfinityLink/package.json",
+				"type": "json"
+			},
+			{
+				"filename": "InfinityLink/manifest.json",
+				"type": "json"
+			},
+			{
+				"filename": "smtc_handler/Cargo.toml",
+				"updater": "standard-version-updater.js"
+			}
 		]
 	}
 }
