@@ -334,65 +334,74 @@ export class ReactStoreProvider extends BaseProvider {
 			return;
 		}
 
-		const msg = e.detail;
-		logger.info(
-			`[React Store Provider] Handling control event: ${msg.type}`,
-			msg,
-		);
+		this.isUpdatingFromProvider = true;
 
-		switch (msg.type) {
-			case "Play":
-				this.playerActions.resume();
-				break;
-			case "Pause":
-				this.playerActions.pause();
-				break;
-			case "NextSong":
-				this.playerActions.next();
-				break;
-			case "PreviousSong":
-				this.playerActions.prev();
-				break;
-			case "Seek":
-				if (typeof msg.position === "number") this.seekToPosition(msg.position);
-				break;
-			case "ToggleShuffle": {
-				const currentMode = this.reduxStore.getState()?.playing?.playingMode;
-				const isShuffleOn = currentMode === CONSTANTS.NCM_PLAY_MODE_SHUFFLE;
-				const targetMode = isShuffleOn
-					? this.lastModeBeforeShuffle || CONSTANTS.NCM_PLAY_MODE_LOOP
-					: CONSTANTS.NCM_PLAY_MODE_SHUFFLE;
+		try {
+			const msg = e.detail;
+			logger.info(
+				`[React Store Provider] Handling control event: ${msg.type}`,
+				msg,
+			);
 
-				if (!isShuffleOn && currentMode) {
-					this.lastModeBeforeShuffle = currentMode;
-				} else {
-					this.lastModeBeforeShuffle = null;
-				}
-				this.playerActions.switchMode(targetMode);
-				break;
-			}
-			case "ToggleRepeat": {
-				const currentMode = this.reduxStore.getState()?.playing?.playingMode;
-				let targetMode: string;
-				if (currentMode === CONSTANTS.NCM_PLAY_MODE_SHUFFLE) {
-					targetMode = CONSTANTS.NCM_PLAY_MODE_ORDER;
-					this.lastModeBeforeShuffle = null;
-				} else {
-					switch (currentMode) {
-						case CONSTANTS.NCM_PLAY_MODE_ORDER:
-							targetMode = CONSTANTS.NCM_PLAY_MODE_LOOP;
-							break;
-						case CONSTANTS.NCM_PLAY_MODE_LOOP:
-							targetMode = CONSTANTS.NCM_PLAY_MODE_ONE;
-							break;
-						default:
-							targetMode = CONSTANTS.NCM_PLAY_MODE_ORDER;
-							break;
+			switch (msg.type) {
+				case "Play":
+					this.playerActions.resume();
+					break;
+				case "Pause":
+					this.playerActions.pause();
+					break;
+				case "NextSong":
+					this.playerActions.next();
+					break;
+				case "PreviousSong":
+					this.playerActions.prev();
+					break;
+				case "Seek":
+					if (typeof msg.position === "number")
+						this.seekToPosition(msg.position);
+					break;
+				case "ToggleShuffle": {
+					const currentMode = this.reduxStore.getState()?.playing?.playingMode;
+					const isShuffleOn = currentMode === CONSTANTS.NCM_PLAY_MODE_SHUFFLE;
+					const targetMode = isShuffleOn
+						? this.lastModeBeforeShuffle || CONSTANTS.NCM_PLAY_MODE_LOOP
+						: CONSTANTS.NCM_PLAY_MODE_SHUFFLE;
+
+					if (!isShuffleOn && currentMode) {
+						this.lastModeBeforeShuffle = currentMode;
+					} else {
+						this.lastModeBeforeShuffle = null;
 					}
+					this.playerActions.switchMode(targetMode);
+					break;
 				}
-				this.playerActions.switchMode(targetMode);
-				break;
+				case "ToggleRepeat": {
+					const currentMode = this.reduxStore.getState()?.playing?.playingMode;
+					let targetMode: string;
+					if (currentMode === CONSTANTS.NCM_PLAY_MODE_SHUFFLE) {
+						targetMode = CONSTANTS.NCM_PLAY_MODE_ORDER;
+						this.lastModeBeforeShuffle = null;
+					} else {
+						switch (currentMode) {
+							case CONSTANTS.NCM_PLAY_MODE_ORDER:
+								targetMode = CONSTANTS.NCM_PLAY_MODE_LOOP;
+								break;
+							case CONSTANTS.NCM_PLAY_MODE_LOOP:
+								targetMode = CONSTANTS.NCM_PLAY_MODE_ONE;
+								break;
+							default:
+								targetMode = CONSTANTS.NCM_PLAY_MODE_ORDER;
+								break;
+						}
+					}
+					this.playerActions.switchMode(targetMode);
+					break;
+				}
 			}
+		} finally {
+			Promise.resolve().then(() => {
+				this.isUpdatingFromProvider = false;
+			});
 		}
 	}
 
@@ -476,11 +485,6 @@ export class ReactStoreProvider extends BaseProvider {
 					repeatMode = "Track";
 					break;
 			}
-
-			this.isUpdatingFromProvider = true;
-			setTimeout(() => {
-				this.isUpdatingFromProvider = false;
-			}, 100);
 
 			this.onPlayModeChange?.({ isShuffling, repeatMode });
 			this.dispatchEvent(
@@ -568,15 +572,7 @@ export class ReactStoreProvider extends BaseProvider {
 		}
 
 		this.musicPlayProgress = timeMS;
-		this.dispatchEvent(
-			new CustomEvent("updateTimeline", {
-				detail: {
-					currentTime: this.musicPlayProgress,
-					totalTime: this.musicDuration,
-				},
-			}),
-		);
-
+		this._dispatchTimelineUpdate();
 		this.playerActions.seek(timeMS);
 	}
 
