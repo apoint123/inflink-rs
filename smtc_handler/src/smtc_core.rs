@@ -33,6 +33,16 @@ unsafe impl Send for SmtcCallback {}
 
 static EVENT_CALLBACK: LazyLock<Mutex<Option<SmtcCallback>>> = LazyLock::new(|| Mutex::new(None));
 
+struct SmtcHandlerTokens {
+    button_pressed: i64,
+    shuffle_changed: i64,
+    repeat_changed: i64,
+    seek_requested: i64,
+}
+
+static HANDLER_TOKENS: LazyLock<Mutex<Option<SmtcHandlerTokens>>> =
+    LazyLock::new(|| Mutex::new(None));
+
 #[derive(Serialize, Clone, Debug)]
 #[serde(tag = "type")]
 enum SmtcEvent {
@@ -133,6 +143,17 @@ fn dispatch_event(event: &SmtcEvent) {
     }
 }
 
+fn cleanup_smtc_handlers(smtc: &SystemMediaTransportControls) -> Result<()> {
+    let maybe_tokens = HANDLER_TOKENS.lock().unwrap().take();
+    if let Some(tokens) = maybe_tokens {
+        smtc.RemoveButtonPressed(tokens.button_pressed)?;
+        smtc.RemoveShuffleEnabledChangeRequested(tokens.shuffle_changed)?;
+        smtc.RemoveAutoRepeatModeChangeRequested(tokens.repeat_changed)?;
+        smtc.RemovePlaybackPositionChangeRequested(tokens.seek_requested)?;
+    }
+    Ok(())
+}
+
 static MEDIA_PLAYER: LazyLock<Mutex<MediaPlayer>> = LazyLock::new(|| {
     info!("创建 MediaPlayer 和 SMTC 实例...");
     let player = MediaPlayer::new().expect("无法创建 MediaPlayer 实例");
@@ -157,7 +178,14 @@ where
 #[instrument]
 pub fn initialize() -> Result<()> {
     info!("正在初始化 SMTC...");
-    with_smtc("初始化", |smtc| {
+    let tokens = with_smtc("初始化", |smtc| {
+        if HANDLER_TOKENS.lock().unwrap().is_some() {
+            warn!("发现残留的 SMTC 处理器，可能是上次未能正常关闭。正在清理");
+            if let Err(e) = cleanup_smtc_handlers(smtc) {
+                error!("清理残留的 SMTC 处理器失败: {e:?}");
+            }
+        }
+
         smtc.SetIsEnabled(true)?;
         smtc.SetIsPlayEnabled(true)?;
         smtc.SetIsPauseEnabled(true)?;
@@ -184,7 +212,7 @@ pub fn initialize() -> Result<()> {
                 Ok(())
             },
         );
-        smtc.ButtonPressed(&handler)?;
+        let button_pressed = smtc.ButtonPressed(&handler)?;
 
         let shuffle_handler = TypedEventHandler::new(
             move |_: Ref<SystemMediaTransportControls>,
@@ -195,7 +223,7 @@ pub fn initialize() -> Result<()> {
                 Ok(())
             },
         );
-        smtc.ShuffleEnabledChangeRequested(&shuffle_handler)?;
+        let shuffle_changed = smtc.ShuffleEnabledChangeRequested(&shuffle_handler)?;
 
         let repeat_handler = TypedEventHandler::new(
             move |_: Ref<SystemMediaTransportControls>,
@@ -206,7 +234,7 @@ pub fn initialize() -> Result<()> {
                 Ok(())
             },
         );
-        smtc.AutoRepeatModeChangeRequested(&repeat_handler)?;
+        let repeat_changed = smtc.AutoRepeatModeChangeRequested(&repeat_handler)?;
 
         let seek_handler = TypedEventHandler::new(
             move |_: Ref<SystemMediaTransportControls>,
@@ -221,10 +249,19 @@ pub fn initialize() -> Result<()> {
                 Ok(())
             },
         );
-        smtc.PlaybackPositionChangeRequested(&seek_handler)?;
+        let seek_requested = smtc.PlaybackPositionChangeRequested(&seek_handler)?;
+
         debug!("SMTC 事件处理器已全部附加");
-        Ok(())
+
+        Ok(SmtcHandlerTokens {
+            button_pressed,
+            shuffle_changed,
+            repeat_changed,
+            seek_requested,
+        })
     })?;
+
+    *HANDLER_TOKENS.lock().unwrap() = Some(tokens);
 
     debug!("SMTC 已初始化");
     Ok(())
@@ -233,6 +270,7 @@ pub fn initialize() -> Result<()> {
 #[instrument]
 pub fn shutdown() -> Result<()> {
     with_smtc("关闭", |smtc| {
+        cleanup_smtc_handlers(smtc).context("清理 SMTC 处理器失败")?;
         smtc.SetIsEnabled(false)?;
         Ok(())
     })?;

@@ -379,10 +379,14 @@ export class ReactStoreProvider extends BaseProvider {
 	}
 
 	private _dispatchPlayStateUpdate(force = false): void {
-		const isPlaying = !!this.reduxStore?.getState().playing?.playing;
-		if (force || this.lastIsPlaying !== isPlaying) {
-			this.lastIsPlaying = isPlaying;
-			this.playState = isPlaying ? "Playing" : "Paused";
+		const isPlayingFromRedux = !!this.reduxStore?.getState().playing?.playing;
+		if (!isPlayingFromRedux && this.playState === "Playing") {
+			this.lastIsPlaying = false;
+			return;
+		}
+		if (force || this.lastIsPlaying !== isPlayingFromRedux) {
+			this.lastIsPlaying = isPlayingFromRedux;
+			this.playState = isPlayingFromRedux ? "Playing" : "Paused";
 			this.dispatchEvent(
 				new CustomEvent("updatePlayState", { detail: this.playState }),
 			);
@@ -490,11 +494,7 @@ export class ReactStoreProvider extends BaseProvider {
 			if (state === "pause") newPlayState = "Paused";
 			else if (state === "resume") newPlayState = "Playing";
 		}
-
 		if (this.playState !== newPlayState) {
-			logger.debug(
-				`[React Store Provider] Event 'PlayState' changed state from '${this.playState}' to '${newPlayState}'.`,
-			);
 			this.playState = newPlayState;
 			this.dispatchEvent(
 				new CustomEvent("updatePlayState", { detail: this.playState }),
@@ -531,6 +531,7 @@ export class ReactStoreProvider extends BaseProvider {
 			logger.warn("[React Store Provider] 没有缓存的状态可以分发。");
 			return;
 		}
+		this.lastIsPlaying = null;
 		this._dispatchSongInfoUpdate(true);
 		this._dispatchPlayStateUpdate(true);
 		this._dispatchPlayModeUpdate(true);
