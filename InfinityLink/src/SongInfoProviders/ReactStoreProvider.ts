@@ -248,6 +248,7 @@ export class ReactStoreProvider extends BaseProvider {
 				);
 				this.reduxStore?.dispatch({
 					type: "playing/setPlayingPosition",
+					// 一个有误导性的名称，实际上是跳转位置
 					payload: { duration: timeMS / 1000 },
 				});
 			},
