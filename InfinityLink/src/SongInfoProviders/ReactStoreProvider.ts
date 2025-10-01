@@ -26,7 +26,7 @@ async function waitForReduxStore(timeoutMs = 10000): Promise<NCMStore> {
 
 	while (elapsedTime < timeoutMs) {
 		try {
-			// 网易云使用了很多年的react16了，几乎没有可能在不大规模重构的情况下更改上面这个固定的路径，
+			// 网易云使用了很多年的react16了，几乎没有可能在不大规模重构的情况下更改下面这个固定的路径，
 			// 但是保险起见，失败时可以遍历搜索一下
 			const store =
 				rootEl._reactRootContainer?._internalRoot?.current?.child?.child
