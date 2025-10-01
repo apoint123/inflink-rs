@@ -21,12 +21,13 @@ import {
 	Typography,
 } from "@mui/material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
-import { useEffect, useId } from "react";
+import { useEffect, useId, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import {
 	useCompatibility,
 	useInfoProvider,
 	useLocalStorage,
+	useNcmTheme,
 	useSmtcConnection,
 	useVersionCheck,
 } from "./hooks";
@@ -42,35 +43,73 @@ const configElement = document.createElement("div");
 
 const GITHUB_REPO = "apoint123/InfLink-rs";
 
-const theme = createTheme({
-	typography: {
-		fontFamily: [
-			'"Noto Sans SC"',
-			'"Microsoft YaHei"',
-			'"Segoe UI"',
-			"Roboto",
-			'"Helvetica Neue"',
-			"Arial",
-			"sans-serif",
-		].join(","),
-	},
-});
+/**
+ * 猴子补丁 localStorage.setItem 以便在当前页面也能监听到变化
+ *
+ * 用来实时同步当前的主题
+ */
+function patchLocalStorage() {
+	const originalSetItem = localStorage.setItem;
+
+	localStorage.setItem = function (key: string, value: string) {
+		const oldValue = localStorage.getItem(key);
+
+		originalSetItem.call(this, key, value);
+
+		const event = new StorageEvent("storage", {
+			key,
+			newValue: value,
+			oldValue,
+			storageArea: localStorage,
+		});
+		window.dispatchEvent(event);
+	};
+}
 
 plugin.onLoad((selfPlugin) => {
-	logger.debug("[InfLink-rs] 插件正在加载...", selfPlugin);
+	logger.info("[InfLink-rs] 插件正在加载...", selfPlugin);
+
+	patchLocalStorage();
 
 	try {
-		createRoot(configElement).render(
-			<ThemeProvider theme={theme}>
-				<Main />
-			</ThemeProvider>,
-		);
+		createRoot(configElement).render(<App />);
 	} catch (error) {
 		logger.error("[InfLink-rs] React 组件渲染失败:", error);
 	}
 });
 
 const logLevels: LogLevel[] = ["trace", "debug", "info", "warn", "error"];
+
+function App() {
+	const ncmThemeMode = useNcmTheme();
+
+	const theme = useMemo(
+		() =>
+			createTheme({
+				palette: {
+					mode: ncmThemeMode,
+				},
+				typography: {
+					fontFamily: [
+						'"Noto Sans SC"',
+						'"Microsoft YaHei"',
+						'"Segoe UI"',
+						"Roboto",
+						'"Helvetica Neue"',
+						"Arial",
+						"sans-serif",
+					].join(","),
+				},
+			}),
+		[ncmThemeMode],
+	);
+
+	return (
+		<ThemeProvider theme={theme}>
+			<Main />
+		</ThemeProvider>
+	);
+}
 
 function Main() {
 	const isCompatible = useCompatibility();

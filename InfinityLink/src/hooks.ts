@@ -1,3 +1,4 @@
+import type { PaletteMode } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
 import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
 import { ReactStoreProvider } from "./SongInfoProviders/ReactStoreProvider";
@@ -174,4 +175,28 @@ export function useVersionCheck(repo: string): NewVersionInfo | null {
 	}, [repo]);
 
 	return newVersionInfo;
+}
+
+function getNcmThemeMode(): PaletteMode {
+	const currentTheme = localStorage.getItem("currentTheme") || "light";
+	return /^dark/i.test(currentTheme) ? "dark" : "light";
+}
+
+export function useNcmTheme(): PaletteMode {
+	const [ncmThemeMode, setNcmThemeMode] = useState(getNcmThemeMode);
+
+	useEffect(() => {
+		const handleStorageChange = (event: StorageEvent) => {
+			if (event.key === "currentTheme") {
+				setNcmThemeMode(getNcmThemeMode());
+			}
+		};
+
+		window.addEventListener("storage", handleStorageChange);
+		return () => {
+			window.removeEventListener("storage", handleStorageChange);
+		};
+	}, []);
+
+	return ncmThemeMode;
 }
