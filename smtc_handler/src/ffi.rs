@@ -1,7 +1,7 @@
 use crate::{logger, smtc_core};
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::ptr;
-use std::sync::Once;
+use std::sync::{LazyLock, Mutex, Once};
 use tracing::{debug, error, instrument, trace};
 
 const DISPATCH_ARGS: [NativeAPIType; 1] = [NativeAPIType::String];
@@ -101,6 +101,16 @@ pub unsafe extern "C" fn inflink_register_event_callback(args: *mut *mut c_void)
     ptr::null_mut()
 }
 
+/// 用来存放返回值的缓冲区
+///
+/// betterncm 复制完我们的返回值后就直接丢弃了，完全没有释放内存，
+/// 所以我们在 `inflink_dispatch` 直接返回一个缓冲区
+///
+/// 如果 betterncm 未来更新了他们的代码，
+/// 又尝试保留之前的指针，这里需要修正
+static RETURN_BUFFER: LazyLock<Mutex<CString>> =
+    LazyLock::new(|| Mutex::new(CString::new("").unwrap()));
+
 #[instrument(skip(args))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn inflink_dispatch(args: *mut *mut c_void) -> *mut c_char {
@@ -120,14 +130,22 @@ pub unsafe extern "C" fn inflink_dispatch(args: *mut *mut c_void) -> *mut c_char
     let result_json = smtc_core::handle_command(&command_json);
     tracing::trace!(result = %result_json, "发送执行结果到前端");
 
-    // betterncm 不会清理这块内存 (大概是忘了)，它会泄漏
-    match CString::new(result_json) {
-        Ok(s) => s.into_raw(),
+    let mut buffer_guard = match RETURN_BUFFER.lock() {
+        Ok(guard) => guard,
         Err(e) => {
-            error!("[InfLink-rs] 无法创建返回的 CString: {}", e);
-            ptr::null_mut()
+            error!("[InfLink-rs] RETURN_BUFFER 锁毒化: {e}");
+            return ptr::null_mut();
         }
-    }
+    };
+
+    *buffer_guard = match CString::new(result_json) {
+        Ok(s) => s,
+        Err(e) => {
+            error!("[InfLink-rs] 无法创建返回的 CString: {e}");
+            CString::new("").unwrap()
+        }
+    };
+    buffer_guard.as_ptr().cast_mut()
 }
 
 #[instrument(skip(args))]
