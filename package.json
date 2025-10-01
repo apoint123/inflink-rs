@@ -71,7 +71,7 @@
 			},
 			{
 				"filename": "smtc_handler/Cargo.toml",
-				"updater": "standard-version-updater.js"
+				"updater": "standard-version-toml-updater.mjs"
 			}
 		]
 	}
