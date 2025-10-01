@@ -2,6 +2,58 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.2.0](https://github.com/apoint123/inflink-rs/compare/v2.1.0...v2.2.0) (2025-10-01)
+
+
+### ✨ Features
+
+* 添加一些网易云音乐的内部工具 ([ac50564](https://github.com/apoint123/inflink-rs/commit/ac50564ae30723f0642a101419aa38eca01220d2))
+* 增强日志 ([f7655f6](https://github.com/apoint123/inflink-rs/commit/f7655f6481e7890cbd16326bce2e3de028894b60))
+
+
+### 🚚 Chores
+
+* 不让biome扫描target目录 ([98d3c45](https://github.com/apoint123/inflink-rs/commit/98d3c45b628d128c9d2e4db73226e950763608e9))
+* 移除弃用的类型包 ([880d5aa](https://github.com/apoint123/inflink-rs/commit/880d5aaec1b6ae25b91c795783a224e854ab6f0f))
+* **deps:** 更新依赖 ([2dfd5f6](https://github.com/apoint123/inflink-rs/commit/2dfd5f661984183fc9fdb22ded73c1e095db3b42))
+
+
+### 📚 Documentation
+
+* 更新 README 文档 ([25580d1](https://github.com/apoint123/inflink-rs/commit/25580d14905af3668c73ff89ddb01cd40a718a87))
+* 添加 playing/setPlayingPosition 中 duration 负载的说明 ([c424daf](https://github.com/apoint123/inflink-rs/commit/c424daf24c17559a929b61a4648a9ee291fbe132))
+
+
+### ♻️ Code Refactoring
+
+* 简化跳转操作 ([c8dfabc](https://github.com/apoint123/inflink-rs/commit/c8dfabcc8aa2c6f28c89e3aaa027483bbe4b2128))
+* 提高获取store的稳定性 ([e245354](https://github.com/apoint123/inflink-rs/commit/e2453541e898db1de60a3f9b4c73e1c391016633))
+* 提高切换播放模式的响应速度 ([50dfa88](https://github.com/apoint123/inflink-rs/commit/50dfa8855d0d03572817f3cd2c88bcb1f9d62fb0))
+* 统一存放各个action ([a410d27](https://github.com/apoint123/inflink-rs/commit/a410d273ea0a5ef0c6685977812c1278edf8ca08))
+* 移除重复代码 ([a13421e](https://github.com/apoint123/inflink-rs/commit/a13421ebed602f1e5e1afff1f761a3137fae71a7))
+* 优化 waitForReduxStore 的可读性 ([7a082ea](https://github.com/apoint123/inflink-rs/commit/7a082ea5e8ad54189ab2ff38522141ae59b763ae))
+* 优化事件监听 ([0844908](https://github.com/apoint123/inflink-rs/commit/0844908fef44b2b66234b941ed2595436b8ad651))
+* 优化cef-safe crate ([045d210](https://github.com/apoint123/inflink-rs/commit/045d21087cce864c32358ca8c6c4f61287cc41fe))
+* 优化SMTC初始化时的可靠性 ([1c23ab6](https://github.com/apoint123/inflink-rs/commit/1c23ab663a5a214685a66f99db844d294a6f544e))
+* **provider:** 使用 Redux dispatch 替换 dom 操作 ([44876dc](https://github.com/apoint123/inflink-rs/commit/44876dcb9c51742a543e96547f833ecc72bf316c))
+
+
+### 🐛 Bug Fixes
+
+* 播放完毕后不要暂停歌曲 ([c0983e9](https://github.com/apoint123/inflink-rs/commit/c0983e92baa05a9d396dc3312c7029304645f0cf))
+* 从事件获取播放模式而不是dom ([b6e5e3e](https://github.com/apoint123/inflink-rs/commit/b6e5e3ea8be6c2a002487dbfd4132f395814c6f0))
+* 等待store变得可用而不是播放栏 ([c0510bf](https://github.com/apoint123/inflink-rs/commit/c0510bf83da2ebfebd1182a2b9efbe4db36833ff))
+* 将默认日志级别修改为warn ([2972a5a](https://github.com/apoint123/inflink-rs/commit/2972a5afeb62b57483b5803abbfab38cb8f9e56b))
+* 向后端传递URL而不是base64字符串以提高性能 ([e3a50c6](https://github.com/apoint123/inflink-rs/commit/e3a50c635948efbdb3e5088ebbe7004ad3c5a323))
+* 修复刚启动时点击播放按钮的 undefined 错误 ([2ea9458](https://github.com/apoint123/inflink-rs/commit/2ea94585eef70f61b12ae3868d8f9d5fda190b68))
+* 修复关闭时未清理监听器的问题 ([ceb8e60](https://github.com/apoint123/inflink-rs/commit/ceb8e607559c7e63bc4b08703cecf5762662755a))
+* 修复跳转问题 ([3bcf25f](https://github.com/apoint123/inflink-rs/commit/3bcf25f0c6ffd492f0dcaeac68a885fe0a5fdc24))
+* 修正错误的上一首和下一首负载 ([4fc085d](https://github.com/apoint123/inflink-rs/commit/4fc085d5e2066dda248ab49dae8b69a8907b1dd9))
+* 异步获取封面以避免阻塞 ([c724ca7](https://github.com/apoint123/inflink-rs/commit/c724ca764efc41ae168bf219079bf1cd7ceaee52))
+* 暂停后立刻更新 ([c361337](https://github.com/apoint123/inflink-rs/commit/c3613376db22e8faaed73b0b076d4dbc7d713f8a))
+* dispatch 切换模式的 action 时附带 triggerScene 以免造成错误 ([a2c7dbb](https://github.com/apoint123/inflink-rs/commit/a2c7dbb5d53501dcf8340cf08c04347afa3aef93))
+* typo ([1f34540](https://github.com/apoint123/inflink-rs/commit/1f345400463f398151ec41ebac3fc3d938e3a0dc))
+
 ## [2.1.0](https://github.com/apoint123/inflink-rs/compare/v2.0.1...v2.1.0) (2025-09-28)
 
 

@@ -1,7 +1,7 @@
 {
 	"manifest_version": 1,
 	"name": "InfLink-rs",
-	"version": "1.0.0",
+	"version": "2.2.0",
 	"author": "apoint123",
 	"ncm3-compatible": true,
 	"description": "SMTC integration using a standalone Rust executable.",
