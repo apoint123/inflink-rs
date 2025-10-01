@@ -4,7 +4,7 @@
 	"version": "2.2.0",
 	"author": "apoint123",
 	"ncm3-compatible": true,
-	"description": "SMTC integration using a standalone Rust executable.",
+	"description": "SMTC 支持，使用 Rust 实现",
 	"injects": {
 		"Main": [
 			{
