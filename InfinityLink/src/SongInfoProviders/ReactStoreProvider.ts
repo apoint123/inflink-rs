@@ -111,6 +111,8 @@ const CONSTANTS = {
 	NCM_PLAY_MODE_ONE: "playOneCycle",
 };
 
+const CHANNEL_EVENTS = new Set<NcmEventName>(["PlayProgress"]);
+
 /**
  * NCM 事件适配器
  */
@@ -128,32 +130,39 @@ class NcmEventAdapter {
 		callback: NcmEventMap[E],
 	): void {
 		const namespace = "audioplayer";
-		try {
-			const fullName = `${namespace}.on${eventName}`;
-			if (!this.registeredEvt.has(fullName)) {
-				this.registeredEvt.add(fullName);
-				channel.registerCall(fullName, (...args: unknown[]) => {
-					// logger.debug(
-					// 	`[NcmEventAdapter] Received event '${fullName}' with args:`,
-					// 	args,
-					// );
-					this.callbacks?.get(fullName)?.forEach((cb) => {
-						(cb as (...args: unknown[]) => void)(...args);
+		const fullName = `${namespace}.on${eventName}`;
+
+		if (CHANNEL_EVENTS.has(eventName) && channel) {
+			try {
+				if (!this.registeredEvt.has(fullName)) {
+					this.registeredEvt.add(fullName);
+					channel.registerCall(fullName, (...args: unknown[]) => {
+						this.callbacks?.get(fullName)?.forEach((cb) => {
+							(cb as (...args: unknown[]) => void)(...args);
+						});
 					});
-				});
-				logger.debug(`[NcmEventAdapter] Event '${fullName}' registered.`);
+				}
+				let callbackSet = this.callbacks.get(fullName);
+				if (!callbackSet) {
+					callbackSet = new Set();
+					this.callbacks.set(fullName, callbackSet);
+				}
+				callbackSet.add(callback);
+			} catch (e) {
+				logger.error(
+					`[React Store Provider] 注册 channel 事件 ${eventName} 失败:`,
+					e,
+				);
 			}
-
-			let callbackSet = this.callbacks.get(fullName);
-
-			if (!callbackSet) {
-				callbackSet = new Set();
-				this.callbacks.set(fullName, callbackSet);
+		} else {
+			try {
+				legacyNativeCmder.appendRegisterCall(eventName, namespace, callback);
+			} catch (e) {
+				logger.error(
+					`[React Store Provider] 注册 legacyNativeCmder 事件 ${eventName} 失败:`,
+					e,
+				);
 			}
-
-			callbackSet.add(callback);
-		} catch (e) {
-			logger.error(`[React Store Provider] 注册事件 ${eventName}失败:`, e);
 		}
 	}
 }

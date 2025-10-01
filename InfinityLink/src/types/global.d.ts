@@ -76,7 +76,7 @@ declare global {
  * 和网易云音乐原生代码交互的命令
  */
 export interface OrpheusCommand {
-	// biome-ignore lint/suspicious/noExplicitAny: 内部实现
+	// biome-ignore lint/suspicious/noExplicitAny: 内部实现，类型复杂
 	_envAdapter: any;
 	_isProduction: boolean;
 
@@ -109,7 +109,8 @@ export interface OrpheusCommand {
 	overwriteRegisterCall(
 		name: string,
 		prefix: string,
-		callback?: (...args: string[]) => void,
+		// biome-ignore lint/suspicious/noExplicitAny: 参数类型因事件而异
+		callback?: (...args: any[]) => void,
 	): boolean;
 
 	/**
@@ -118,7 +119,8 @@ export interface OrpheusCommand {
 	appendRegisterCall(
 		name: string,
 		prefix: string,
-		callback?: (...args: string[]) => void,
+		// biome-ignore lint/suspicious/noExplicitAny: 参数类型因事件而异
+		callback?: (...args: any[]) => void,
 	): boolean;
 
 	/**
@@ -127,7 +129,8 @@ export interface OrpheusCommand {
 	fillRegisterCallIfEmpty(
 		name: string,
 		prefix: string,
-		callback?: (...args: string[]) => void,
+		// biome-ignore lint/suspicious/noExplicitAny: 参数类型因事件而异
+		callback?: (...args: any[]) => void,
 	): boolean;
 
 	/**
@@ -136,7 +139,8 @@ export interface OrpheusCommand {
 	removeRegisterCall(
 		name: string,
 		prefix: string,
-		cb: (...args: string[]) => void,
+		// biome-ignore lint/suspicious/noExplicitAny: 参数类型因事件而异
+		cb: (...args: any[]) => void,
 	): void;
 
 	/**
