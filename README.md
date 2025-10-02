@@ -2,12 +2,27 @@
 
 一个基于 InfinityLink 的二改版本，使用 TypeScript + Rust 编写。
 
-仅支持网易云 v3 版本。网易云音乐 v2 版本使用原版 InfinityLink 即可。
-
-目前仅在 `3.1.20 (build: 204558) Patch: f84632d` 版本上测试正常，其它版本不保证能用
-
 > [!WARNING]
 > 不要与原版 InfLink 混用，混用可能导致奇奇怪怪的问题
+
+> [!WARNING]
+> 私人漫游、云盘、播客等比较特别的场景支持可能不佳或存在问题。
+> 如果你遇到了问题，可打开一个 Issue，作者不常用网易云音乐，只能确保普通场景基本没问题
+
+## 使用方法
+
+1. [安装 Betterncm 插件](https://github.com/std-microblock/BetterNCM-Installer/releases/latest)
+2. 在 [Release 页面](https://github.com/apoint123/inflink-rs/releases/latest)下载最新版本
+3. 将插件文件 (以 `.plugin` 结尾) 复制到 `C:\betterncm\plugins` 文件夹下 (或者你指定的自定义数据目录)
+4. 重启网易云音乐
+
+
+## 已测试的网易云音乐版本
+
+仅在这些版本上进行了测试，其它版本不保证可以工作!
+
+* `3.1.20 (build: 204558) Patch: f84632d`
+* `2.12.13 (build: 202675) Patch: 1:12f60b8`
 
 ## 支持上传到 SMTC 的信息
 
@@ -38,10 +53,3 @@
 * 如果已经开了随机播放，切换循环模式会退出随机播放并设置为顺序播放。
 
 更多细节请自行点击这两个按钮来了解
-
-## 使用方法
-
-1. [安装 Betterncm 插件](https://github.com/std-microblock/BetterNCM-Installer/releases/latest)
-2. 在 [Release 页面](https://github.com/apoint123/inflink-rs/releases/latest)下载最新版本
-3. 将插件文件 (以 `.plugin` 结尾) 复制到 `C:\betterncm\plugins` 文件夹下 (或者你指定的自定义数据目录)
-4. 重启网易云音乐
