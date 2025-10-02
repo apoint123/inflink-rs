@@ -1,0 +1,32 @@
+{
+	"$schema": "https://docs.renovatebot.com/renovate-schema.json",
+	"extends": ["config:base", ":dependencyDashboard", ":semanticCommits"],
+	"labels": ["dependencies"],
+	"schedule": ["0 3 * * *"],
+	"packageRules": [
+		{
+			"matchUpdateTypes": ["minor", "patch"],
+			"matchPackagePatterns": ["*"],
+			"groupName": "all non-major dependencies",
+			"groupSlug": "all-minor-patch"
+		},
+		{
+			"matchManagers": ["pnpm"],
+			"matchDepTypes": ["devDependencies"],
+			"groupName": "pnpm development dependencies",
+			"groupSlug": "pnpm-dev",
+			"automerge": true,
+			"automergeType": "pr"
+		},
+		{
+			"matchManagers": ["cargo"],
+			"groupName": "rust crates",
+			"groupSlug": "rust-crates"
+		},
+		{
+			"matchPackagePatterns": ["^@mui/"],
+			"groupName": "Material UI packages",
+			"groupSlug": "mui"
+		}
+	]
+}
