@@ -71,11 +71,14 @@ async function findReduxStore(selector: string): Promise<V2NCMStore> {
 class V2Provider extends BaseProvider {
 	private musicDuration = 0;
 	private musicPlayProgress = 0;
-	private lastTrackId: string | null = null;
 
 	private reduxStore: V2NCMStore | null = null;
 	private unsubscribeStore: (() => void) | null = null;
+
+	private lastReduxTrackId: unknown = null;
 	private lastPlayMode: string | undefined = undefined;
+	private _lastDispatchedTrackId: string | null = null;
+
 	private lastModeBeforeShuffle: string | null = null;
 
 	private readonly dispatchTimelineThrottled: () => void;
@@ -123,7 +126,6 @@ class V2Provider extends BaseProvider {
 		this.addEventListener("control", this.handleControlEvent);
 
 		this.onStateChanged();
-		this.dispatchSongInfoUpdate(true);
 	}
 
 	private registerNcmEvents(): void {
@@ -147,7 +149,6 @@ class V2Provider extends BaseProvider {
 
 	private onMusicLoad(info: AudioLoadInfo): void {
 		this.musicDuration = (info.duration * 1000) | 0;
-		this.dispatchSongInfoUpdate(true);
 	}
 
 	private onPlayStateChanged(stateInfo: string | number): void {
@@ -168,6 +169,14 @@ class V2Provider extends BaseProvider {
 
 	private onStateChanged(): void {
 		if (!this.reduxStore) return;
+		const playingState = this.reduxStore.getState().playing;
+		if (!playingState) return;
+
+		const newTrackId = playingState.resourceTrackId;
+		if (newTrackId && newTrackId !== this.lastReduxTrackId) {
+			this.lastReduxTrackId = newTrackId;
+			this.dispatchSongInfoUpdate(true);
+		}
 		this.dispatchPlayModeUpdate();
 	}
 
@@ -255,10 +264,9 @@ class V2Provider extends BaseProvider {
 	private dispatchSongInfoUpdate(force = false): void {
 		const song = betterncm.ncm.getPlayingSong();
 		if (!song?.data) return;
-
 		const currentTrackId = String(song.data.id).trim();
-		if (force || currentTrackId !== this.lastTrackId) {
-			this.lastTrackId = currentTrackId;
+		if (force || currentTrackId !== this._lastDispatchedTrackId) {
+			this._lastDispatchedTrackId = currentTrackId;
 			this.dispatchEvent(
 				new CustomEvent("updateSongInfo", {
 					detail: {
@@ -273,14 +281,12 @@ class V2Provider extends BaseProvider {
 		}
 	}
 
-	private dispatchPlayModeUpdate(force = false): void {
+	private dispatchPlayModeUpdate(): void {
 		const newNcmMode = this.reduxStore?.getState().playing?.playMode;
-		if (force || this.lastPlayMode !== newNcmMode) {
+		if (this.lastPlayMode !== newNcmMode) {
 			this.lastPlayMode = newNcmMode;
-
 			let isShuffling = newNcmMode === NCM_PLAY_MODES.RANDOM;
 			let repeatMode: RepeatMode = "None";
-
 			switch (newNcmMode) {
 				case NCM_PLAY_MODES.RANDOM:
 					isShuffling = true;
@@ -309,10 +315,8 @@ class V2Provider extends BaseProvider {
 	}
 
 	public override forceDispatchFullState(): void {
-		this.dispatchSongInfoUpdate(true);
+		this.onStateChanged();
 		this.onPlayStateChanged(ctl.defPlayer.OT() ? "play" : "pause");
-		this.dispatchPlayModeUpdate(true);
-
 		const progress = ctl.defPlayer.sL?.currentTime || 0;
 		const duration = ctl.defPlayer.sL?.duration || 0;
 		if (duration > 0) {

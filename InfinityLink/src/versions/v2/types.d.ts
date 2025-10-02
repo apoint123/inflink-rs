@@ -5,6 +5,7 @@ export interface ReduxAction {
 
 interface V2ReduxPlayingState {
 	playMode: string;
+	resourceTrackId: string | number;
 }
 
 interface V2ReduxState {
