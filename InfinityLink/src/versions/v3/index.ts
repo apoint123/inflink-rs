@@ -167,7 +167,7 @@ class NcmEventAdapter {
 	}
 }
 
-export default class ReactStoreProvider extends BaseProvider {
+export default class V3Provider extends BaseProvider {
 	private musicDuration = 0;
 	private musicPlayProgress = 0;
 	private playState: PlaybackStatus = "Paused";

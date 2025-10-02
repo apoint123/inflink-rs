@@ -1,0 +1,15 @@
+{
+	"manifest_version": 1,
+	"name": "InfLink-rs",
+	"version": "2.2.0",
+	"author": "apoint123",
+	"description": "SMTC 支持，使用 Rust 实现",
+	"injects": {
+		"Main": [
+			{
+				"file": "index.js"
+			}
+		]
+	},
+	"native_plugin": "smtc_handler.dll"
+}

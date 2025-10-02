@@ -35,7 +35,7 @@ export function useLocalStorage<T>(
 	return [storedValue, setValue];
 }
 
-type NcmVersion = "v3" | "unsupported";
+type NcmVersion = "v3" | "v2" | "unsupported";
 
 /**
  * 检测当前网易云音乐客户端的版本
@@ -51,6 +51,8 @@ export function useNcmVersion(): NcmVersion | null {
 
 			if (majorVersion >= 3) {
 				setVersion("v3");
+			} else if (majorVersion === 2) {
+				setVersion("v2");
 			} else {
 				logger.warn(`不支持的网易云音乐版本: ${majorVersion}`);
 				setVersion("unsupported");
@@ -84,6 +86,11 @@ export function useInfoProvider(
 					case "v3": {
 						const { default: ProviderV3 } = await import("./versions/v3");
 						providerInstance = new ProviderV3();
+						break;
+					}
+					case "v2": {
+						const { default: ProviderV2 } = await import("./versions/v2");
+						providerInstance = new ProviderV2();
 						break;
 					}
 				}

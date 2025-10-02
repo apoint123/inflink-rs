@@ -18,29 +18,119 @@ struct RustClosureTask {
     ref_count: AtomicUsize,
 }
 
-/// 传递给 CEF 的 C 回调函数，用于执行 Rust 闭包
-unsafe extern "C" fn execute_rust_closure(task: *mut _cef_task_t) {
-    let rust_task = unsafe { &mut *task.cast::<RustClosureTask>() };
-
-    let v8_context_ptr = rust_task.v8_context.as_raw();
-    let entered_context = unsafe {
-        NonNull::new(v8_context_ptr)
-            .and_then(|ctx_ptr| (*ctx_ptr.as_ptr()).enter)
-            .is_some_and(|enter_func| {
-                enter_func(v8_context_ptr);
-                true
-            })
+mod internal_logic {
+    use super::{
+        _cef_base_ref_counted_t, _cef_task_t, AssertUnwindSafe, NonNull, Ordering, RustClosureTask,
+        catch_unwind,
     };
 
-    if let Some(closure) = rust_task.closure.take() {
-        // 使用 AssertUnwindSafe 是因为在 FFI 边界捕获 panic 是安全的
-        // 这里只是为了保证下面清理代码的执行
-        let _ = catch_unwind(AssertUnwindSafe(closure));
+    pub(super) unsafe fn execute_rust_closure(task: *mut _cef_task_t) {
+        let rust_task = unsafe { &mut *task.cast::<RustClosureTask>() };
+
+        let v8_context_ptr = rust_task.v8_context.as_raw();
+        let entered_context = unsafe {
+            NonNull::new(v8_context_ptr)
+                .and_then(|ctx_ptr| (*ctx_ptr.as_ptr()).enter)
+                .is_some_and(|enter_func| {
+                    enter_func(v8_context_ptr);
+                    true
+                })
+        };
+
+        if let Some(closure) = rust_task.closure.take() {
+            // 使用 AssertUnwindSafe 是因为在 FFI 边界捕获 panic 是安全的
+            // 这里只是为了保证下面清理代码的执行
+            let _ = catch_unwind(AssertUnwindSafe(closure));
+        }
+
+        if entered_context && let Some(exit_func) = (unsafe { *v8_context_ptr }).exit {
+            unsafe { exit_func(v8_context_ptr) };
+        }
     }
 
-    if entered_context && let Some(exit_func) = (unsafe { *v8_context_ptr }).exit {
-        unsafe { exit_func(v8_context_ptr) };
+    pub(super) unsafe fn base_add_ref(base: *mut _cef_base_ref_counted_t) {
+        let task = unsafe { &*base.cast::<RustClosureTask>() };
+        task.ref_count.fetch_add(1, Ordering::Relaxed);
     }
+
+    pub(super) unsafe fn base_release(base: *mut _cef_base_ref_counted_t) -> i32 {
+        let task_ptr = base.cast::<RustClosureTask>();
+        let task = unsafe { &*task_ptr };
+
+        if task.ref_count.fetch_sub(1, Ordering::AcqRel) == 1 {
+            drop(unsafe { Box::from_raw(task_ptr) });
+            return 1;
+        }
+        0
+    }
+
+    pub(super) unsafe fn base_has_one_ref(base: *mut _cef_base_ref_counted_t) -> i32 {
+        let task = unsafe { &*base.cast::<RustClosureTask>() };
+        i32::from(task.ref_count.load(Ordering::Relaxed) == 1)
+    }
+
+    pub(super) unsafe fn base_has_at_least_one_ref(base: *mut _cef_base_ref_counted_t) -> i32 {
+        let task = unsafe { &*base.cast::<RustClosureTask>() };
+        i32::from(task.ref_count.load(Ordering::Relaxed) > 0)
+    }
+}
+
+#[cfg(not(all(target_arch = "x86", target_os = "windows")))]
+use internal_logic::{
+    base_add_ref as extern_base_add_ref,
+    base_has_at_least_one_ref as extern_base_has_at_least_one_ref,
+    base_has_one_ref as extern_base_has_one_ref, base_release as extern_base_release,
+    execute_rust_closure as extern_execute_rust_closure,
+};
+
+#[cfg(not(all(target_arch = "x86", target_os = "windows")))]
+unsafe extern "C" fn execute_rust_closure(task: *mut _cef_task_t) {
+    unsafe { extern_execute_rust_closure(task) }
+}
+#[cfg(not(all(target_arch = "x86", target_os = "windows")))]
+unsafe extern "C" fn base_add_ref(base: *mut _cef_base_ref_counted_t) {
+    unsafe { extern_base_add_ref(base) }
+}
+#[cfg(not(all(target_arch = "x86", target_os = "windows")))]
+unsafe extern "C" fn base_release(base: *mut _cef_base_ref_counted_t) -> i32 {
+    unsafe { extern_base_release(base) }
+}
+#[cfg(not(all(target_arch = "x86", target_os = "windows")))]
+unsafe extern "C" fn base_has_one_ref(base: *mut _cef_base_ref_counted_t) -> i32 {
+    unsafe { extern_base_has_one_ref(base) }
+}
+#[cfg(not(all(target_arch = "x86", target_os = "windows")))]
+unsafe extern "C" fn base_has_at_least_one_ref(base: *mut _cef_base_ref_counted_t) -> i32 {
+    unsafe { extern_base_has_at_least_one_ref(base) }
+}
+
+#[cfg(all(target_arch = "x86", target_os = "windows"))]
+use internal_logic::{
+    base_add_ref as extern_base_add_ref,
+    base_has_at_least_one_ref as extern_base_has_at_least_one_ref,
+    base_has_one_ref as extern_base_has_one_ref, base_release as extern_base_release,
+    execute_rust_closure as extern_execute_rust_closure,
+};
+
+#[cfg(all(target_arch = "x86", target_os = "windows"))]
+unsafe extern "stdcall" fn execute_rust_closure(task: *mut _cef_task_t) {
+    unsafe { extern_execute_rust_closure(task) }
+}
+#[cfg(all(target_arch = "x86", target_os = "windows"))]
+unsafe extern "stdcall" fn base_add_ref(base: *mut _cef_base_ref_counted_t) {
+    unsafe { extern_base_add_ref(base) }
+}
+#[cfg(all(target_arch = "x86", target_os = "windows"))]
+unsafe extern "stdcall" fn base_release(base: *mut _cef_base_ref_counted_t) -> i32 {
+    unsafe { extern_base_release(base) }
+}
+#[cfg(all(target_arch = "x86", target_os = "windows"))]
+unsafe extern "stdcall" fn base_has_one_ref(base: *mut _cef_base_ref_counted_t) -> i32 {
+    unsafe { extern_base_has_one_ref(base) }
+}
+#[cfg(all(target_arch = "x86", target_os = "windows"))]
+unsafe extern "stdcall" fn base_has_at_least_one_ref(base: *mut _cef_base_ref_counted_t) -> i32 {
+    unsafe { extern_base_has_at_least_one_ref(base) }
 }
 
 /// 将一个 Rust 闭包作为提交到 CEF 的渲染线程，并在指定的 V8 上下文中执行
@@ -107,32 +197,4 @@ where
             Err(CefError::TaskPostFailed)
         }
     }
-}
-
-// --- 用于手动实现引用计数的 C 回调函数 ---
-
-unsafe extern "C" fn base_add_ref(base: *mut _cef_base_ref_counted_t) {
-    let task = unsafe { &*base.cast::<RustClosureTask>() };
-    task.ref_count.fetch_add(1, Ordering::Relaxed);
-}
-
-unsafe extern "C" fn base_release(base: *mut _cef_base_ref_counted_t) -> i32 {
-    let task_ptr = base.cast::<RustClosureTask>();
-    let task = unsafe { &*task_ptr };
-
-    if task.ref_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-        drop(unsafe { Box::from_raw(task_ptr) });
-        return 1;
-    }
-    0
-}
-
-unsafe extern "C" fn base_has_one_ref(base: *mut _cef_base_ref_counted_t) -> i32 {
-    let task = unsafe { &*base.cast::<RustClosureTask>() };
-    i32::from(task.ref_count.load(Ordering::Relaxed) == 1)
-}
-
-unsafe extern "C" fn base_has_at_least_one_ref(base: *mut _cef_base_ref_counted_t) -> i32 {
-    let task = unsafe { &*base.cast::<RustClosureTask>() };
-    i32::from(task.ref_count.load(Ordering::Relaxed) > 0)
 }
