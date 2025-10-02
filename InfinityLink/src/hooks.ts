@@ -104,6 +104,9 @@ export function useSmtcConnection(
 		const onUpdateTimeline = (e: CustomEvent) =>
 			smtcImplObj.updateTimeline(e.detail);
 
+		const onUpdatePlayMode = (e: CustomEvent) =>
+			smtcImplObj.updatePlayMode(e.detail);
+
 		const onControl = (msg: ControlMessage) => {
 			infoProvider.dispatchEvent(new CustomEvent("control", { detail: msg }));
 		};
@@ -111,9 +114,7 @@ export function useSmtcConnection(
 		infoProvider.addEventListener("updateSongInfo", onUpdateSongInfo);
 		infoProvider.addEventListener("updatePlayState", onUpdatePlayState);
 		infoProvider.addEventListener("updateTimeline", onUpdateTimeline);
-		infoProvider.onPlayModeChange = (detail) => {
-			smtcImplObj.updatePlayMode(detail);
-		};
+		infoProvider.addEventListener("updatePlayMode", onUpdatePlayMode);
 
 		const connectCallback = async () => {
 			await infoProvider.ready;
@@ -126,7 +127,7 @@ export function useSmtcConnection(
 			infoProvider.removeEventListener("updateSongInfo", onUpdateSongInfo);
 			infoProvider.removeEventListener("updatePlayState", onUpdatePlayState);
 			infoProvider.removeEventListener("updateTimeline", onUpdateTimeline);
-			infoProvider.onPlayModeChange = null;
+			infoProvider.removeEventListener("updatePlayMode", onUpdatePlayMode);
 			smtcImplObj.disable();
 		};
 	}, [infoProvider, isEnabled]);

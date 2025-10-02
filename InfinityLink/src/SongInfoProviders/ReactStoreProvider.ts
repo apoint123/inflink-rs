@@ -195,10 +195,6 @@ export class ReactStoreProvider extends BaseProvider {
 	public ready: Promise<void>;
 	private resolveReady!: () => void;
 
-	public onPlayModeChange:
-		| ((detail: { isShuffling: boolean; repeatMode: RepeatMode }) => void)
-		| null = null;
-
 	constructor() {
 		super();
 		this.eventAdapter = new NcmEventAdapter();
@@ -485,9 +481,10 @@ export class ReactStoreProvider extends BaseProvider {
 					break;
 			}
 
-			this.onPlayModeChange?.({ isShuffling, repeatMode });
 			this.dispatchEvent(
-				new CustomEvent("updatePlayMode", { detail: newNcmMode }),
+				new CustomEvent("updatePlayMode", {
+					detail: { isShuffling, repeatMode },
+				}),
 			);
 		}
 	}

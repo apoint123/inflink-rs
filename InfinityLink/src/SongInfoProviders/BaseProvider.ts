@@ -2,6 +2,7 @@ import mitt, { type Emitter } from "mitt";
 import type {
 	ControlMessage,
 	PlaybackStatus,
+	PlayModePayload,
 	SongInfo,
 	TimelineInfo,
 } from "../types/smtc";
@@ -11,6 +12,7 @@ type ProviderEventMap = {
 	updateSongInfo: CustomEvent<SongInfo>;
 	updatePlayState: CustomEvent<PlaybackStatus>;
 	updateTimeline: CustomEvent<TimelineInfo>;
+	updatePlayMode: CustomEvent<PlayModePayload>;
 	control: CustomEvent<ControlMessage>;
 	disable: CustomEvent<void>;
 };
