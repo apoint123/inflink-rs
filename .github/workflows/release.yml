@@ -49,5 +49,6 @@ jobs:
       - name: 创建 Release
         uses: softprops/action-gh-release@v2
         with:
-          body_path: CHANGELOG.md
+          body: |
+            查看更新日志：[CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)
           files: InfLink-rs.plugin

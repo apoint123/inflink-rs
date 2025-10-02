@@ -10,69 +10,17 @@
 		"format": "pnpm biome format . --write",
 		"typecheck": "tsc --noEmit",
 		"prepare": "husky",
-		"release": "standard-version"
+		"cs:add": "pnpm changeset add",
+		"cs:version": "pnpm changeset version",
+		"cs:publish": "pnpm changeset publish"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.2.4",
+		"@changesets/cli": "^2.29.7",
 		"@commitlint/cli": "^20.1.0",
 		"@commitlint/config-conventional": "^20.0.0",
 		"husky": "^9.1.7",
-		"standard-version": "^9.5.0",
 		"typescript": "^5.9.3"
 	},
-	"packageManager": "pnpm@10.17.1",
-	"standard-version": {
-		"types": [
-			{
-				"type": "feat",
-				"section": "✨ Features"
-			},
-			{
-				"type": "fix",
-				"section": "🐛 Bug Fixes"
-			},
-			{
-				"type": "chore",
-				"section": "🚚 Chores"
-			},
-			{
-				"type": "docs",
-				"section": "📚 Documentation"
-			},
-			{
-				"type": "style",
-				"section": "🎨 Styling"
-			},
-			{
-				"type": "refactor",
-				"section": "♻️ Code Refactoring"
-			},
-			{
-				"type": "perf",
-				"section": "🚀 Performance Improvements"
-			},
-			{
-				"type": "test",
-				"section": "🚨 Tests"
-			}
-		],
-		"bumpFiles": [
-			{
-				"filename": "package.json",
-				"type": "json"
-			},
-			{
-				"filename": "InfinityLink/package.json",
-				"type": "json"
-			},
-			{
-				"filename": "InfinityLink/manifest.json",
-				"type": "json"
-			},
-			{
-				"filename": "smtc_handler/Cargo.toml",
-				"updater": "standard-version-toml-updater.mjs"
-			}
-		]
-	}
+	"packageManager": "pnpm@10.17.1"
 }
