@@ -5,11 +5,11 @@ import type {
 	NcmEventMap,
 	NcmEventName,
 	ReactRootElement,
-} from "../types/ncm-internal";
-import type { PlaybackStatus, RepeatMode } from "../types/smtc";
-import { throttle, waitForElement } from "../utils";
-import logger from "../utils/logger";
-import { BaseProvider } from "./BaseProvider";
+} from "../../types/ncm-internal";
+import type { PlaybackStatus, RepeatMode } from "../../types/smtc";
+import { throttle, waitForElement } from "../../utils";
+import logger from "../../utils/logger";
+import { BaseProvider } from "../provider";
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -167,7 +167,7 @@ class NcmEventAdapter {
 	}
 }
 
-export class ReactStoreProvider extends BaseProvider {
+export default class ReactStoreProvider extends BaseProvider {
 	private musicDuration = 0;
 	private musicPlayProgress = 0;
 	private playState: PlaybackStatus = "Paused";
@@ -192,7 +192,7 @@ export class ReactStoreProvider extends BaseProvider {
 		switchMode: (mode: string) => void;
 	};
 
-	public ready: Promise<void>;
+	public override ready: Promise<void>;
 	private resolveReady!: () => void;
 
 	constructor() {
@@ -572,7 +572,7 @@ export class ReactStoreProvider extends BaseProvider {
 		this.playerActions.seek(timeMS);
 	}
 
-	public forceDispatchFullState(): void {
+	public override forceDispatchFullState(): void {
 		logger.debug(
 			"[React Store Provider] Forcing dispatch of full current state.",
 		);

@@ -1,9 +1,9 @@
 import type { PaletteMode } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
 import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
-import { ReactStoreProvider } from "./SongInfoProviders/ReactStoreProvider";
 import type { ControlMessage } from "./types/smtc";
 import logger from "./utils/logger";
+import type { BaseProvider } from "./versions/provider";
 
 export function useLocalStorage<T>(
 	key: string,
@@ -35,52 +35,87 @@ export function useLocalStorage<T>(
 	return [storedValue, setValue];
 }
 
-export function useCompatibility(): boolean | null {
-	const [isCompatible, setIsCompatible] = useState<boolean | null>(null);
+type NcmVersion = "v3" | "unsupported";
+
+/**
+ * 检测当前网易云音乐客户端的版本
+ * @returns 'v3', 'unsupported', 或 null (检测中)
+ */
+export function useNcmVersion(): NcmVersion | null {
+	const [version, setVersion] = useState<NcmVersion | null>(null);
 
 	useEffect(() => {
 		try {
-			const version = betterncm.ncm.getNCMVersion();
-			const majorVersion = parseInt(version.split(".")[0], 10);
-			setIsCompatible(majorVersion >= 3);
+			const versionStr = betterncm.ncm.getNCMVersion();
+			const majorVersion = parseInt(versionStr.split(".")[0], 10);
+
+			if (majorVersion >= 3) {
+				setVersion("v3");
+			} else {
+				logger.warn(`不支持的网易云音乐版本: ${majorVersion}`);
+				setVersion("unsupported");
+			}
 		} catch (e) {
-			logger.error("[InfLink-rs] 无法检测网易云音乐版本。", e);
-			setIsCompatible(false);
+			logger.error("[InfLink-rs] 无法检测网易云音乐版本", e);
+			setVersion("unsupported");
 		}
 	}, []);
 
-	return isCompatible;
+	return version;
 }
 
 export function useInfoProvider(
-	isCompatible: boolean | null,
-): ReactStoreProvider | null {
-	const providerRef = useRef<ReactStoreProvider | null>(null);
+	version: NcmVersion | null,
+): BaseProvider | null {
+	const providerRef = useRef<BaseProvider | null>(null);
 	const [isReady, setIsReady] = useState(false);
 
 	useEffect(() => {
-		if (isCompatible) {
-			const provider = new ReactStoreProvider();
-			providerRef.current = provider;
-			setIsReady(true);
+		const initializeProvider = async () => {
+			if (!version || version === "unsupported") {
+				providerRef.current = null;
+				setIsReady(true);
+				return;
+			}
 
-			return () => {
-				provider.disabled = true;
-				provider.dispatchEvent(new CustomEvent("disable"));
-				if ("dispose" in provider && typeof provider.dispose === "function") {
-					provider.dispose();
+			let providerInstance: BaseProvider | null = null;
+			try {
+				switch (version) {
+					case "v3": {
+						const { default: ProviderV3 } = await import("./versions/v3");
+						providerInstance = new ProviderV3();
+						break;
+					}
+				}
+			} catch (e) {
+				logger.error(`[InfLink] 加载数据提供源时失败:`, e);
+				providerInstance = null;
+			}
+
+			providerRef.current = providerInstance;
+			setIsReady(true);
+		};
+
+		initializeProvider();
+
+		return () => {
+			if (providerRef.current) {
+				providerRef.current.disabled = true;
+				providerRef.current.dispatchEvent(new CustomEvent("disable"));
+				if (typeof providerRef.current.dispose === "function") {
+					providerRef.current.dispose();
 				}
 				providerRef.current = null;
-				setIsReady(false);
-			};
-		}
-	}, [isCompatible]);
+			}
+			setIsReady(false);
+		};
+	}, [version]);
 
 	return isReady ? providerRef.current : null;
 }
 
 export function useSmtcConnection(
-	infoProvider: ReactStoreProvider | null,
+	infoProvider: BaseProvider | null,
 	isEnabled: boolean,
 ) {
 	useEffect(() => {

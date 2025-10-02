@@ -22,6 +22,17 @@ export class BaseProvider {
 
 	public disabled = false;
 
+	public ready: Promise<void> = Promise.resolve();
+
+	/**
+	 * 强制分发所有当前状态的事件
+	 *
+	 * 用于在插件启动时或者用户重新打开了 SMTC 功能时同步所有信息
+	 */
+	public forceDispatchFullState(): void {
+		// 空实现
+	}
+
 	constructor() {
 		this.emitter = mitt<ProviderEventMap>();
 	}
