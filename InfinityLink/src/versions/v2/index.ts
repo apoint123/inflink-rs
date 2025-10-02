@@ -83,6 +83,8 @@ class V2Provider extends BaseProvider {
 
 	private readonly dispatchTimelineThrottled: () => void;
 
+	// 目前观察到有 fmPlayer 用来私人漫游，mvPlayer 用来播放 MV，
+	// 这里目前只使用 defPlayer 实例，之后可能需要扩展
 	private readonly playerActions = {
 		// 直接使用混淆后的函数名很脆弱，但考虑到网易云 v2 都不更新了，
 		// 直接使用问题也不大
