@@ -24,10 +24,10 @@ import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { useEffect, useId, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import {
-	useCompatibility,
 	useInfoProvider,
 	useLocalStorage,
 	useNcmTheme,
+	useNcmVersion,
 	useSmtcConnection,
 	useVersionCheck,
 } from "./hooks";
@@ -112,7 +112,8 @@ function App() {
 }
 
 function Main() {
-	const isCompatible = useCompatibility();
+	const ncmVersion = useNcmVersion();
+
 	const [SMTCEnabled, setSMTCEnabled] = useLocalStorage(
 		STORE_KEY_SMTC_ENABLED,
 		true,
@@ -130,18 +131,14 @@ function Main() {
 	const backendId = useId();
 
 	const newVersionInfo = useVersionCheck(GITHUB_REPO);
-	const infoProvider = useInfoProvider(isCompatible);
+	const infoProvider = useInfoProvider(ncmVersion);
 	useSmtcConnection(infoProvider, SMTCEnabled);
 
 	useEffect(() => {
-		if (isCompatible !== null) {
-			logger.debug(
-				`[InfLink] 兼容性检查结果: ${
-					isCompatible ? "Compatible" : "Incompatible"
-				}`,
-			);
+		if (ncmVersion !== null) {
+			logger.debug(`[InfLink] 兼容性检查结果: ${ncmVersion}`);
 		}
-	}, [isCompatible]);
+	}, [ncmVersion]);
 
 	useEffect(() => {
 		logger.debug(`[InfLink] SMTC 支持: ${SMTCEnabled}`);
@@ -162,16 +159,15 @@ function Main() {
 		SMTCNativeBackendInstance.setBackendLogLevel(backendLogLevel);
 	}, [backendLogLevel]);
 
-	if (isCompatible === null) {
+	if (ncmVersion === null) {
 		return <CircularProgress size={24} />;
 	}
 
-	if (isCompatible === false) {
+	if (ncmVersion === "unsupported") {
 		return (
 			<Alert severity="error">
 				<AlertTitle>不兼容的网易云音乐版本</AlertTitle>
-				InfLink-rs 需要网易云音乐 v3.0.0 或更高版本才能运行。请使用原版 InfLink
-				作为代替。
+				InfLink-rs 不支持当前版本的网易云音乐, 请使用原版 InfLink 作为代替
 			</Alert>
 		);
 	}
