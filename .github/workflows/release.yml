@@ -63,7 +63,7 @@ jobs:
 
             ---
 
-            查看详细更新日志：[CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)
+            查看详细更新日志：[CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/InfinityLink/CHANGELOG.md)
           files: |
             InfLink-rs-v3-x64.plugin
             InfLink-rs-v2-x86.plugin

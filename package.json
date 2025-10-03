@@ -1,7 +1,7 @@
 {
 	"name": "inflink-rs-workspace",
 	"private": true,
-	"version": "2.2.0",
+	"version": "3.0.0",
 	"scripts": {
 		"build:frontend:v3": "cross-env TARGET_ARCH=x64 pnpm --filter inflink-rs build",
 		"build:frontend:v2": "cross-env TARGET_ARCH=x86 pnpm --filter inflink-rs build",
@@ -16,8 +16,7 @@
 		"typecheck": "tsc --noEmit",
 		"prepare": "husky",
 		"cs:add": "pnpm changeset add",
-		"cs:version": "pnpm changeset version",
-		"cs:publish": "pnpm changeset publish"
+		"cs:version": "pnpm changeset version && node ./scripts/sync-versions.js"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.2.4",

@@ -1,6 +1,27 @@
 # Changelog
 
-All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
+## 3.0.0
+
+### Major Changes
+
+- 9cbc9be: feat: 添加对网易云音乐 v2 的支持
+
+  基本实现了针对网易云音乐 v2 的支持
+
+### Minor Changes
+
+- 9cbc9be: feat: 在 SMTC 中添加歌曲 ID
+
+  在 SMTC 的“流派”字段添加了当前播放歌曲的 ID，格式为 `NCM-{ID}`，可用于精确匹配歌曲
+
+### Patch Changes
+
+- 9cbc9be: fix: 修复了一个后端的内存泄漏问题
+
+  实际上是由 betterncm 导致的
+
+- 9cbc9be: docs: 添加 GEMINI.md 以指导 AI
+
 
 ## [2.2.0](https://github.com/apoint123/inflink-rs/compare/v2.1.0...v2.2.0) (2025-10-01)
 
