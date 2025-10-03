@@ -1,9 +1,12 @@
-import type { Artist } from "InfinityLink/src/types/ncm-internal";
-import type { PlaybackStatus, RepeatMode } from "../../types/smtc";
+import type {
+	ControlMessage,
+	PlaybackStatus,
+	RepeatMode,
+} from "../../types/smtc";
 import { throttle, waitForElement } from "../../utils";
 import logger from "../../utils/logger";
 import { BaseProvider } from "../provider";
-import type { CtlDefPlayer, V2NCMStore } from "./types";
+import type { CtlDefPlayer, NcmSongData, V2NCMStore } from "./types";
 
 // 看起来很奇怪，但是网易云音乐内部确实是这样定义的
 const NCM_PLAY_MODES = {
@@ -12,7 +15,18 @@ const NCM_PLAY_MODES = {
 	RANDOM: "playrandom",
 	ORDER: "playonce",
 	AI: "playai",
-};
+} as const;
+
+type NcmPlayMode = (typeof NCM_PLAY_MODES)[keyof typeof NCM_PLAY_MODES];
+
+function isValidNcmPlayMode(
+	mode: string | undefined,
+): mode is NcmPlayMode | undefined {
+	if (mode === undefined) {
+		return true;
+	}
+	return (Object.values(NCM_PLAY_MODES) as string[]).includes(mode);
+}
 
 /**
  * 封装了对 v2 播放器实例的混淆 API 调用
@@ -21,6 +35,8 @@ const NCM_PLAY_MODES = {
  *
  * 直接使用混淆后的函数名很脆弱，但考虑到网易云 v2 都不更新了，
  * 直接使用问题也不大
+ *
+ * 如果某天网易云真的又给 v2 更新了一个版本，这里几乎肯定会出错
  */
 class NcmV2PlayerApi {
 	private readonly playerInstance: CtlDefPlayer;
@@ -59,6 +75,15 @@ class NcmV2PlayerApi {
 
 	public getDuration(): number {
 		return this.playerInstance.tQ;
+	}
+
+	public get currentSongData(): NcmSongData | null {
+		return this.playerInstance.x6?.data ?? null;
+	}
+
+	public getFmSongData(): NcmSongData | null {
+		const trackObject = this.playerInstance._t?.();
+		return trackObject?.data ?? null;
 	}
 }
 
@@ -121,8 +146,8 @@ class V2Provider extends BaseProvider {
 	private reduxStore: V2NCMStore | null = null;
 	private unsubscribeStore: (() => void) | null = null;
 
-	private lastReduxTrackId: unknown = null;
-	private lastPlayMode: string | undefined = undefined;
+	private lastReduxTrackId: number | null = null;
+	private lastPlayMode: NcmPlayMode | undefined = undefined;
 	private _lastDispatchedTrackId: string | null = null;
 
 	private lastModeBeforeShuffle: string | null = null;
@@ -178,8 +203,7 @@ class V2Provider extends BaseProvider {
 		legacyNativeCmder.appendRegisterCall(
 			"PlayState",
 			"audioplayer",
-			(_audioId: string, state: string | number) =>
-				this.onPlayStateChanged(state),
+			(_audioId: string, state: string) => this.onPlayStateChanged(state),
 		);
 		legacyNativeCmder.appendRegisterCall(
 			"PlayProgress",
@@ -188,11 +212,29 @@ class V2Provider extends BaseProvider {
 		);
 	}
 
-	private onPlayStateChanged(stateInfo: string | number): void {
+	private onPlayStateChanged(stateInfo: string): void {
+		const parts = stateInfo.split("|");
 		let newPlayState: PlaybackStatus = "Paused";
-		if (typeof stateInfo === "string") {
-			const state = stateInfo.split("|")[1];
-			if (state === "resume" || state === "play") newPlayState = "Playing";
+
+		if (parts.length >= 2) {
+			const stateKeyword = parts[1];
+			switch (stateKeyword) {
+				case "resume":
+				case "play":
+					newPlayState = "Playing";
+					break;
+
+				case "pause":
+					newPlayState = "Paused";
+					break;
+
+				default:
+					newPlayState = "Paused";
+					logger.warn(`[V2 Provider] 未知的播放状态: ${stateKeyword}`);
+					break;
+			}
+		} else {
+			logger.warn(`[V2 Provider] 意外的播放状态: ${stateInfo}`);
 		}
 		this.dispatchEvent(
 			new CustomEvent("updatePlayState", { detail: newPlayState }),
@@ -221,7 +263,7 @@ class V2Provider extends BaseProvider {
 		}
 	}
 
-	private handleControlEvent(e: CustomEvent): void {
+	private handleControlEvent(e: CustomEvent<ControlMessage>): void {
 		const msg = e.detail;
 		logger.info(`[V2 Provider] 处理后端控制事件: ${msg.type}`, msg);
 
@@ -242,7 +284,7 @@ class V2Provider extends BaseProvider {
 				this.activePlayerApi?.previous();
 				break;
 			case "Seek":
-				if (typeof msg.position === "number" && this.musicDuration > 0) {
+				if (this.musicDuration > 0) {
 					const targetTimeMs = msg.position;
 					const progressRatio = targetTimeMs / this.musicDuration;
 
@@ -303,13 +345,23 @@ class V2Provider extends BaseProvider {
 	}
 
 	private dispatchSongInfoUpdate(force = false): void {
-		const song = betterncm.ncm.getPlayingSong();
-		if (!song?.data) return;
-		const currentTrackId = String(song.data.id).trim();
+		let songData: NcmSongData | null = null;
+
+		if (this.activePlayerApi) {
+			songData = this.activePlayerApi.currentSongData;
+			// FM 模式
+			if (!songData) {
+				songData = this.activePlayerApi.getFmSongData();
+			}
+		}
+
+		if (!songData) return;
+
+		const currentTrackId = String(songData.id);
 		if (force || currentTrackId !== this._lastDispatchedTrackId) {
 			this._lastDispatchedTrackId = currentTrackId;
 
-			const newDuration = song.data.duration || 0;
+			const newDuration = songData.duration || 0;
 			if (newDuration > 0) {
 				this.musicDuration = newDuration;
 			}
@@ -317,12 +369,12 @@ class V2Provider extends BaseProvider {
 			this.dispatchEvent(
 				new CustomEvent("updateSongInfo", {
 					detail: {
-						songName: song.data.name || "未知歌名",
-						authorName:
-							song.data.artists?.map((v: Artist) => v.name).join(" / ") || "",
-						albumName: song.data.album?.name || "未知专辑",
-						thumbnailUrl: song.data.album?.picUrl || "",
+						songName: songData.name || "未知歌名",
+						authorName: songData.artists?.map((v) => v.name).join(" / ") || "",
+						albumName: songData.album?.name || "未知专辑",
+						thumbnailUrl: songData.album?.picUrl || "",
 						ncmId: currentTrackId,
+						duration: this.musicDuration,
 					},
 				}),
 			);
@@ -340,34 +392,40 @@ class V2Provider extends BaseProvider {
 
 	private dispatchPlayModeUpdate(): void {
 		const newNcmMode = this.reduxStore?.getState().playing?.playMode;
-		if (this.lastPlayMode !== newNcmMode) {
-			this.lastPlayMode = newNcmMode;
-			let isShuffling = newNcmMode === NCM_PLAY_MODES.RANDOM;
-			let repeatMode: RepeatMode = "None";
-			switch (newNcmMode) {
-				case NCM_PLAY_MODES.RANDOM:
-					isShuffling = true;
-					repeatMode = "List";
-					break;
-				case NCM_PLAY_MODES.LIST_LOOP:
-					isShuffling = false;
-					repeatMode = "List";
-					break;
-				case NCM_PLAY_MODES.SINGLE_LOOP:
-					isShuffling = false;
-					repeatMode = "Track";
-					break;
-				case NCM_PLAY_MODES.ORDER:
-					isShuffling = false;
-					repeatMode = "None";
-					break;
-			}
 
-			this.dispatchEvent(
-				new CustomEvent("updatePlayMode", {
-					detail: { isShuffling, repeatMode },
-				}),
-			);
+		if (isValidNcmPlayMode(newNcmMode)) {
+			if (this.lastPlayMode !== newNcmMode) {
+				this.lastPlayMode = newNcmMode;
+
+				let isShuffling = newNcmMode === NCM_PLAY_MODES.RANDOM;
+				let repeatMode: RepeatMode = "None";
+				switch (newNcmMode) {
+					case NCM_PLAY_MODES.RANDOM:
+						isShuffling = true;
+						repeatMode = "List";
+						break;
+					case NCM_PLAY_MODES.LIST_LOOP:
+						isShuffling = false;
+						repeatMode = "List";
+						break;
+					case NCM_PLAY_MODES.SINGLE_LOOP:
+						isShuffling = false;
+						repeatMode = "Track";
+						break;
+					case NCM_PLAY_MODES.ORDER:
+						isShuffling = false;
+						repeatMode = "None";
+						break;
+				}
+
+				this.dispatchEvent(
+					new CustomEvent("updatePlayMode", {
+						detail: { isShuffling, repeatMode },
+					}),
+				);
+			}
+		} else {
+			logger.warn(`[V2 Provider] 意外的播放模式: ${newNcmMode}`);
 		}
 	}
 
