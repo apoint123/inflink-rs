@@ -8,11 +8,12 @@ import logger from "../../utils/logger";
 import { BaseProvider } from "../provider";
 import type { V2NCMStore } from "./types";
 
+// 看起来很奇怪，但是网易云音乐内部确实是这样定义的
 const NCM_PLAY_MODES = {
-	ORDER: "playorder",
-	LOOP: "playcycle",
+	LIST_LOOP: "playorder",
+	SINGLE_LOOP: "playcycle",
 	RANDOM: "playrandom",
-	ONE: "playonce",
+	ORDER: "playonce",
 	AI: "playai",
 };
 
@@ -179,7 +180,11 @@ class V2Provider extends BaseProvider {
 			this.lastReduxTrackId = newTrackId;
 			this.dispatchSongInfoUpdate(true);
 		}
-		this.dispatchPlayModeUpdate();
+
+		const newPlayMode = playingState.playMode;
+		if (newPlayMode && newPlayMode !== this.lastPlayMode) {
+			this.dispatchPlayModeUpdate();
+		}
 	}
 
 	private handleControlEvent(e: CustomEvent): void {
@@ -225,7 +230,7 @@ class V2Provider extends BaseProvider {
 				const currentMode = this.reduxStore.getState()?.playing?.playMode;
 				const isShuffleOn = currentMode === NCM_PLAY_MODES.RANDOM;
 				const targetMode = isShuffleOn
-					? this.lastModeBeforeShuffle || NCM_PLAY_MODES.LOOP
+					? this.lastModeBeforeShuffle || NCM_PLAY_MODES.SINGLE_LOOP
 					: NCM_PLAY_MODES.RANDOM;
 
 				if (!isShuffleOn && currentMode) {
@@ -242,18 +247,18 @@ class V2Provider extends BaseProvider {
 				let targetMode: string;
 
 				if (currentMode === NCM_PLAY_MODES.RANDOM) {
-					targetMode = NCM_PLAY_MODES.ORDER;
+					targetMode = NCM_PLAY_MODES.LIST_LOOP;
 					this.lastModeBeforeShuffle = null;
 				} else {
 					switch (currentMode) {
-						case NCM_PLAY_MODES.ORDER:
-							targetMode = NCM_PLAY_MODES.LOOP;
+						case NCM_PLAY_MODES.LIST_LOOP:
+							targetMode = NCM_PLAY_MODES.SINGLE_LOOP;
 							break;
-						case NCM_PLAY_MODES.LOOP:
-							targetMode = NCM_PLAY_MODES.ONE;
+						case NCM_PLAY_MODES.SINGLE_LOOP:
+							targetMode = NCM_PLAY_MODES.ORDER;
 							break;
 						default:
-							targetMode = NCM_PLAY_MODES.ORDER;
+							targetMode = NCM_PLAY_MODES.LIST_LOOP;
 							break;
 					}
 				}
@@ -294,15 +299,15 @@ class V2Provider extends BaseProvider {
 					isShuffling = true;
 					repeatMode = "List";
 					break;
-				case NCM_PLAY_MODES.ORDER:
+				case NCM_PLAY_MODES.LIST_LOOP:
 					isShuffling = false;
 					repeatMode = "List";
 					break;
-				case NCM_PLAY_MODES.LOOP:
+				case NCM_PLAY_MODES.SINGLE_LOOP:
 					isShuffling = false;
 					repeatMode = "Track";
 					break;
-				case NCM_PLAY_MODES.ONE:
+				case NCM_PLAY_MODES.ORDER:
 					isShuffling = false;
 					repeatMode = "None";
 					break;
