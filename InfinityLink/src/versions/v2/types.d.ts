@@ -21,7 +21,7 @@ export interface V2NCMStore {
 interface CtlDefPlayer {
 	// 命令分发函数
 	KJ: (command: string) => void;
-	// 跳转函数 (0 到 1)
+	// 跳转函数 (百分比)
 	Qn: (progress: number) => void;
 	// 如果在播放，返回 true
 	OT: () => boolean;

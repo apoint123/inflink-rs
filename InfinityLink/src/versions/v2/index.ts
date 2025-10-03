@@ -6,7 +6,7 @@ import type { PlaybackStatus, RepeatMode } from "../../types/smtc";
 import { throttle, waitForElement } from "../../utils";
 import logger from "../../utils/logger";
 import { BaseProvider } from "../provider";
-import type { V2NCMStore } from "./types";
+import type { CtlDefPlayer, V2NCMStore } from "./types";
 
 // 看起来很奇怪，但是网易云音乐内部确实是这样定义的
 const NCM_PLAY_MODES = {
@@ -16,6 +16,54 @@ const NCM_PLAY_MODES = {
 	ORDER: "playonce",
 	AI: "playai",
 };
+
+/**
+ * 封装了对 v2 播放器实例的混淆 API 调用
+ *
+ * 这个类的实例代表一个播放器（defPlayer, fmPlayer等）
+ *
+ * 直接使用混淆后的函数名很脆弱，但考虑到网易云 v2 都不更新了，
+ * 直接使用问题也不大
+ */
+class NcmV2PlayerApi {
+	private readonly playerInstance: CtlDefPlayer;
+
+	constructor(playerInstance: CtlDefPlayer) {
+		this.playerInstance = playerInstance;
+	}
+
+	public resume(): void {
+		this.playerInstance.KJ("play");
+	}
+
+	public pause(): void {
+		this.playerInstance.KJ("pause");
+	}
+
+	public next(): void {
+		this.playerInstance.KJ("playnext");
+	}
+
+	public previous(): void {
+		this.playerInstance.KJ("playprev");
+	}
+
+	public seek(progressRatio: number): void {
+		this.playerInstance.Qn(progressRatio);
+	}
+
+	public switchMode(mode: string): void {
+		this.playerInstance.KJ(`mode_${mode}`);
+	}
+
+	public getProgress(): number {
+		return this.playerInstance.Gn();
+	}
+
+	public getDuration(): number {
+		return this.playerInstance.tQ;
+	}
+}
 
 interface FiberNode {
 	memoizedProps?: {
@@ -84,16 +132,16 @@ class V2Provider extends BaseProvider {
 
 	private readonly dispatchTimelineThrottled: () => void;
 
-	private readonly playerActions = {
-		// 直接使用混淆后的函数名很脆弱，但考虑到网易云 v2 都不更新了，
-		// 直接使用问题也不大
-		resume: () => ctl.player?.Hn()?.KJ("play"),
-		pause: () => ctl.player?.Hn()?.KJ("pause"),
-		next: () => ctl.player?.Hn()?.KJ("playnext"),
-		prev: () => ctl.player?.Hn()?.KJ("playprev"),
-		seek: (progressRatio: number) => ctl.player?.Hn()?.Qn(progressRatio),
-		switchMode: (mode: string) => ctl.player?.Hn()?.KJ(`mode_${mode}`),
-	};
+	/**
+	 * 获取当前播放器（defPlayer, fmPlayer 等）的实例
+	 */
+	private get activePlayerApi(): NcmV2PlayerApi | null {
+		const currentPlayerInstance = ctl.player?.Hn();
+		if (currentPlayerInstance) {
+			return new NcmV2PlayerApi(currentPlayerInstance);
+		}
+		return null;
+	}
 
 	constructor() {
 		super();
@@ -191,19 +239,19 @@ class V2Provider extends BaseProvider {
 
 		switch (msg.type) {
 			case "Play":
-				this.playerActions.resume();
+				this.activePlayerApi?.resume();
 				break;
 			case "Pause":
-				this.playerActions.pause();
+				this.activePlayerApi?.pause();
 				this.dispatchEvent(
 					new CustomEvent("updatePlayState", { detail: "Paused" }),
 				);
 				break;
 			case "NextSong":
-				this.playerActions.next();
+				this.activePlayerApi?.next();
 				break;
 			case "PreviousSong":
-				this.playerActions.prev();
+				this.activePlayerApi?.previous();
 				break;
 			case "Seek":
 				if (typeof msg.position === "number" && this.musicDuration > 0) {
@@ -220,7 +268,7 @@ class V2Provider extends BaseProvider {
 						}),
 					);
 
-					this.playerActions.seek(progressRatio);
+					this.activePlayerApi?.seek(progressRatio);
 				}
 				break;
 			case "ToggleShuffle": {
@@ -236,7 +284,7 @@ class V2Provider extends BaseProvider {
 				} else {
 					this.lastModeBeforeShuffle = null;
 				}
-				this.playerActions.switchMode(targetMode);
+				this.activePlayerApi?.switchMode(targetMode);
 				break;
 			}
 			case "ToggleRepeat": {
@@ -260,7 +308,7 @@ class V2Provider extends BaseProvider {
 							break;
 					}
 				}
-				this.playerActions.switchMode(targetMode);
+				this.activePlayerApi?.switchMode(targetMode);
 				break;
 			}
 		}
@@ -321,9 +369,11 @@ class V2Provider extends BaseProvider {
 
 	public override forceDispatchFullState(): void {
 		this.onStateChanged();
-		const currentPlayer = ctl.player?.Hn();
-		const progress = currentPlayer?.Gn() || 0;
-		const duration = currentPlayer?.tQ || 0;
+		const playerApi = this.activePlayerApi;
+		if (!playerApi) return;
+
+		const progress = playerApi.getProgress();
+		const duration = playerApi.getDuration();
 		if (duration > 0) {
 			this.musicDuration = Math.floor(duration * 1000);
 			this.onPlayProgress(progress);
