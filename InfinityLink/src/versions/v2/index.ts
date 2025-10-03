@@ -318,7 +318,6 @@ class V2Provider extends BaseProvider {
 
 	public override forceDispatchFullState(): void {
 		this.onStateChanged();
-		this.onPlayStateChanged(ctl.defPlayer.OT() ? "play" : "pause");
 		const progress = ctl.defPlayer.sL?.currentTime || 0;
 		const duration = ctl.defPlayer.sL?.duration || 0;
 		if (duration > 0) {
