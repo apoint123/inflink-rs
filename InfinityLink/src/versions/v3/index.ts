@@ -433,6 +433,7 @@ export default class V3Provider extends BaseProvider {
 								.join(" / ") || "",
 						albumName: playingInfo.musicAlbumName ?? playingInfo.resourceName,
 						thumbnailUrl: thumbnailUrl,
+						ncmId: currentTrackId,
 					},
 				}),
 			);

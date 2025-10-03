@@ -10,15 +10,13 @@ pub enum SmtcCommand {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MetadataPayload {
-    #[serde(rename = "songName")]
     pub song_name: String,
-    #[serde(rename = "authorName")]
     pub author_name: String,
-    #[serde(rename = "albumName")]
     pub album_name: String,
-    #[serde(rename = "thumbnailUrl")]
     pub thumbnail_url: String,
+    pub ncm_id: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]

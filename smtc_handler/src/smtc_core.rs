@@ -17,7 +17,9 @@ use windows::{
     core::{HSTRING, Ref},
 };
 
-use crate::model::{CommandResult, CommandStatus, PlaybackStatus, RepeatMode, SmtcCommand};
+use crate::model::{
+    CommandResult, CommandStatus, MetadataPayload, PlaybackStatus, RepeatMode, SmtcCommand,
+};
 
 const HNS_PER_MILLISECOND: f64 = 10_000.0;
 
@@ -338,27 +340,23 @@ pub fn update_play_mode(is_shuffling: bool, repeat_mode: &RepeatMode) -> Result<
     })
 }
 
-pub fn update_metadata(title: &str, artist: &str, album: &str, thumbnail_url: &str) {
+pub fn update_metadata(payload: MetadataPayload) {
     info!(
-        title = %title,
-        artist = %artist,
-        album = %album,
-        thumbnail_url = %thumbnail_url,
+        title = %payload.song_name,
+        artist = %payload.author_name,
+        album = %payload.album_name,
+        thumbnail_url = %payload.thumbnail_url,
+        ncm_id = ?payload.ncm_id,
         "正在更新 SMTC 歌曲元数据"
     );
 
-    let title = title.to_string();
-    let artist = artist.to_string();
-    let album = album.to_string();
-    let thumbnail_url = thumbnail_url.to_string();
-
     TOKIO_RUNTIME.spawn(async move {
-        let maybe_bytes = if thumbnail_url.is_empty() {
+        let maybe_bytes = if payload.thumbnail_url.is_empty() {
             warn!("未提供封面URL");
             None
         } else {
-            debug!("正在从 URL 下载封面: {}", thumbnail_url);
-            match reqwest::get(&thumbnail_url).await {
+            debug!("正在从 URL 下载封面: {}", payload.thumbnail_url);
+            match reqwest::get(&payload.thumbnail_url).await {
                 Ok(response) => match response.bytes().await {
                     Ok(bytes) => Some(bytes.to_vec()),
                     Err(e) => {
@@ -378,9 +376,19 @@ pub fn update_metadata(title: &str, artist: &str, album: &str, thumbnail_url: &s
             updater.SetType(MediaPlaybackType::Music)?;
 
             let props = updater.MusicProperties()?;
-            props.SetTitle(&HSTRING::from(&title))?;
-            props.SetArtist(&HSTRING::from(&artist))?;
-            props.SetAlbumTitle(&HSTRING::from(&album))?;
+            props.SetTitle(&HSTRING::from(&payload.song_name))?;
+            props.SetArtist(&HSTRING::from(&payload.author_name))?;
+            props.SetAlbumTitle(&HSTRING::from(&payload.album_name))?;
+
+            // Lyricify Lite 会使用*流派*的歌曲ID来精确匹配歌曲
+            if let Some(ncm_id) = &payload.ncm_id
+                && !ncm_id.is_empty()
+            {
+                let genres_collection = props.Genres()?;
+                genres_collection.Clear()?;
+                genres_collection.Append(&HSTRING::from(format!("NCM-{ncm_id}")))?;
+                debug!("将 SMTC 流派设置为 NCM ID: {ncm_id}");
+            }
 
             if let Some(bytes) = maybe_bytes {
                 let stream = InMemoryRandomAccessStream::new()?;
@@ -409,12 +417,7 @@ fn handle_command_inner(command_json: &str) -> Result<()> {
     debug!(?command, "正在处理命令");
 
     match command {
-        SmtcCommand::Metadata(payload) => update_metadata(
-            &payload.song_name,
-            &payload.author_name,
-            &payload.album_name,
-            &payload.thumbnail_url,
-        ),
+        SmtcCommand::Metadata(payload) => update_metadata(payload),
         SmtcCommand::PlayState(payload) => {
             update_play_state(&payload.status).context("更新播放状态失败")?;
         }

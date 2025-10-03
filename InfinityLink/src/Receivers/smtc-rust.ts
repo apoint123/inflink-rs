@@ -2,6 +2,7 @@ import type {
 	CommandResult,
 	ControlMessage,
 	LogEntry,
+	MetadataPayload,
 	PlaybackStatus,
 	RepeatMode,
 	SmtcCommandPayloads,
@@ -133,12 +134,7 @@ class SMTCNativeBackend {
 		logger.info("[InfLink-Native] SMTC 已禁用");
 	}
 
-	public update(songInfo: {
-		songName: string;
-		authorName: string;
-		albumName: string;
-		thumbnailUrl: string;
-	}) {
+	public update(songInfo: MetadataPayload) {
 		this.dispatch("Metadata", {
 			...songInfo,
 			albumName: songInfo.albumName ?? songInfo.songName,

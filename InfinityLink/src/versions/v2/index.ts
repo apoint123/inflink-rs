@@ -328,6 +328,7 @@ class V2Provider extends BaseProvider {
 							song.data.artists?.map((v: Artist) => v.name).join(" / ") || "",
 						albumName: song.data.album?.name || "未知专辑",
 						thumbnailUrl: song.data.album?.picUrl || "",
+						ncmId: currentTrackId,
 					},
 				}),
 			);
