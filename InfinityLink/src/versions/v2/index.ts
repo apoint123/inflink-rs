@@ -84,17 +84,15 @@ class V2Provider extends BaseProvider {
 
 	private readonly dispatchTimelineThrottled: () => void;
 
-	// 目前观察到有 fmPlayer 用来私人漫游，mvPlayer 用来播放 MV，
-	// 这里目前只使用 defPlayer 实例，之后可能需要扩展
 	private readonly playerActions = {
 		// 直接使用混淆后的函数名很脆弱，但考虑到网易云 v2 都不更新了，
 		// 直接使用问题也不大
-		resume: () => ctl.defPlayer.KJ("play"),
-		pause: () => ctl.defPlayer.KJ("pause"),
-		next: () => ctl.defPlayer.KJ("playnext"),
-		prev: () => ctl.defPlayer.KJ("playprev"),
-		seek: (progressRatio: number) => ctl.defPlayer.Qn(progressRatio),
-		switchMode: (mode: string) => ctl.defPlayer.KJ(`mode_${mode}`),
+		resume: () => ctl.player?.Hn()?.KJ("play"),
+		pause: () => ctl.player?.Hn()?.KJ("pause"),
+		next: () => ctl.player?.Hn()?.KJ("playnext"),
+		prev: () => ctl.player?.Hn()?.KJ("playprev"),
+		seek: (progressRatio: number) => ctl.player?.Hn()?.Qn(progressRatio),
+		switchMode: (mode: string) => ctl.player?.Hn()?.KJ(`mode_${mode}`),
 	};
 
 	constructor() {
@@ -323,11 +321,12 @@ class V2Provider extends BaseProvider {
 
 	public override forceDispatchFullState(): void {
 		this.onStateChanged();
-		const progress = ctl.defPlayer.sL?.currentTime || 0;
-		const duration = ctl.defPlayer.sL?.duration || 0;
+		const currentPlayer = ctl.player?.Hn();
+		const progress = currentPlayer?.Gn() || 0;
+		const duration = currentPlayer?.tQ || 0;
 		if (duration > 0) {
-			this.musicDuration = duration * 1000;
-			this.onPlayProgress(progress / duration);
+			this.musicDuration = Math.floor(duration * 1000);
+			this.onPlayProgress(progress);
 		}
 	}
 
