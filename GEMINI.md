@@ -4,7 +4,7 @@ This document provides an overview of the **InfLink-rs** project, its architectu
 
 ## Project Overview
 
-**InfLink-rs** is a high-performance plugin for the **BetterNCM** modding platform for the Netease Cloud Music desktop client. Its primary function is to integrate the music player with the native **Windows System Media Transport Controls (SMTC)**. This allows users to view song information (title, artist, album art) and control playback (play, pause, next, previous) directly from the Windows volume and media overlay.
+**InfLink-rs** is a high-performance plugin for the **BetterNCM** modding platform for the Netease Cloud Music desktop client. Its primary function is to integrate the music player with the native **Windows System Media Transport Controls (SMTC)**. This allows users to view song information (title, artist, album art) and control playback (play, pause, next, previous) directly from the Windows volume and media overlay. **A secondary, but powerful feature is the embedding of the Netease Cloud Music song ID into the SMTC's metadata (using the `Genres` field), enabling precise song identification for third-party applications.**
 
 A key feature of the project is its adaptive architecture, designed to support multiple versions of the Netease Cloud Music client, including both the modern **64-bit (v3)** and legacy **32-bit (v2)** releases.
 
@@ -19,6 +19,7 @@ The project is architecturally divided into two main parts that communicate via 
     *   **Role**: The core of the plugin. It is compiled into native dynamic libraries (`.cdylib`) for both **x64 and x86** architectures.
     *   **Responsibilities**:
         *   Interfacing directly with the Windows API (`windows-rs` crate) to manage the SMTC session.
+        *   Processing incoming metadata, including the NCM song ID, and mapping it to appropriate SMTC properties (e.g., setting the `Genres` property to `NCM-{ID}`).
         *   Exposing a set of native functions to the JavaScript environment.
         *   Receiving commands from the frontend and forwarding events (e.g., SMTC button presses) back to it.
     *   **Key Crates**: `cef-safe` (for safe communication with the Chromium Embedded Framework), `windows`, `tracing` (for structured logging), `serde` (for data serialization).
@@ -38,15 +39,15 @@ All version-specific logic is encapsulated within Provider classes that adhere t
     *   **Method**: Interacts almost exclusively with the client's **Redux store**.
     *   **State & Control**: Both reading player state (current song, play mode) and controlling playback (play, pause, next) are achieved by accessing the store's state and dispatching Redux actions.
 
-*   **v2 Provider (`versions/v2/index.ts`)**: The implementation for the legacy 32-bit client. This provider is a hybrid solution derived from reverse-engineering.
-    *   **Method**: Combines multiple client-side APIs.
+*   **v2 Provider (`versions/v2/index.ts`)**: The implementation for the legacy 32-bit client. This provider is a sophisticated hybrid solution derived from reverse-engineering, designed for maximum robustness.
+    *   **Method**: It combines multiple client-side data sources for state reading but relies exclusively on robust internal JavaScript APIs for playback control.
     *   **State Reading**:
         *   Uses the `legacyNativeCmder` global object to subscribe to backend events like `Load`, `PlayState`, and `PlayProgress`.
         *   Crucially, it also subscribes to the **Redux store** to detect track changes *instantly*, providing a responsive UI experience that `legacyNativeCmder` events alone cannot.
         *   Reads the current play mode directly from the Redux store state.
     *   **Playback Control**:
-        *   Uses a discovered global object, `ctl.defPlayer`, and its command dispatcher method `KJ("command")` to control playback (play, pause, next, prev, mode switching). This is more robust than DOM manipulation.
-        *   Uses the `Qn(progress)` method for precise seek control.
+        *   By dynamically resolving the **currently active player instance** (e.g., `defPlayer`, `fmPlayer`, `mvPlayer`) by calling a discovered global method, `ctl.player.Hn()`, we can ensure that SMTC controls work correctly across all of the client's playback modes.
+        *   All direct interactions with the client's obfuscated internal methods (e.g., `KJ`, `Qn`, `Gn`, `tQ`) have **encapsulated within a dedicated `NcmV2PlayerApi` wrapper class**. This adapter exposes a clean, intention-revealing API (`resume()`, `getProgress()`, etc.) to the provider, completely isolating the core logic from the fragile implementation details of the reverse-engineered API.
 
 ### Build System & Packaging
 
@@ -72,7 +73,7 @@ The codebase demonstrates a strong preference for robust, modern, and maintainab
 
 *   **Style & Linting**: **Biome** is used for formatting and linting.
 *   **API Interaction**: Direct interaction with the client's internal APIs is abstracted away behind the version-specific Provider classes. This centralizes API knowledge and makes the code resilient to upstream changes.
-*   **Robustness over Convenience**: The project has systematically replaced fragile implementation details (e.g., DOM manipulation) with more robust, future-proof strategies (e.g., dispatching Redux actions, calling internal JS methods, subscribing to client-provided event listeners).
+*   **Robustness over Convenience**: The project has systematically replaced fragile implementation details (e.g., DOM manipulation, hardcoded object paths) with more robust, future-proof strategies (e.g., dispatching Redux actions, calling internal JS methods, subscribing to client-provided event listeners). **A prime example is the v2 provider's evolution from accessing DOM element properties (`.sL.duration`) to calling internal player methods (`.tQ`), and the encapsulation of obfuscated APIs (`KJ`, `Gn`) within a clean wrapper class.**
 
 ### Backend (Rust)
 
