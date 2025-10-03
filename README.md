@@ -22,7 +22,7 @@
 仅在这些版本上进行了测试，其它版本不保证可以工作!
 
 * `3.1.20 (build: 204558) Patch: f84632d`
-* `2.12.13 (build: 202675) Patch: 1:12f60b8`
+* `2.12.13 (build: 202675) Patch: 1:12f60b8` (正在开发中: https://github.com/apoint123/inflink-rs/issues/11)
 
 ## 支持上传到 SMTC 的信息
 
