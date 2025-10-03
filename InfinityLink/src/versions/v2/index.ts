@@ -264,7 +264,7 @@ class V2Provider extends BaseProvider {
 				const currentMode = this.reduxStore.getState()?.playing?.playMode;
 				const isShuffleOn = currentMode === NCM_PLAY_MODES.RANDOM;
 				const targetMode = isShuffleOn
-					? this.lastModeBeforeShuffle || NCM_PLAY_MODES.SINGLE_LOOP
+					? this.lastModeBeforeShuffle || NCM_PLAY_MODES.LIST_LOOP
 					: NCM_PLAY_MODES.RANDOM;
 
 				if (!isShuffleOn && currentMode) {
