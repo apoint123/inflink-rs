@@ -1,7 +1,4 @@
-import type {
-	Artist,
-	AudioLoadInfo,
-} from "InfinityLink/src/types/ncm-internal";
+import type { Artist } from "InfinityLink/src/types/ncm-internal";
 import type { PlaybackStatus, RepeatMode } from "../../types/smtc";
 import { throttle, waitForElement } from "../../utils";
 import logger from "../../utils/logger";
@@ -179,11 +176,6 @@ class V2Provider extends BaseProvider {
 
 	private registerNcmEvents(): void {
 		legacyNativeCmder.appendRegisterCall(
-			"Load",
-			"audioplayer",
-			(_audioId: string, info: AudioLoadInfo) => this.onMusicLoad(info),
-		);
-		legacyNativeCmder.appendRegisterCall(
 			"PlayState",
 			"audioplayer",
 			(_audioId: string, state: string | number) =>
@@ -194,10 +186,6 @@ class V2Provider extends BaseProvider {
 			"audioplayer",
 			(_audioId: string, progress: number) => this.onPlayProgress(progress),
 		);
-	}
-
-	private onMusicLoad(info: AudioLoadInfo): void {
-		this.musicDuration = (info.duration * 1000) | 0;
 	}
 
 	private onPlayStateChanged(stateInfo: string | number): void {
@@ -320,6 +308,12 @@ class V2Provider extends BaseProvider {
 		const currentTrackId = String(song.data.id).trim();
 		if (force || currentTrackId !== this._lastDispatchedTrackId) {
 			this._lastDispatchedTrackId = currentTrackId;
+
+			const newDuration = song.data.duration || 0;
+			if (newDuration > 0) {
+				this.musicDuration = newDuration;
+			}
+
 			this.dispatchEvent(
 				new CustomEvent("updateSongInfo", {
 					detail: {
@@ -329,6 +323,15 @@ class V2Provider extends BaseProvider {
 						albumName: song.data.album?.name || "未知专辑",
 						thumbnailUrl: song.data.album?.picUrl || "",
 						ncmId: currentTrackId,
+					},
+				}),
+			);
+
+			this.dispatchEvent(
+				new CustomEvent("updateTimeline", {
+					detail: {
+						currentTime: 0,
+						totalTime: this.musicDuration,
 					},
 				}),
 			);
