@@ -30,6 +30,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+          targets: i686-pc-windows-msvc, x86_64-pc-windows-msvc
 
       - name: 缓存 Rust 依赖
         uses: Swatinem/rust-cache@v2
@@ -42,13 +43,27 @@ jobs:
 
       - name: 打包产物
         run: |
-          Compress-Archive -Path InfinityLink/dist/* -DestinationPath InfLink-rs.zip
-          Rename-Item -Path InfLink-rs.zip -NewName InfLink-rs.plugin
+          Compress-Archive -Path InfinityLink/dist/v3/* -DestinationPath InfLink-rs-v3-x64.zip
+          Rename-Item -Path InfLink-rs-v3-x64.zip -NewName InfLink-rs-v3-x64.plugin
+
+          Compress-Archive -Path InfinityLink/dist/v2/* -DestinationPath InfLink-rs-v2-x86.zip
+          Rename-Item -Path InfLink-rs-v2-x86.zip -NewName InfLink-rs-v2-x86.plugin
         shell: powershell
 
       - name: 创建 Release
         uses: softprops/action-gh-release@v2
         with:
           body: |
-            查看更新日志：[CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)
-          files: InfLink-rs.plugin
+            ## 文件说明
+
+            本次发布包含两个版本, 请根据网易云音乐客户端版本下载对应的文件, 下载错误的文件会导致插件无法运行!
+
+            - **`InfLink-rs-v3-x64.plugin`**: 适用于 **64位** 的网易云音乐客户端 (v3.x.x 版本)。
+            - **`InfLink-rs-v2-x86.plugin`**: 适用于 **32位** 的网易云音乐客户端 (v2.x.x 版本)。
+
+            ---
+
+            查看详细更新日志：[CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)
+          files: |
+            InfLink-rs-v3-x64.plugin
+            InfLink-rs-v2-x86.plugin
