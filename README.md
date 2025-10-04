@@ -11,15 +11,6 @@
 
 ## 使用方法
 
-> [!CAUTION]
-> 安装错误的插件架构会导致插件无法工作，并有可能导致网易云无法启动
->
-> 请确保你安装的插件版本和你的网易云音乐版本是相同的！
->
-> 即，网易云音乐 v2.x 应该使用带 `x86` 字样的插件, v3.x 应该使用带 `x64` 的字样
->
-> 第一个支持网易云音乐 v2.x 版本的插件是 [v3.0.0](https://github.com/apoint123/inflink-rs/releases/tag/v3.0.0), 低于该版本的插件只能在网易云音乐 v3.x 版本上运行
-
 1. [安装 Betterncm 插件](https://github.com/std-microblock/BetterNCM-Installer/releases/latest)
 2. 在 [Release 页面](https://github.com/apoint123/inflink-rs/releases/latest)下载最新版本
 3. 将插件文件 (以 `.plugin` 结尾) 复制到 `C:\betterncm\plugins` 文件夹下 (或者你指定的自定义数据目录)
