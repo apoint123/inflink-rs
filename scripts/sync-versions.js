@@ -14,15 +14,10 @@ async function main() {
 			"package.json",
 		);
 		const rootPackageJsonPath = path.join(projectRoot, "package.json");
-		const manifestV2Path = path.join(
+		const manifestPath = path.join(
 			projectRoot,
 			"InfinityLink",
-			"manifest.v2.json",
-		);
-		const manifestV3Path = path.join(
-			projectRoot,
-			"InfinityLink",
-			"manifest.v3.json",
+			"manifest.json",
 		);
 		const cargoTomlPath = path.join(projectRoot, "smtc_handler", "Cargo.toml");
 
@@ -57,8 +52,7 @@ async function main() {
 		};
 
 		updateJsonVersion(rootPackageJsonPath);
-		updateJsonVersion(manifestV2Path);
-		updateJsonVersion(manifestV3Path);
+		updateJsonVersion(manifestPath);
 		updateCargoTomlVersion(cargoTomlPath);
 	} catch (error) {
 		console.error("同步版本号时发生错误:", error);
