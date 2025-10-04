@@ -1,7 +1,7 @@
 import type { Store } from "redux";
 
 /**
- * UI 中实际存在的播放模式
+ * Redux Store 中实际存在的播放模式
  */
 export type NCMPlayMode = "playCycle" | "playOneCycle" | "playRandom" | "playOrder" | "playFm" | "playAi";
 
