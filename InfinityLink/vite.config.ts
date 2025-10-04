@@ -47,16 +47,19 @@ const copyAssetsPlugin = (mode: string): Plugin => {
 				"target/x86_64-pc-windows-msvc/release/smtc_handler.dll",
 			);
 			const manifestSrc = path.resolve(__dirname, "manifest.json");
+			const previewSrc = path.resolve(projectRoot, "preview.png");
 
 			const dllDestX86 = path.resolve(outputDir, "smtc_handler.dll");
 			const dllDestX64 = path.resolve(outputDir, "smtc_handler.dll.x64.dll");
 			const manifestDest = path.resolve(outputDir, "manifest.json");
+			const previewDest = path.resolve(outputDir, "preview.png");
 
 			fs.mkdirSync(outputDir, { recursive: true });
 
 			copyFile(dllSrcX86, dllDestX86);
 			copyFile(dllSrcX64, dllDestX64);
 			copyFile(manifestSrc, manifestDest);
+			copyFile(previewSrc, previewDest);
 
 			if (mode === "development") {
 				const devPluginDir = "C:/betterncm/plugins_dev/InfLink-rs";
