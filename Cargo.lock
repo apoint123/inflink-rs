@@ -1301,7 +1301,7 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
 name = "smtc_handler"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "anyhow",
  "base64",
