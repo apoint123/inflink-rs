@@ -1,8 +1,10 @@
 {
 	"manifest_version": 1,
 	"name": "InfLink-rs",
+	"fork_of": "InfLink",
 	"version": "3.0.0",
 	"author": "apoint123",
+	"ncm3-compatible": true,
 	"description": "SMTC 支持，使用 Rust 实现",
 	"injects": {
 		"Main": [

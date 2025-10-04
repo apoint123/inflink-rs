@@ -8,60 +8,70 @@ const packageJson = JSON.parse(
 );
 
 const copyAssetsPlugin = (mode: string): Plugin => {
-	const targetArch = process.env.TARGET_ARCH || "x64";
-	const isX64 = targetArch === "x64";
-
-	console.log(`[Vite] 构建目标: ${targetArch}`);
-
-	const dllSubPath = isX64 ? "x86_64-pc-windows-msvc" : "i686-pc-windows-msvc";
-	const manifestFileName = isX64 ? "manifest.v3.json" : "manifest.v2.json";
+	const copyFile = (src: string, dest: string) => {
+		if (!fs.existsSync(src)) {
+			console.error(`[Vite] 找不到源文件，无法复制: ${src}`);
+			return;
+		}
+		try {
+			fs.copyFileSync(src, dest);
+		} catch (error) {
+			if (error && typeof error === "object" && "code" in error) {
+				if (error.code === "EBUSY" || error.code === "EPERM") {
+					console.warn(
+						`[Vite] 无法复制 ${path.basename(src)} (文件可能被网易云占用)`,
+					);
+				} else {
+					console.error(`[Vite] 复制 ${path.basename(src)} 时发生错误:`, error);
+				}
+			} else {
+				console.error(
+					`[Vite] 复制 ${path.basename(src)} 时发生未知错误:`,
+					error,
+				);
+			}
+		}
+	};
 
 	return {
 		name: "vite-plugin-copy-assets",
-		writeBundle: (options) => {
-			if (!options.dir) {
-				console.error(
-					"Vite output directory is not defined. Cannot copy files.",
-				);
-				return;
-			}
-			const outputDir = options.dir;
+		closeBundle: () => {
 			const projectRoot = path.resolve(__dirname, "..");
-
-			const dllSrc = path.resolve(
+			const outputDir = path.resolve(__dirname, "dist");
+			const dllSrcX86 = path.resolve(
 				projectRoot,
-				`target/${dllSubPath}/release/smtc_handler.dll`,
+				"target/i686-pc-windows-msvc/release/smtc_handler.dll",
 			);
-			const manifestSrc = path.resolve(__dirname, manifestFileName);
+			const dllSrcX64 = path.resolve(
+				projectRoot,
+				"target/x86_64-pc-windows-msvc/release/smtc_handler.dll",
+			);
+			const manifestSrc = path.resolve(__dirname, "manifest.json");
 
-			const dllDest = path.resolve(outputDir, "smtc_handler.dll");
+			const dllDestX86 = path.resolve(outputDir, "smtc_handler.dll");
+			const dllDestX64 = path.resolve(outputDir, "smtc_handler.dll.x64.dll");
 			const manifestDest = path.resolve(outputDir, "manifest.json");
 
-			if (fs.existsSync(dllSrc)) {
-				fs.copyFileSync(dllSrc, dllDest);
-			} else {
-				console.error(`[Vite] 找不到dll文件: ${dllSrc}`);
-				console.error(`[Vite] 请先运行 'pnpm build:backend'`);
-			}
+			fs.mkdirSync(outputDir, { recursive: true });
 
-			if (fs.existsSync(manifestSrc)) {
-				fs.copyFileSync(manifestSrc, manifestDest);
-			} else {
-				console.error(`[Vite] 找不到 manifest 文件: ${manifestSrc}`);
-			}
+			copyFile(dllSrcX86, dllDestX86);
+			copyFile(dllSrcX64, dllDestX64);
+			copyFile(manifestSrc, manifestDest);
 
 			if (mode === "development") {
 				const devPluginDir = "C:/betterncm/plugins_dev/InfLink-rs";
-
-				fs.mkdirSync(devPluginDir, { recursive: true });
-				const filesInDist = fs
-					.readdirSync(outputDir)
-					.filter((f) => !f.endsWith(".dll"));
-				for (const file of filesInDist) {
-					fs.copyFileSync(
-						path.join(outputDir, file),
-						path.join(devPluginDir, file),
-					);
+				try {
+					fs.cpSync(outputDir, devPluginDir, { recursive: true });
+				} catch (error) {
+					if (error && typeof error === "object" && "code" in error) {
+						if (error.code === "EBUSY" || error.code === "EPERM") {
+							console.warn("[Vite] 无法同步到开发目录 (文件可能被网易云占用)");
+						} else {
+							console.error("同步到开发目录时发生错误:", error);
+						}
+					} else {
+						console.error("[Vite] 同步到开发目录时发生未知错误:", error);
+					}
 				}
 			}
 		},
@@ -69,9 +79,6 @@ const copyAssetsPlugin = (mode: string): Plugin => {
 };
 
 export default defineConfig(({ mode }) => {
-	const targetArch = process.env.TARGET_ARCH || "x64";
-	const outDir = targetArch === "x64" ? "dist/v3" : "dist/v2";
-
 	return {
 		plugins: [react(), copyAssetsPlugin(mode)],
 		define: {
@@ -80,7 +87,7 @@ export default defineConfig(({ mode }) => {
 			__APP_VERSION__: JSON.stringify(packageJson.version),
 		},
 		build: {
-			outDir: outDir,
+			outDir: "dist",
 			target: "chrome91",
 			sourcemap: mode === "development" ? "inline" : false,
 			lib: {

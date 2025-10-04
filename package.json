@@ -3,9 +3,7 @@
 	"private": true,
 	"version": "3.0.0",
 	"scripts": {
-		"build:frontend:v3": "cross-env TARGET_ARCH=x64 pnpm --filter inflink-rs build",
-		"build:frontend:v2": "cross-env TARGET_ARCH=x86 pnpm --filter inflink-rs build",
-		"build:frontend": "pnpm build:frontend:v3 && pnpm build:frontend:v2",
+		"build:frontend": "pnpm --filter inflink-rs build",
 		"watch": "pnpm --filter inflink-rs build:dev",
 		"build:backend:x64": "cargo build --release --target=x86_64-pc-windows-msvc -p smtc_handler",
 		"build:backend:x86": "cargo build --release --target=i686-pc-windows-msvc -p smtc_handler",
@@ -23,7 +21,6 @@
 		"@changesets/cli": "^2.29.7",
 		"@commitlint/cli": "^20.1.0",
 		"@commitlint/config-conventional": "^20.0.0",
-		"cross-env": "^10.1.0",
 		"husky": "^9.1.7",
 		"typescript": "^5.9.3"
 	},
