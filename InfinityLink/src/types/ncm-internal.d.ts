@@ -3,9 +3,9 @@ import type { Store } from "redux";
 /**
  * UI 中实际存在的播放模式
  */
-export type NCMPlayMode = "order" | "loop" | "shuffle" | "singleloop";
+export type NCMPlayMode = "playCycle" | "playOneCycle" | "playRandom" | "playOrder" | "playFm" | "playAi";
 
-/** 播放状态的数字表示。1: 播放中, 2: 已暂停 */
+/** 播放状态的数字表示。1: 已暂停, 2: 播放中 */
 export type NCMPlayState = 1 | 2;
 
 export interface Artist {
