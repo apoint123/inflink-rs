@@ -102,9 +102,6 @@ const CONSTANTS = {
 
 	PROGRESS_JUMP_THRESHOLD_S: 1.5,
 
-	// React 内部 props 属性的前缀
-	REACT_PROPS_PREFIX: "__reactProps$",
-
 	NCM_PLAY_MODE_ORDER: "playOrder",
 	NCM_PLAY_MODE_LOOP: "playCycle",
 	NCM_PLAY_MODE_SHUFFLE: "playRandom",
