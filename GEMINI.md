@@ -6,7 +6,7 @@ This document provides an overview of the **InfLink-rs** project, its architectu
 
 **InfLink-rs** is a high-performance plugin for the **BetterNCM** modding platform for the Netease Cloud Music desktop client. Its primary function is to integrate the music player with the native **Windows System Media Transport Controls (SMTC)**. This allows users to view song information (title, artist, album art) and control playback (play, pause, next, previous) directly from the Windows volume and media overlay. **A secondary, but powerful feature is the embedding of the Netease Cloud Music song ID into the SMTC's metadata (using the `Genres` field), enabling precise song identification for third-party applications.**
 
-A key feature of the project is its adaptive architecture, designed to support multiple versions of the Netease Cloud Music client, including both the modern **64-bit (v3)** and legacy **32-bit (v2)** releases.
+A key feature of the project is its adaptive architecture, designed to support multiple versions of the Netease Cloud Music client, including both the modern **64-bit (v3)** and legacy **32-bit (v2)** releases, via a **single, universal plugin package**.
 
 The project follows a modern monorepo architecture, combining the strengths of Rust for backend performance and safety with a TypeScript/React frontend for the user interface.
 
@@ -19,9 +19,9 @@ The project is architecturally divided into two main parts that communicate via 
     *   **Role**: The core of the plugin. It is compiled into native dynamic libraries (`.cdylib`) for both **x64 and x86** architectures.
     *   **Responsibilities**:
         *   Interfacing directly with the Windows API (`windows-rs` crate) to manage the SMTC session.
-        *   Processing incoming metadata, including the NCM song ID, and mapping it to appropriate SMTC properties (e.g., setting the `Genres` property to `NCM-{ID}`).
         *   Exposing a set of native functions to the JavaScript environment.
         *   Receiving commands from the frontend and forwarding events (e.g., SMTC button presses) back to it.
+        *   **Interoperability Feature**: Sets the SMTC `genre` field to `NCM-{ID}` to allow other applications to identify the currently playing track.
     *   **Key Crates**: `cef-safe` (for safe communication with the Chromium Embedded Framework), `windows`, `tracing` (for structured logging), `serde` (for data serialization).
 
 2.  **TypeScript Frontend (`InfinityLink`) - Version-Adaptive**:
@@ -49,31 +49,34 @@ All version-specific logic is encapsulated within Provider classes that adhere t
         *   By dynamically resolving the **currently active player instance** (e.g., `defPlayer`, `fmPlayer`, `mvPlayer`) by calling a discovered global method, `ctl.player.Hn()`, we can ensure that SMTC controls work correctly across all of the client's playback modes.
         *   All direct interactions with the client's obfuscated internal methods (e.g., `KJ`, `Qn`, `Gn`, `tQ`) have **encapsulated within a dedicated `NcmV2PlayerApi` wrapper class**. This adapter exposes a clean, intention-revealing API (`resume()`, `getProgress()`, etc.) to the provider, completely isolating the core logic from the fragile implementation details of the reverse-engineered API.
 
-### Build System & Packaging
+### Build System & Packaging (Universal)
 
-The build process is configured to produce two separate, architecture-specific plugin packages.
+The build process is configured to produce a **single, universal plugin package** that works on both 32-bit and 64-bit clients, leveraging a clever loading mechanism within BetterNCM.
 
-*   **Dual-Target Compilation**: The Rust backend is compiled for both `x86_64-pc-windows-msvc` (64-bit) and `i686-pc-windows-msvc` (32-bit) targets.
-*   **Parameterized Frontend Build**: The `vite.config.ts` reads a `TARGET_ARCH` environment variable (`x64` or `x86`) to:
-    *   Dynamically set the output directory (e.g., `dist/v3` or `dist/v2`).
-    *   Copy the corresponding 32-bit or 64-bit DLL, renaming it to the generic `smtc_handler.dll`.
-    *   Copy the corresponding version-specific manifest file (`manifest.v3.json` or `manifest.v2.json`), renaming it to `manifest.json`.
-*   **Final Output**: The `pnpm build` command orchestrates this entire process, resulting in two distinct, ready-to-distribute plugin packages.
+*   **Dual-Target Backend Compilation**: The Rust backend is compiled for both `x86_64-pc-windows-msvc` (64-bit) and `i686-pc-windows-msvc` (32-bit) targets.
+*   **Unified Frontend Build**: The `vite.config.ts` orchestrates a single build process with a universal output.
+    *   **Output Directory**: All artifacts are placed in a single `InfinityLink/dist` directory.
+    *   **DLL Handling**:
+        *   The 32-bit DLL is copied and named `smtc_handler.dll`.
+        *   The 64-bit DLL is copied and named `smtc_handler.dll.x64.dll`.
+    *   **Manifest Handling**: A single, universal `manifest.json` is copied to the output directory. Its `native_plugin` key points to the base `smtc_handler.dll`.
+*   **BetterNCM Loading Mechanism**: When the plugin is loaded, BetterNCM first tries to load `smtc_handler.dll`. On a 64-bit client, this fails, and it then automatically tries to load `smtc_handler.dll.x64.dll`, which succeeds. On a 32-bit client, the first attempt succeeds.
+*   **Final Output**: The `pnpm build` command produces one ready-to-distribute, universal plugin folder.
 
 ## Development Conventions
-
-The codebase demonstrates a strong preference for robust, modern, and maintainable practices.
 
 ### General
 
 *   **Monorepo Management**: The project is a monorepo managed with `pnpm` workspaces.
-*   **Commit Style**: Contributions should follow the **Conventional Commits** specification (e.g., `feat:`, `fix:`, `refactor:`).
+*   **Commit Style**: Contributions should follow the **Conventional Commits** specification.
+*   **Versioning & Changelog**: The project uses **Changesets** for version management and automated changelog generation.
+    *   **Daily Workflow**: Run `pnpm cs:add` after completing a meaningful change.
+    *   **Release Workflow**: Run `pnpm cs:version`, which calls `changeset version` and then a custom `scripts/sync-versions.js` script to propagate the new version number to all relevant files (`Cargo.toml`, `manifest.json`, etc.).
 
 ### Frontend (TypeScript/React)
 
 *   **Style & Linting**: **Biome** is used for formatting and linting.
-*   **API Interaction**: Direct interaction with the client's internal APIs is abstracted away behind the version-specific Provider classes. This centralizes API knowledge and makes the code resilient to upstream changes.
-*   **Robustness over Convenience**: The project has systematically replaced fragile implementation details (e.g., DOM manipulation, hardcoded object paths) with more robust, future-proof strategies (e.g., dispatching Redux actions, calling internal JS methods, subscribing to client-provided event listeners). **A prime example is the v2 provider's evolution from accessing DOM element properties (`.sL.duration`) to calling internal player methods (`.tQ`), and the encapsulation of obfuscated APIs (`KJ`, `Gn`) within a clean wrapper class.**
+*   **API Abstraction**: Client-specific internal APIs are strictly abstracted behind Provider classes. Obfuscated methods are further encapsulated in dedicated wrapper classes (e.g., `NcmV2PlayerApi`).
 
 ### Backend (Rust)
 
@@ -81,12 +84,9 @@ The codebase demonstrates a strong preference for robust, modern, and maintainab
 *   **Logging**: The `tracing` crate is used for comprehensive, structured logging. Logs are piped to both a file and the frontend console, with dynamically configurable log levels.
 *   **Safety**: While FFI necessitates `unsafe` code, its usage is localized. The project uses safe wrappers where possible.
 
-### Testing & Validation
+### Release Automation
 
-While the project lacks a formal automated testing suite, it follows a rigorous and pragmatic validation process:
+The project utilizes GitHub Actions for a fully automated release process.
 
-1.  **Hypothesize**: Form a theory about how an internal API works (e.g., "Playback control is likely handled by a global `ctl.defPlayer` object").
-2.  **Validate**: Write small, isolated scripts to test the hypothesis directly in the client's developer console (e.g., run `ctl.defPlayer.KJ("playnext")` and observe the result).
-3.  **Implement**: Only after the hypothesis is proven correct, integrate the new, validated logic into the corresponding Provider class.
-
-This iterative, evidence-based approach is crucial when working with and reverse-engineering a closed-source application.
+*   **`release.yml`**: Triggered on `v*.*.*` tags. This workflow builds the universal plugin, packages it into a `.plugin` file, and attaches it to a new GitHub Release.
+*   **`publish-store.yml`**: Also triggered on `v*.*.*` tags. This workflow builds the project and pushes the raw plugin contents (from `InfinityLink/dist`) to a dedicated `release` branch. This branch serves as a stable, clean distribution source for the BetterNCM plugin store.
