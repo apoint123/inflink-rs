@@ -1,32 +1,53 @@
 {
 	"$schema": "https://docs.renovatebot.com/renovate-schema.json",
-	"extends": ["config:base", ":dependencyDashboard", ":semanticCommits"],
-	"labels": ["dependencies"],
-	"schedule": ["* 3 * * *"],
+	"extends": [
+		"config:recommended",
+		":dependencyDashboard",
+		":semanticCommits"
+	],
+	"labels": [
+		"dependencies"
+	],
+	"schedule": [
+		"* 3 * * *"
+	],
 	"packageRules": [
 		{
-			"matchUpdateTypes": ["minor", "patch"],
-			"matchPackagePatterns": ["*"],
+			"matchUpdateTypes": [
+				"minor",
+				"patch"
+			],
 			"groupName": "all non-major dependencies",
-			"groupSlug": "all-minor-patch"
+			"groupSlug": "all-minor-patch",
+			"matchPackageNames": [
+				"*"
+			]
 		},
 		{
-			"matchManagers": ["pnpm"],
-			"matchDepTypes": ["devDependencies"],
+			"matchManagers": [
+				"pnpm"
+			],
+			"matchDepTypes": [
+				"devDependencies"
+			],
 			"groupName": "pnpm development dependencies",
 			"groupSlug": "pnpm-dev",
 			"automerge": true,
 			"automergeType": "pr"
 		},
 		{
-			"matchManagers": ["cargo"],
+			"matchManagers": [
+				"cargo"
+			],
 			"groupName": "rust crates",
 			"groupSlug": "rust-crates"
 		},
 		{
-			"matchPackagePatterns": ["^@mui/"],
 			"groupName": "Material UI packages",
-			"groupSlug": "mui"
+			"groupSlug": "mui",
+			"matchPackageNames": [
+				"/^@mui//"
+			]
 		}
 	]
 }
