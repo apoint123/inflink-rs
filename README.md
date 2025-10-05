@@ -11,11 +11,17 @@
 
 ## 使用方法
 
+### 通过插件商店安装
+
+1. [安装 Betterncm 插件](https://github.com/std-microblock/BetterNCM-Installer/releases/latest)
+2. 在插件商店中找到并安装 InfLink-rs
+3. 根据提示重启网易云音乐
+
+### 手动安装
 1. [安装 Betterncm 插件](https://github.com/std-microblock/BetterNCM-Installer/releases/latest)
 2. 在 [Release 页面](https://github.com/apoint123/inflink-rs/releases/latest)下载最新版本
 3. 将插件文件 (以 `.plugin` 结尾) 复制到 `C:\betterncm\plugins` 文件夹下 (或者你指定的自定义数据目录)
 4. 重启网易云音乐
-
 
 ## 已测试的网易云音乐版本
 
