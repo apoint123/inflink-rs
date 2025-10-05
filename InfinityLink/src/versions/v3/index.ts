@@ -1,9 +1,4 @@
-import type {
-	NCMStore,
-	NcmEventMap,
-	NcmEventName,
-	ReactRootElement,
-} from "../../types/ncm-internal";
+import type { v3 } from "../../types/ncm";
 import type {
 	ControlMessage,
 	PlaybackStatus,
@@ -11,14 +6,15 @@ import type {
 } from "../../types/smtc";
 import { throttle, waitForElement } from "../../utils";
 import logger from "../../utils/logger";
+
 import { BaseProvider } from "../provider";
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function waitForReduxStore(timeoutMs = 10000): Promise<NCMStore> {
+async function waitForReduxStore(timeoutMs = 10000): Promise<v3.NCMStore> {
 	const rootEl = (await waitForElement(
 		SELECTORS.REACT_ROOT,
-	)) as ReactRootElement;
+	)) as v3.ReactRootElement;
 	if (!rootEl) {
 		throw new Error("在页面上找不到 React 根元素");
 	}
@@ -48,12 +44,12 @@ async function waitForReduxStore(timeoutMs = 10000): Promise<NCMStore> {
 
 interface FiberNode {
 	memoizedProps?: {
-		store?: NCMStore;
+		store?: v3.NCMStore;
 	};
 	return: FiberNode | null;
 }
 
-function findReduxStoreInFiberTree(node: FiberNode | null): NCMStore | null {
+function findReduxStoreInFiberTree(node: FiberNode | null): v3.NCMStore | null {
 	let currentNode = node;
 	while (currentNode) {
 		if (currentNode.memoizedProps?.store) {
@@ -64,7 +60,7 @@ function findReduxStoreInFiberTree(node: FiberNode | null): NCMStore | null {
 	return null;
 }
 
-function findStoreFromRootElement(rootEl: HTMLElement): NCMStore | null {
+function findStoreFromRootElement(rootEl: HTMLElement): v3.NCMStore | null {
 	const appEl = rootEl.firstElementChild;
 	if (!appEl) {
 		logger.warn("[V3 Provider] #root 元素没有子元素");
@@ -108,23 +104,23 @@ const CONSTANTS = {
 	NCM_PLAY_MODE_ONE: "playOneCycle",
 };
 
-const CHANNEL_EVENTS = new Set<NcmEventName>(["PlayProgress"]);
+const CHANNEL_EVENTS = new Set<v3.EventName>(["PlayProgress"]);
 
 /**
  * NCM 事件适配器
  */
 class NcmEventAdapter {
 	private readonly registeredEvt: Set<string>;
-	private readonly callbacks: Map<string, Set<NcmEventMap[NcmEventName]>>;
+	private readonly callbacks: Map<string, Set<v3.EventMap[v3.EventName]>>;
 
 	constructor() {
 		this.registeredEvt = new Set<string>();
-		this.callbacks = new Map<string, Set<NcmEventMap[NcmEventName]>>();
+		this.callbacks = new Map<string, Set<v3.EventMap[v3.EventName]>>();
 	}
 
-	public on<E extends NcmEventName>(
+	public on<E extends v3.EventName>(
 		eventName: E,
-		callback: NcmEventMap[E],
+		callback: v3.EventMap[E],
 	): void {
 		const namespace = "audioplayer";
 		const fullName = `${namespace}.on${eventName}`;
@@ -165,7 +161,7 @@ export default class V3Provider extends BaseProvider {
 	private musicDuration = 0;
 	private musicPlayProgress = 0;
 	private playState: PlaybackStatus = "Paused";
-	private reduxStore: NCMStore | null = null;
+	private reduxStore: v3.NCMStore | null = null;
 	private unsubscribeStore: (() => void) | null = null;
 	private readonly dispatchTimelineThrottled: () => void;
 	private lastTrackId: number | null = null;

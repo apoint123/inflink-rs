@@ -1,3 +1,4 @@
+import type { v2 } from "../../types/ncm";
 import type {
 	ControlMessage,
 	PlaybackStatus,
@@ -6,7 +7,6 @@ import type {
 import { throttle, waitForElement } from "../../utils";
 import logger from "../../utils/logger";
 import { BaseProvider } from "../provider";
-import type { CtlDefPlayer, NcmSongData, V2NCMStore } from "./types";
 
 // 看起来很奇怪，但是网易云音乐内部确实是这样定义的
 const NCM_PLAY_MODES = {
@@ -39,9 +39,9 @@ function isValidNcmPlayMode(
  * 如果某天网易云真的又给 v2 更新了一个版本，这里几乎肯定会出错
  */
 class NcmV2PlayerApi {
-	private readonly playerInstance: CtlDefPlayer;
+	private readonly playerInstance: v2.PlayerInstance;
 
-	constructor(playerInstance: CtlDefPlayer) {
+	constructor(playerInstance: v2.PlayerInstance) {
 		this.playerInstance = playerInstance;
 	}
 
@@ -77,11 +77,11 @@ class NcmV2PlayerApi {
 		return this.playerInstance.tQ;
 	}
 
-	public get currentSongData(): NcmSongData | null {
+	public get currentSongData(): v2.SongData | null {
 		return this.playerInstance.x6?.data ?? null;
 	}
 
-	public getFmSongData(): NcmSongData | null {
+	public getFmSongData(): v2.SongData | null {
 		const trackObject = this.playerInstance._t?.();
 		return trackObject?.data ?? null;
 	}
@@ -89,19 +89,19 @@ class NcmV2PlayerApi {
 
 interface FiberNode {
 	memoizedProps?: {
-		store?: V2NCMStore;
+		store?: v2.NCMStore;
 	};
 	return: FiberNode | null;
 }
 
 // 网易云v2的store路径包含每次启动都变化的哈希，所以得每次都寻找它
-async function findReduxStore(selector: string): Promise<V2NCMStore> {
+async function findReduxStore(selector: string): Promise<v2.NCMStore> {
 	const rootEl = await waitForElement(selector);
 	if (!rootEl) {
 		throw new Error(`根元素 ('${selector}') 未找到`);
 	}
 
-	const findStoreInFiberTree = (node: FiberNode | null): V2NCMStore | null => {
+	const findStoreInFiberTree = (node: FiberNode | null): v2.NCMStore | null => {
 		let currentNode = node;
 		while (currentNode) {
 			if (currentNode.memoizedProps?.store) {
@@ -143,7 +143,7 @@ class V2Provider extends BaseProvider {
 	private musicDuration = 0;
 	private musicPlayProgress = 0;
 
-	private reduxStore: V2NCMStore | null = null;
+	private reduxStore: v2.NCMStore | null = null;
 	private unsubscribeStore: (() => void) | null = null;
 
 	private lastReduxTrackId: number | null = null;
@@ -351,7 +351,7 @@ class V2Provider extends BaseProvider {
 	}
 
 	private dispatchSongInfoUpdate(force = false): void {
-		let songData: NcmSongData | null = null;
+		let songData: v2.SongData | null = null;
 
 		if (this.activePlayerApi) {
 			songData = this.activePlayerApi.currentSongData;
