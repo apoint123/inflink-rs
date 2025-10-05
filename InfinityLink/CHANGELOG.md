@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.1.2
+
+### Patch Changes
+
+- 78a0838: fix(app): 修正更新提示
+
 ## 3.1.1
 
 ### Patch Changes

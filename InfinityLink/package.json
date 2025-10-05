@@ -1,6 +1,6 @@
 {
 	"name": "inflink-rs",
-	"version": "3.1.1",
+	"version": "3.1.2",
 	"main": "index.js",
 	"license": "GPL-3.0-only",
 	"scripts": {
