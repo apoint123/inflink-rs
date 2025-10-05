@@ -1,12 +1,14 @@
 import type {
-	Artist,
-	AudioLoadInfo,
 	NCMStore,
 	NcmEventMap,
 	NcmEventName,
 	ReactRootElement,
 } from "../../types/ncm-internal";
-import type { PlaybackStatus, RepeatMode } from "../../types/smtc";
+import type {
+	ControlMessage,
+	PlaybackStatus,
+	RepeatMode,
+} from "../../types/smtc";
 import { throttle, waitForElement } from "../../utils";
 import logger from "../../utils/logger";
 import { BaseProvider } from "../provider";
@@ -18,7 +20,7 @@ async function waitForReduxStore(timeoutMs = 10000): Promise<NCMStore> {
 		SELECTORS.REACT_ROOT,
 	)) as ReactRootElement;
 	if (!rootEl) {
-		throw new Error("React root element (#root) not found on the page.");
+		throw new Error("在页面上找不到 React 根元素");
 	}
 
 	const interval = 100;
@@ -41,7 +43,7 @@ async function waitForReduxStore(timeoutMs = 10000): Promise<NCMStore> {
 		elapsedTime += interval;
 	}
 
-	throw new Error(`waitForReduxStore timed out after ${timeoutMs}ms.`);
+	throw new Error(`在 ${timeoutMs}ms 仍未找到 Redux Store`);
 }
 
 interface FiberNode {
@@ -65,7 +67,7 @@ function findReduxStoreInFiberTree(node: FiberNode | null): NCMStore | null {
 function findStoreFromRootElement(rootEl: HTMLElement): NCMStore | null {
 	const appEl = rootEl.firstElementChild;
 	if (!appEl) {
-		logger.warn("[React Store Provider] #root 元素没有子元素");
+		logger.warn("[V3 Provider] #root 元素没有子元素");
 		return null;
 	}
 
@@ -75,13 +77,13 @@ function findStoreFromRootElement(rootEl: HTMLElement): NCMStore | null {
 			key.startsWith("__reactInternalInstance$"), // < react 17, 网易云使用 react 16.14
 	);
 	if (!fiberKey) {
-		logger.warn("[React Store Provider] 找不到 React Fiber key");
+		logger.warn("[V3 Provider] 找不到 React Fiber key");
 		return null;
 	}
 
 	const startNode = (appEl as unknown as Record<string, FiberNode>)[fiberKey];
 	if (!startNode) {
-		logger.warn("[React Store Provider] 找不到起始 Fiber 节点");
+		logger.warn("[V3 Provider] 找不到起始 Fiber 节点");
 		return null;
 	}
 
@@ -99,8 +101,6 @@ const SELECTORS = {
 const CONSTANTS = {
 	// 时间线更新节流间隔
 	TIMELINE_THROTTLE_INTERVAL_MS: 1000,
-
-	PROGRESS_JUMP_THRESHOLD_S: 1.5,
 
 	NCM_PLAY_MODE_ORDER: "playOrder",
 	NCM_PLAY_MODE_LOOP: "playCycle",
@@ -146,17 +146,14 @@ class NcmEventAdapter {
 				}
 				callbackSet.add(callback);
 			} catch (e) {
-				logger.error(
-					`[React Store Provider] 注册 channel 事件 ${eventName} 失败:`,
-					e,
-				);
+				logger.error(`[V3 Provider] 注册 channel 事件 ${eventName} 失败:`, e);
 			}
 		} else {
 			try {
 				legacyNativeCmder.appendRegisterCall(eventName, namespace, callback);
 			} catch (e) {
 				logger.error(
-					`[React Store Provider] 注册 legacyNativeCmder 事件 ${eventName} 失败:`,
+					`[V3 Provider] 注册 legacyNativeCmder 事件 ${eventName} 失败:`,
 					e,
 				);
 			}
@@ -170,9 +167,8 @@ export default class V3Provider extends BaseProvider {
 	private playState: PlaybackStatus = "Paused";
 	private reduxStore: NCMStore | null = null;
 	private unsubscribeStore: (() => void) | null = null;
-	private lastProgress = 0;
 	private readonly dispatchTimelineThrottled: () => void;
-	private lastTrackId: string | null = null;
+	private lastTrackId: number | null = null;
 	private lastIsPlaying: boolean | null = null;
 	private lastPlayMode: string | undefined = undefined;
 	private lastModeBeforeShuffle: string | null = null;
@@ -275,23 +271,20 @@ export default class V3Provider extends BaseProvider {
 		}, CONSTANTS.TIMELINE_THROTTLE_INTERVAL_MS)[0];
 
 		this.initialize().catch((e) => {
-			logger.error("[React Store Provider] 初始化失败:", e);
+			logger.error("[V3 Provider] 初始化失败:", e);
 		});
 	}
 
 	private async initialize(): Promise<void> {
-		logger.trace("[React Store Provider] Initializing...");
-
 		try {
 			const store = await waitForReduxStore();
-			logger.trace("[React Store Provider] Redux store found.");
 			this.reduxStore = store;
 			this.unsubscribeStore = this.reduxStore.subscribe(() => {
 				this.onStateChanged();
 			});
-			logger.trace("[React Store Provider] Subscribed to Redux store updates.");
+			logger.trace("[V3 Provider] 已订阅 Redux store 更新");
 		} catch (error) {
-			logger.error("[React Store Provider] Could not find Redux store:", error);
+			logger.error("[V3 Provider] 找不到 Redux store:", error);
 			return;
 		}
 
@@ -303,14 +296,10 @@ export default class V3Provider extends BaseProvider {
 		this.onStateChanged();
 
 		this.resolveReady();
-		logger.debug("[React Store Provider] Initialization complete.");
+		logger.debug("[V3 Provider] 初始化完成");
 	}
 
 	private registerAudioPlayerEvents(): void {
-		logger.debug("[React Store Provider] Registering audio player events...");
-		this.eventAdapter.on("Load", (audioId: string, info: AudioLoadInfo) =>
-			this.onMusicLoad(audioId, info),
-		);
 		this.eventAdapter.on("PlayProgress", (audioId: string, progress: number) =>
 			this.onPlayProgress(audioId, progress),
 		);
@@ -321,7 +310,7 @@ export default class V3Provider extends BaseProvider {
 		);
 	}
 
-	private handleControlEvent(e: CustomEvent): void {
+	private handleControlEvent(e: CustomEvent<ControlMessage>): void {
 		if (this.isUpdatingFromProvider || !this.reduxStore) {
 			return;
 		}
@@ -330,10 +319,7 @@ export default class V3Provider extends BaseProvider {
 
 		try {
 			const msg = e.detail;
-			logger.info(
-				`[React Store Provider] Handling control event: ${msg.type}`,
-				msg,
-			);
+			logger.info(`[V3 Provider] 处理后端控制事件: ${msg.type}`, msg);
 
 			switch (msg.type) {
 				case "Play":
@@ -398,7 +384,6 @@ export default class V3Provider extends BaseProvider {
 	}
 
 	private registerControlListeners(): void {
-		logger.debug("[React Store Provider] Registering control event listeners.");
 		this.addEventListener("control", this.handleControlEvent);
 	}
 
@@ -406,12 +391,18 @@ export default class V3Provider extends BaseProvider {
 		const playingInfo = this.reduxStore?.getState().playing;
 		if (!playingInfo) return;
 
-		const currentTrackId = String(playingInfo.resourceTrackId || "").trim();
+		const rawTrackId = playingInfo.resourceTrackId;
+		if (!rawTrackId) return;
+
+		const currentTrackId =
+			typeof rawTrackId === "number"
+				? rawTrackId
+				: parseInt(String(rawTrackId), 10);
+
 		if (
-			force ||
-			(currentTrackId &&
-				currentTrackId !== "0" &&
-				currentTrackId !== this.lastTrackId)
+			!Number.isNaN(currentTrackId) &&
+			currentTrackId !== 0 &&
+			(force || currentTrackId !== this.lastTrackId)
 		) {
 			this.lastTrackId = currentTrackId;
 			if (playingInfo.curTrack?.duration) {
@@ -425,10 +416,11 @@ export default class V3Provider extends BaseProvider {
 					detail: {
 						songName: playingInfo.resourceName || "未知歌名",
 						authorName:
-							playingInfo.resourceArtists
-								?.map((v: Artist) => v.name)
-								.join(" / ") || "",
-						albumName: playingInfo.musicAlbumName ?? playingInfo.resourceName,
+							playingInfo.resourceArtists?.map((v) => v.name).join(" / ") || "",
+						albumName:
+							playingInfo.musicAlbumName ??
+							playingInfo.resourceName ??
+							"未知专辑",
 						thumbnailUrl: thumbnailUrl,
 						ncmId: currentTrackId,
 					},
@@ -506,35 +498,12 @@ export default class V3Provider extends BaseProvider {
 		this._dispatchPlayStateUpdate();
 		const playingInfo = this.reduxStore.getState().playing;
 		if (playingInfo?.progress !== undefined && this.musicPlayProgress === 0) {
-			logger.debug(
-				`[React Store Provider] Initializing progress: ${playingInfo.progress * 1000}ms`,
-			);
 			this.musicPlayProgress = Math.floor(playingInfo.progress * 1000);
 			this.dispatchTimelineThrottled();
 		}
 	}
 
-	private onMusicLoad(audioId: string, info: AudioLoadInfo): void {
-		logger.debug(
-			`[React Store Provider] Event 'Load' received for audioId: ${audioId}. Duration: ${info.duration}s`,
-		);
-		this.musicDuration = (info.duration * 1000) | 0;
-	}
-
 	private onPlayProgress(_audioId: string, progress: number): void {
-		// 忽略因 seek 操作导致的进度大幅跳跃
-		if (
-			Math.abs(progress - this.lastProgress) >
-				CONSTANTS.PROGRESS_JUMP_THRESHOLD_S &&
-			progress > 0.01
-		) {
-			logger.debug(
-				`[React Store Provider] Progress jump detected and ignored. From ${this.lastProgress} to ${progress}.`,
-			);
-			this.lastProgress = progress;
-			return;
-		}
-		this.lastProgress = progress;
 		this.musicPlayProgress = (progress * 1000) | 0;
 		this.dispatchTimelineThrottled();
 	}
@@ -559,9 +528,7 @@ export default class V3Provider extends BaseProvider {
 
 	public seekToPosition(timeMS: number): void {
 		if (!this.reduxStore) {
-			logger.warn(
-				"[React Store Provider] Redux store is not available, cannot seek.",
-			);
+			logger.error("[V3 Provider] Redux store 不可用, 无法跳转.");
 			return;
 		}
 
@@ -571,11 +538,8 @@ export default class V3Provider extends BaseProvider {
 	}
 
 	public override forceDispatchFullState(): void {
-		logger.debug(
-			"[React Store Provider] Forcing dispatch of full current state.",
-		);
 		if (!this.reduxStore?.getState().playing || !this.lastTrackId) {
-			logger.warn("[React Store Provider] 没有缓存的状态可以分发。");
+			logger.warn("[V3 Provider] 没有缓存的状态可以分发。");
 			return;
 		}
 		this.lastIsPlaying = null;
@@ -583,17 +547,14 @@ export default class V3Provider extends BaseProvider {
 		this._dispatchPlayStateUpdate(true);
 		this._dispatchPlayModeUpdate(true);
 		this._dispatchTimelineUpdate();
-
-		logger.trace("[React Store Provider] Full state dispatch complete.");
 	}
 
 	public override dispose(): void {
 		if (this.unsubscribeStore) {
 			this.unsubscribeStore();
 			this.unsubscribeStore = null;
-			logger.trace("[React Store Provider] Unsubscribed from Redux store.");
 		}
 		this.removeEventListener("control", this.handleControlEvent);
-		logger.debug("[React Store Provider] Disposed.");
+		logger.debug("[V3 Provider] Disposed.");
 	}
 }

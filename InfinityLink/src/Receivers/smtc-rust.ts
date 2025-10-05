@@ -13,10 +13,31 @@ import logger from "../utils/logger";
 
 const NATIVE_API_PREFIX = "inflink.";
 
+type NativeApiFunction =
+	| "initialize"
+	| "register_logger"
+	| "set_log_level"
+	| "cleanup"
+	| "shutdown"
+	| "register_event_callback"
+	| "dispatch";
+
+const ALL_LOG_LEVELS: Readonly<LogLevel[]> = [
+	"error",
+	"warn",
+	"info",
+	"debug",
+	"trace",
+];
+
+function isLogLevel(level: string): level is LogLevel {
+	return (ALL_LOG_LEVELS as string[]).includes(level);
+}
+
 class SMTCNativeBackend {
 	private isActive = false;
 
-	private call<T>(func: string, args: unknown[] = []): T {
+	private call<T>(func: NativeApiFunction, args: unknown[] = []): T {
 		return betterncm_native.native_plugin.call<T>(
 			`${NATIVE_API_PREFIX}${func}`,
 			args,
@@ -97,26 +118,12 @@ class SMTCNativeBackend {
 			try {
 				const entry: LogEntry = JSON.parse(logJson);
 				const message = `[InfLink-rs backend|${entry.target}] ${entry.message}`;
+				const level = entry.level.toLowerCase();
 
-				switch (entry.level.toLowerCase() as LogLevel) {
-					case "error":
-						logger.error(message);
-						break;
-					case "warn":
-						logger.warn(message);
-						break;
-					case "info":
-						logger.info(message);
-						break;
-					case "debug":
-						logger.debug(message);
-						break;
-					case "trace":
-						logger.trace(message);
-						break;
-					default:
-						logger.log(message);
-						break;
+				if (isLogLevel(level)) {
+					logger[level](message);
+				} else {
+					logger.log(message);
 				}
 			} catch (e) {
 				logger.error("[InfLink-Native] 解析后端日志失败:", e);

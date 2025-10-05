@@ -8,7 +8,7 @@ import type {
 } from "../types/smtc";
 import logger from "../utils/logger";
 
-type ProviderEventMap = {
+export type ProviderEventMap = {
 	updateSongInfo: CustomEvent<SongInfo>;
 	updatePlayState: CustomEvent<PlaybackStatus>;
 	updateTimeline: CustomEvent<TimelineInfo>;
@@ -51,11 +51,12 @@ export class BaseProvider {
 		this.emitter.off(type, listener);
 	}
 
-	public dispatchEvent(event: Event): boolean {
+	public dispatchEvent<T extends keyof ProviderEventMap>(
+		event: ProviderEventMap[T],
+	): boolean {
 		if (this.disabled) return false;
 
-		const type = event.type as keyof ProviderEventMap;
-		this.emitter.emit(type, event as ProviderEventMap[typeof type]);
+		this.emitter.emit(event.type as T, event);
 
 		return true;
 	}

@@ -16,7 +16,7 @@ pub struct MetadataPayload {
     pub author_name: String,
     pub album_name: String,
     pub thumbnail_url: String,
-    pub ncm_id: Option<String>,
+    pub ncm_id: Option<u64>,
 }
 
 #[derive(Deserialize, Debug)]

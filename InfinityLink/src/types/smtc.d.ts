@@ -9,9 +9,9 @@ export interface SongInfo {
 	 * 上传到流派的歌曲ID，部分应用 (例如 Lyricify Lite)
 	 * 可以通过检测流派 ID 来精确匹配歌曲
 	 *
-	 * 格式为 `NCM-{ID}`
+	 * 后端会把 ID 拼接为 `NCM-{ID}`
 	 */
-	ncmId: string;
+	ncmId: number;
 }
 
 export interface TimelineInfo {

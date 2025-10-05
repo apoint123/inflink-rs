@@ -381,8 +381,8 @@ pub fn update_metadata(payload: MetadataPayload) {
             props.SetAlbumTitle(&HSTRING::from(&payload.album_name))?;
 
             // Lyricify Lite 会使用*流派*的歌曲ID来精确匹配歌曲
-            if let Some(ncm_id) = &payload.ncm_id
-                && !ncm_id.is_empty()
+            if let Some(ncm_id) = payload.ncm_id
+                && ncm_id > 0
             {
                 let genres_collection = props.Genres()?;
                 genres_collection.Clear()?;

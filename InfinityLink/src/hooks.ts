@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
 import type { ControlMessage } from "./types/smtc";
 import logger from "./utils/logger";
-import type { BaseProvider } from "./versions/provider";
+import type { BaseProvider, ProviderEventMap } from "./versions/provider";
 
 export function useLocalStorage<T>(
 	key: string,
@@ -108,7 +108,7 @@ export function useInfoProvider(
 		return () => {
 			if (providerRef.current) {
 				providerRef.current.disabled = true;
-				providerRef.current.dispatchEvent(new CustomEvent("disable"));
+				providerRef.current.dispatchEvent(new CustomEvent<void>("disable"));
 				if (typeof providerRef.current.dispose === "function") {
 					providerRef.current.dispose();
 				}
@@ -137,16 +137,15 @@ export function useSmtcConnection(
 			return;
 		}
 
-		const onUpdateSongInfo = (e: CustomEvent) => smtcImplObj.update(e.detail);
-		const onUpdatePlayState = (e: CustomEvent) => {
+		const onUpdateSongInfo = (e: ProviderEventMap["updateSongInfo"]) =>
+			smtcImplObj.update(e.detail);
+		const onUpdatePlayState = (e: ProviderEventMap["updatePlayState"]) => {
 			const status = e.detail === "Playing" ? "Playing" : "Paused";
 			smtcImplObj.updatePlayState(status);
 		};
-
-		const onUpdateTimeline = (e: CustomEvent) =>
+		const onUpdateTimeline = (e: ProviderEventMap["updateTimeline"]) =>
 			smtcImplObj.updateTimeline(e.detail);
-
-		const onUpdatePlayMode = (e: CustomEvent) =>
+		const onUpdatePlayMode = (e: ProviderEventMap["updatePlayMode"]) =>
 			smtcImplObj.updatePlayMode(e.detail);
 
 		const onControl = (msg: ControlMessage) => {

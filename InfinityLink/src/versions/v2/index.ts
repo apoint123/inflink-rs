@@ -65,7 +65,7 @@ class NcmV2PlayerApi {
 		this.playerInstance.Qn(progressRatio);
 	}
 
-	public switchMode(mode: string): void {
+	public switchMode(mode: NcmPlayMode): void {
 		this.playerInstance.KJ(`mode_${mode}`);
 	}
 
@@ -148,9 +148,9 @@ class V2Provider extends BaseProvider {
 
 	private lastReduxTrackId: number | null = null;
 	private lastPlayMode: NcmPlayMode | undefined = undefined;
-	private _lastDispatchedTrackId: string | null = null;
+	private _lastDispatchedTrackId: number | null = null;
 
-	private lastModeBeforeShuffle: string | null = null;
+	private lastModeBeforeShuffle: NcmPlayMode | null = null;
 
 	private readonly dispatchTimelineThrottled: () => void;
 
@@ -274,7 +274,9 @@ class V2Provider extends BaseProvider {
 			case "Pause":
 				this.activePlayerApi?.pause();
 				this.dispatchEvent(
-					new CustomEvent("updatePlayState", { detail: "Paused" }),
+					new CustomEvent<PlaybackStatus>("updatePlayState", {
+						detail: "Paused",
+					}),
 				);
 				break;
 			case "NextSong":
@@ -304,12 +306,14 @@ class V2Provider extends BaseProvider {
 			case "ToggleShuffle": {
 				if (!this.reduxStore) return;
 				const currentMode = this.reduxStore.getState()?.playing?.playMode;
+				if (!isValidNcmPlayMode(currentMode) || !currentMode) return;
+
 				const isShuffleOn = currentMode === NCM_PLAY_MODES.RANDOM;
-				const targetMode = isShuffleOn
+				const targetMode: NcmPlayMode = isShuffleOn
 					? this.lastModeBeforeShuffle || NCM_PLAY_MODES.LIST_LOOP
 					: NCM_PLAY_MODES.RANDOM;
 
-				if (!isShuffleOn && currentMode) {
+				if (!isShuffleOn) {
 					this.lastModeBeforeShuffle = currentMode;
 				} else {
 					this.lastModeBeforeShuffle = null;
@@ -320,7 +324,9 @@ class V2Provider extends BaseProvider {
 			case "ToggleRepeat": {
 				if (!this.reduxStore) return;
 				const currentMode = this.reduxStore.getState()?.playing?.playMode;
-				let targetMode: string;
+				if (!isValidNcmPlayMode(currentMode) || !currentMode) return;
+
+				let targetMode: NcmPlayMode;
 
 				if (currentMode === NCM_PLAY_MODES.RANDOM) {
 					targetMode = NCM_PLAY_MODES.LIST_LOOP;
@@ -355,9 +361,9 @@ class V2Provider extends BaseProvider {
 			}
 		}
 
-		if (!songData) return;
+		if (!songData?.id) return;
 
-		const currentTrackId = String(songData.id);
+		const currentTrackId = songData.id;
 		if (force || currentTrackId !== this._lastDispatchedTrackId) {
 			this._lastDispatchedTrackId = currentTrackId;
 
