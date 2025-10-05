@@ -136,19 +136,13 @@ function Main() {
 
 	useEffect(() => {
 		if (ncmVersion !== null) {
-			logger.debug(`[InfLink] 兼容性检查结果: ${ncmVersion}`);
+			logger.debug(`[InfLink] 兼容的版本: ${ncmVersion}`);
 		}
 	}, [ncmVersion]);
 
 	useEffect(() => {
 		logger.debug(`[InfLink] SMTC 支持: ${SMTCEnabled}`);
 	}, [SMTCEnabled]);
-
-	useEffect(() => {
-		if (newVersionInfo) {
-			logger.info(`[InfLink] New version detected: ${newVersionInfo.version}`);
-		}
-	}, [newVersionInfo]);
 
 	useEffect(() => {
 		setLogLevel(frontendLogLevel);
