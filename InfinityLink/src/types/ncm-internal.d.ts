@@ -65,7 +65,7 @@ export interface NcmEventMap {
 	Load: (audioId: string, info: AudioLoadInfo) => void;
 	End: (audioId: string) => void;
 	PlayProgress: (audioId: string, progress: number) => void;
-	PlayState: (audioId: string, state: string | number) => void;
+	PlayState: (audioId: string, state: string) => void;
 }
 
 export type NcmEventName = keyof NcmEventMap;

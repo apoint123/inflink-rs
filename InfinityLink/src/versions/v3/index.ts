@@ -303,10 +303,8 @@ export default class V3Provider extends BaseProvider {
 		this.eventAdapter.on("PlayProgress", (audioId: string, progress: number) =>
 			this.onPlayProgress(audioId, progress),
 		);
-		this.eventAdapter.on(
-			"PlayState",
-			(audioId: string, state: string | number) =>
-				this.onPlayStateChanged(audioId, state),
+		this.eventAdapter.on("PlayState", (audioId: string, state: string) =>
+			this.onPlayStateChanged(audioId, state),
 		);
 	}
 
@@ -508,20 +506,34 @@ export default class V3Provider extends BaseProvider {
 		this.dispatchTimelineThrottled();
 	}
 
-	private onPlayStateChanged(
-		_audioId: string,
-		stateInfo: string | number,
-	): void {
+	private onPlayStateChanged(_audioId: string, stateInfo: string): void {
 		let newPlayState: PlaybackStatus = this.playState;
-		if (typeof stateInfo === "string") {
-			const state = stateInfo.split("|")[1];
-			if (state === "pause") newPlayState = "Paused";
-			else if (state === "resume") newPlayState = "Playing";
+
+		const parts = stateInfo.split("|");
+		if (parts.length >= 2) {
+			const stateKeyword = parts[1];
+			switch (stateKeyword) {
+				case "resume":
+				case "play":
+					newPlayState = "Playing";
+					break;
+				case "pause":
+					newPlayState = "Paused";
+					break;
+				default:
+					logger.warn(`[V3 Provider] 未知的播放状态: ${stateKeyword}`);
+					break;
+			}
+		} else {
+			logger.warn(`[V3 Provider] 意外的播放状态: ${stateInfo}`);
 		}
+
 		if (this.playState !== newPlayState) {
 			this.playState = newPlayState;
 			this.dispatchEvent(
-				new CustomEvent("updatePlayState", { detail: this.playState }),
+				new CustomEvent<PlaybackStatus>("updatePlayState", {
+					detail: this.playState,
+				}),
 			);
 		}
 	}
