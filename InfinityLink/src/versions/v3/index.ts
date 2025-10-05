@@ -43,7 +43,7 @@ async function waitForReduxStore(timeoutMs = 10000): Promise<NCMStore> {
 		elapsedTime += interval;
 	}
 
-	throw new Error(`在 ${timeoutMs}ms 仍未找到 Redux Store`);
+	throw new Error(`在 ${timeoutMs}ms 后仍未找到 Redux Store`);
 }
 
 interface FiberNode {
