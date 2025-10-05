@@ -181,6 +181,9 @@ function Main() {
 						<Typography variant="body2" component="div">
 							下载新版本以获得最新功能和修复
 						</Typography>
+						<Typography variant="body2" component="div">
+							在左侧插件商店进行更新，或者点击下方按钮手动下载插件进行更新
+						</Typography>
 					</Box>
 					<Button
 						variant="contained"
