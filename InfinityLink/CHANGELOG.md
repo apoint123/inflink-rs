@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.1.1
+
+### Patch Changes
+
+- 5570eba: fix(meta): 添加缺失的扩展元数据
+
 ## 3.1.0
 
 ### Minor Changes
