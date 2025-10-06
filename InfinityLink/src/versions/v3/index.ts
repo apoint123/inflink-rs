@@ -2,7 +2,10 @@ import type { v3 } from "../../types/ncm";
 import type {
 	ControlMessage,
 	PlaybackStatus,
+	PlayModePayload,
 	RepeatMode,
+	SongInfo,
+	TimelineInfo,
 } from "../../types/smtc";
 import {
 	findModule,
@@ -212,7 +215,9 @@ export default class V3Provider extends BaseProvider {
 				if (this.playState !== "Paused") {
 					this.playState = "Paused";
 					this.dispatchEvent(
-						new CustomEvent("updatePlayState", { detail: this.playState }),
+						new CustomEvent<PlaybackStatus>("updatePlayState", {
+							detail: this.playState,
+						}),
 					);
 				}
 			},
@@ -263,7 +268,7 @@ export default class V3Provider extends BaseProvider {
 
 		this.dispatchTimelineThrottled = throttle(() => {
 			this.dispatchEvent(
-				new CustomEvent("updateTimeline", {
+				new CustomEvent<TimelineInfo>("updateTimeline", {
 					detail: {
 						currentTime: this.musicPlayProgress,
 						totalTime: this.musicDuration,
@@ -461,7 +466,7 @@ export default class V3Provider extends BaseProvider {
 			const thumbnailUrl = playingInfo.resourceCoverUrl || "";
 
 			this.dispatchEvent(
-				new CustomEvent("updateSongInfo", {
+				new CustomEvent<SongInfo>("updateSongInfo", {
 					detail: {
 						songName: playingInfo.resourceName || "未知歌名",
 						authorName:
@@ -488,7 +493,9 @@ export default class V3Provider extends BaseProvider {
 			this.lastIsPlaying = isPlayingFromRedux;
 			this.playState = isPlayingFromRedux ? "Playing" : "Paused";
 			this.dispatchEvent(
-				new CustomEvent("updatePlayState", { detail: this.playState }),
+				new CustomEvent<PlaybackStatus>("updatePlayState", {
+					detail: this.playState,
+				}),
 			);
 		}
 	}
@@ -521,7 +528,7 @@ export default class V3Provider extends BaseProvider {
 			}
 
 			this.dispatchEvent(
-				new CustomEvent("updatePlayMode", {
+				new CustomEvent<PlayModePayload>("updatePlayMode", {
 					detail: { isShuffling, repeatMode },
 				}),
 			);
@@ -530,7 +537,7 @@ export default class V3Provider extends BaseProvider {
 
 	private _dispatchTimelineUpdate(): void {
 		this.dispatchEvent(
-			new CustomEvent("updateTimeline", {
+			new CustomEvent<TimelineInfo>("updateTimeline", {
 				detail: {
 					currentTime: this.musicPlayProgress,
 					totalTime: this.musicDuration,

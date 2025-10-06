@@ -3,6 +3,8 @@ import type {
 	ControlMessage,
 	PlaybackStatus,
 	RepeatMode,
+	SongInfo,
+	TimelineInfo,
 } from "../../types/smtc";
 import { throttle, waitForElement } from "../../utils";
 import logger from "../../utils/logger";
@@ -173,7 +175,7 @@ class V2Provider extends BaseProvider {
 
 		this.dispatchTimelineThrottled = throttle(() => {
 			this.dispatchEvent(
-				new CustomEvent("updateTimeline", {
+				new CustomEvent<TimelineInfo>("updateTimeline", {
 					detail: {
 						currentTime: this.musicPlayProgress,
 						totalTime: this.musicDuration,
@@ -237,7 +239,9 @@ class V2Provider extends BaseProvider {
 			logger.warn(`[V2 Provider] 意外的播放状态: ${stateInfo}`);
 		}
 		this.dispatchEvent(
-			new CustomEvent("updatePlayState", { detail: newPlayState }),
+			new CustomEvent<PlaybackStatus>("updatePlayState", {
+				detail: newPlayState,
+			}),
 		);
 	}
 
@@ -292,7 +296,7 @@ class V2Provider extends BaseProvider {
 
 					this.musicPlayProgress = targetTimeMs;
 					this.dispatchEvent(
-						new CustomEvent("updateTimeline", {
+						new CustomEvent<TimelineInfo>("updateTimeline", {
 							detail: {
 								currentTime: this.musicPlayProgress,
 								totalTime: this.musicDuration,
@@ -373,20 +377,19 @@ class V2Provider extends BaseProvider {
 			}
 
 			this.dispatchEvent(
-				new CustomEvent("updateSongInfo", {
+				new CustomEvent<SongInfo>("updateSongInfo", {
 					detail: {
 						songName: songData.name || "未知歌名",
 						authorName: songData.artists?.map((v) => v.name).join(" / ") || "",
 						albumName: songData.album?.name || "未知专辑",
 						thumbnailUrl: songData.album?.picUrl || "",
 						ncmId: currentTrackId,
-						duration: this.musicDuration,
 					},
 				}),
 			);
 
 			this.dispatchEvent(
-				new CustomEvent("updateTimeline", {
+				new CustomEvent<TimelineInfo>("updateTimeline", {
 					detail: {
 						currentTime: 0,
 						totalTime: this.musicDuration,
