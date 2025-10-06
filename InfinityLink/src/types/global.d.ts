@@ -50,6 +50,8 @@ declare global {
 		loadFailedErrors: [string, Error][];
 
 		legacyNativeCmder: OrpheusCommand;
+
+		webpackJsonp?: unknown[];
 	}
 
 	const BETTERNCM_API_KEY: Window["BETTERNCM_API_KEY"];

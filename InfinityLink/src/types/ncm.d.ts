@@ -29,7 +29,6 @@ export namespace v3 {
 		musicAlbumName?: string;
 		resourceCoverUrl?: string;
 		playing?: boolean;
-		progress?: number;
 		curTrack?: {
 			duration?: number;
 		};
@@ -72,6 +71,26 @@ export namespace v3 {
 	}
 
 	export type EventName = keyof EventMap;
+
+	export interface AudioPlayer {
+		subscribePlayStatus: (options: {
+			type: "playprogress";
+			callback: (info: {
+				playId: string;
+				current: number; // 播放进度 (秒)
+				cacheProgress: number;
+				force: boolean;
+			}) => void;
+		}) => void;
+		unSubscribePlayStatus: (
+			callback: (info: {
+				playId: string;
+				current: number;
+				cacheProgress: number;
+				force: boolean;
+			}) => void,
+		) => void;
+	}
 }
 
 // --- v2 类型 ---

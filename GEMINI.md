@@ -28,6 +28,7 @@ The project is architecturally divided into two main parts that communicate via 
     *   **Language**: TypeScript with React and Material UI (MUI).
     *   **Role**: Acts as a version-aware bridge between the Rust backend and the specific Netease client version it's running on.
     *   **Core Strategy**: The frontend employs a **dynamic Provider model** to abstract away version-specific implementation details. At runtime, it detects the client version and loads the corresponding "Provider" module, which is responsible for all interaction with the client.
+    *   **Utilities**: Common logic is organized into a modular `utils/` directory, featuring shared functions for playback mode calculations (`playback.ts`) and robust, specialized helpers for interacting with the client's Webpack module system (`webpack.ts`).
 
 ### Provider Architecture
 
@@ -35,9 +36,11 @@ All version-specific logic is encapsulated within Provider classes that adhere t
 
 *   **`BaseProvider` (`versions/provider.ts`)**: A universal abstract class that defines the API contract for all providers. It establishes an event-driven model (`addEventListener`, `dispatchEvent`) that the rest of the application relies on, ensuring the core logic remains decoupled from any specific client version.
 
-*   **v3 Provider (`versions/v3/index.ts`)**: The implementation for the modern 64-bit client.
-    *   **Method**: Interacts almost exclusively with the client's **Redux store**.
-    *   **State & Control**: Both reading player state (current song, play mode) and controlling playback (play, pause, next) are achieved by accessing the store's state and dispatching Redux actions.
+*   **v3 Provider (`versions/v3/index.ts`)**: The implementation for the modern 64-bit client. It employs a sophisticated, hybrid approach to ensure maximum reliability and compatibility.
+    *   **Method**: This provider has been refactored to be highly resilient against conflicts with other plugins. Instead of relying on fragile, easily-overwritten global event listeners for progress updates, it directly taps into the client's internal, high-level `AudioPlayer` API.
+    *   **State & Control**:
+        *   **General State & Playback Control**: Reading most player state (current song info, play/pause status, play mode) and controlling playback (play, pause, next) are still achieved by interacting with the client's **Redux store**.
+        *   **Timeline Updates (Robust Method)**: At initialization, the provider **dynamically obtains a reference to the client's internal Webpack `require` function**. It then searches for and utilizes the official **`AudioPlayer` module**, subscribing to its reliable `subscribePlayStatus` method. This provides event-driven, real-time timeline updates that are completely isolated from other plugins, guaranteeing functionality regardless of what other mods are installed.
 
 *   **v2 Provider (`versions/v2/index.ts`)**: The implementation for the legacy 32-bit client. This provider is a sophisticated hybrid solution derived from reverse-engineering, designed for maximum robustness.
     *   **Method**: It combines multiple client-side data sources for state reading but relies exclusively on robust internal JavaScript APIs for playback control.

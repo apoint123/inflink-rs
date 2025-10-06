@@ -4,7 +4,12 @@ import type {
 	PlaybackStatus,
 	RepeatMode,
 } from "../../types/smtc";
-import { throttle, waitForElement } from "../../utils";
+import {
+	findModule,
+	getWebpackRequire,
+	throttle,
+	waitForElement,
+} from "../../utils";
 import logger from "../../utils/logger";
 
 import { BaseProvider } from "../provider";
@@ -169,6 +174,7 @@ export default class V3Provider extends BaseProvider {
 	private lastPlayMode: string | undefined = undefined;
 	private lastModeBeforeShuffle: string | null = null;
 	private isUpdatingFromProvider = false;
+	private audioPlayer: v3.AudioPlayer | null = null;
 
 	private readonly eventAdapter: NcmEventAdapter;
 
@@ -272,6 +278,42 @@ export default class V3Provider extends BaseProvider {
 	}
 
 	private async initialize(): Promise<void> {
+		type AudioPlayerModule = { AudioPlayer: v3.AudioPlayer };
+
+		try {
+			const require = await getWebpackRequire();
+			const audioPlayerModule = findModule(
+				require,
+				(exports: unknown): exports is AudioPlayerModule => {
+					if (typeof exports !== "object" || exports === null) {
+						return false;
+					}
+					if (!("AudioPlayer" in exports)) {
+						return false;
+					}
+					const audioPlayerProp = (exports as { AudioPlayer: unknown })
+						.AudioPlayer;
+					if (typeof audioPlayerProp !== "object" || audioPlayerProp === null) {
+						return false;
+					}
+					return (
+						"subscribePlayStatus" in audioPlayerProp &&
+						typeof (audioPlayerProp as { subscribePlayStatus: unknown })
+							.subscribePlayStatus === "function"
+					);
+				},
+			);
+			if (audioPlayerModule) {
+				this.audioPlayer = audioPlayerModule.AudioPlayer;
+			} else {
+				logger.warn(
+					"[V3 Provider] 找不到 AudioPlayer 模块。时间轴更新可能受到其它插件影响",
+				);
+			}
+		} catch (error) {
+			logger.error("[V3 Provider] 获取 Webpack require 方法失败:", error);
+		}
+
 		try {
 			const store = await waitForReduxStore();
 			this.reduxStore = store;
@@ -296,12 +338,25 @@ export default class V3Provider extends BaseProvider {
 	}
 
 	private registerAudioPlayerEvents(): void {
-		this.eventAdapter.on("PlayProgress", (audioId: string, progress: number) =>
-			this.onPlayProgress(audioId, progress),
-		);
 		this.eventAdapter.on("PlayState", (audioId: string, state: string) =>
 			this.onPlayStateChanged(audioId, state),
 		);
+		if (this.audioPlayer) {
+			this.audioPlayer.subscribePlayStatus({
+				type: "playprogress",
+				callback: (info) => {
+					this.onPlayProgress("", info.current);
+				},
+			});
+		} else {
+			// 已知多个插件同时注册 PlayProgress 的事件回调会导致前一个插件的回调被后一个覆盖
+			// 所以尽量使用上面的 audioPlayer.subscribePlayStatus 方法
+			this.eventAdapter.on(
+				"PlayProgress",
+				(audioId: string, progress: number) =>
+					this.onPlayProgress(audioId, progress),
+			);
+		}
 	}
 
 	private handleControlEvent(e: CustomEvent<ControlMessage>): void {
@@ -490,11 +545,6 @@ export default class V3Provider extends BaseProvider {
 		this._dispatchPlayModeUpdate();
 		this._dispatchSongInfoUpdate();
 		this._dispatchPlayStateUpdate();
-		const playingInfo = this.reduxStore.getState().playing;
-		if (playingInfo?.progress !== undefined && this.musicPlayProgress === 0) {
-			this.musicPlayProgress = Math.floor(playingInfo.progress * 1000);
-			this.dispatchTimelineThrottled();
-		}
 	}
 
 	private onPlayProgress(_audioId: string, progress: number): void {
