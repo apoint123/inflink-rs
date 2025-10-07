@@ -18,6 +18,11 @@ export interface TimelineInfo {
 	totalTime: number;
 }
 
+export interface VolumeInfo {
+	volume: number;
+	isMuted: boolean;
+}
+
 export type ControlMessage =
 	| {
 			type:
@@ -26,7 +31,8 @@ export type ControlMessage =
 				| "PreviousSong"
 				| "NextSong"
 				| "ToggleShuffle"
-				| "ToggleRepeat";
+				| "ToggleRepeat"
+				| "ToggleMute";
 	  }
 	| {
 			type: "Seek";
@@ -35,6 +41,10 @@ export type ControlMessage =
 	| {
 			type: "SetRepeat";
 			mode: RepeatMode;
+	  }
+	| {
+			type: "SetVolume";
+			level: number;
 	  };
 
 export type SmtcSimpleEvent = {
@@ -66,6 +76,7 @@ export interface PlayModePayload {
 	isShuffling: boolean;
 	repeatMode: RepeatMode;
 }
+export interface VolumePayload extends VolumeInfo {}
 export type RepeatMode = "None" | "Track" | "List" | "AI";
 
 export type SmtcCommandPayloads = {
@@ -73,6 +84,7 @@ export type SmtcCommandPayloads = {
 	PlayState: PlayStatePayload;
 	Timeline: TimelinePayload;
 	PlayMode: PlayModePayload;
+	Volume: VolumePayload;
 };
 
 export type CommandResult = {
@@ -91,6 +103,7 @@ export interface ProviderEventMap {
 	updatePlayState: CustomEvent<PlaybackStatus>;
 	updateTimeline: CustomEvent<TimelineInfo>;
 	updatePlayMode: CustomEvent<PlayModePayload>;
+	updateVolume: CustomEvent<VolumeInfo>;
 	disable: CustomEvent<void>;
 	control: CustomEvent<ControlMessage>;
 }

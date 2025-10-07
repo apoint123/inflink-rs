@@ -46,6 +46,7 @@ export namespace v3 {
 		curTrack?: CurTrack;
 		playingState?: PlayState;
 		playingMode?: PlayMode;
+		playingVolume?: number; // 0-1
 	}
 
 	export interface ReduxState {
@@ -215,11 +216,48 @@ export namespace v2 {
 		duration: number; // 毫秒
 		alias: string[]; // 歌曲后缀，说明原曲之类的
 	}
+
+	export interface CefPlayerVolumePayload {
+		volume: number; // 0-1
+	}
+
+	export interface CefPlayerMutePayload {
+		mute: boolean;
+	}
+
+	export interface CefPlayerEventMap {
+		onvolumechange: (payload: CefPlayerVolumePayload) => void;
+		onmutechange: (payload: CefPlayerMutePayload) => void;
+	}
+
+	export interface CefPlayer {
+		/** 获取当前音量 (0-1) */
+		K6: () => number;
+		/** 设置音量 (0-1) */
+		F6: (level: number) => void;
+		/**
+		 * 设置静音状态
+		 * @param mute true 为静音, false 为取消静音
+		 */
+		T6: (mute: boolean) => void;
+		/** 当前是否静音 */
+		a6: boolean;
+		/**
+		 * 监听播放器事件
+		 * @param eventName 事件名称, 如 'onvolumechange', 'onmutechange'
+		 * @param callback 事件回调函数
+		 */
+		Ti<K extends keyof CefPlayerEventMap>(
+			eventName: K,
+			callback: CefPlayerEventMap[K],
+		): void;
+	}
 }
 
 declare global {
 	const ctl: {
 		defPlayer: v2.PlayerInstance;
 		player: v2.PlayerInstance;
+		cefPlayer: v2.CefPlayer;
 	};
 }

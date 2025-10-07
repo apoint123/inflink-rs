@@ -159,10 +159,11 @@ function Main() {
 	useEffect(() => {
 		if (infoProvider) {
 			const api: IInfLinkApi = {
-				getCurrentSong: () => infoProvider.adapter.getCurrentSongInfo(),
-				getPlaybackStatus: () => infoProvider.adapter.getPlaybackStatus(),
-				getTimeline: () => infoProvider.adapter.getTimelineInfo(),
-				getPlayMode: () => infoProvider.adapter.getPlayMode(),
+				getCurrentSong: () => infoProvider.getCurrentSongInfo(),
+				getPlaybackStatus: () => infoProvider.getPlaybackStatus(),
+				getTimeline: () => infoProvider.getTimelineInfo(),
+				getPlayMode: () => infoProvider.getPlayMode(),
+				getVolume: () => infoProvider.getVolume(),
 
 				play: () => infoProvider.handleControlCommand({ type: "Play" }),
 				pause: () => infoProvider.handleControlCommand({ type: "Pause" }),
@@ -177,7 +178,11 @@ function Main() {
 				toggleRepeat: () =>
 					infoProvider.handleControlCommand({ type: "ToggleRepeat" }),
 				setRepeatMode: (mode) =>
-					infoProvider.handleControlCommand({ type: "SetRepeat", mode: mode }),
+					infoProvider.handleControlCommand({ type: "SetRepeat", mode }),
+				setVolume: (level) =>
+					infoProvider.handleControlCommand({ type: "SetVolume", level }),
+				toggleMute: () =>
+					infoProvider.handleControlCommand({ type: "ToggleMute" }),
 
 				addEventListener: (type, listener) =>
 					infoProvider.addEventListener(type, listener),

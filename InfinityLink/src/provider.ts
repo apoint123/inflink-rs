@@ -1,4 +1,8 @@
-import type { ControlMessage, ProviderEventMap } from "./types/smtc";
+import type {
+	ControlMessage,
+	ProviderEventMap,
+	VolumeInfo,
+} from "./types/smtc";
 import type { INcmAdapter, NcmAdapterEventMap } from "./versions/adapter";
 
 export class SmtcProvider {
@@ -16,6 +20,7 @@ export class SmtcProvider {
 		this.adapter.addEventListener("playStateChange", this.onPlayStateChange);
 		this.adapter.addEventListener("playModeChange", this.onPlayModeChange);
 		this.adapter.addEventListener("timelineUpdate", this.onTimelineUpdate);
+		this.adapter.addEventListener("volumeChange", this.onVolumeChange);
 
 		await this.adapter.initialize();
 	}
@@ -53,6 +58,12 @@ export class SmtcProvider {
 			case "SetRepeat":
 				this.adapter.setRepeatMode(msg.mode);
 				break;
+			case "SetVolume":
+				this.adapter.setVolume(msg.level);
+				break;
+			case "ToggleMute":
+				this.adapter.toggleMute();
+				break;
 			default: {
 				const exhaustiveCheck: never = msg;
 				console.warn(`[SmtcProvider] 未处理的命令:`, exhaustiveCheck);
@@ -74,6 +85,8 @@ export class SmtcProvider {
 		if (timeline) {
 			this.dispatch("updateTimeline", timeline);
 		}
+		const volume = this.adapter.getVolumeInfo();
+		this.dispatch("updateVolume", volume);
 	}
 
 	public dispose(): void {
@@ -81,6 +94,7 @@ export class SmtcProvider {
 		this.adapter.removeEventListener("playStateChange", this.onPlayStateChange);
 		this.adapter.removeEventListener("playModeChange", this.onPlayModeChange);
 		this.adapter.removeEventListener("timelineUpdate", this.onTimelineUpdate);
+		this.adapter.removeEventListener("volumeChange", this.onVolumeChange);
 		this.adapter.dispose();
 	}
 
@@ -102,6 +116,26 @@ export class SmtcProvider {
 			listener as EventListener,
 			options,
 		);
+	}
+
+	public getCurrentSongInfo(): ReturnType<INcmAdapter["getCurrentSongInfo"]> {
+		return this.adapter.getCurrentSongInfo();
+	}
+
+	public getPlaybackStatus(): ReturnType<INcmAdapter["getPlaybackStatus"]> {
+		return this.adapter.getPlaybackStatus();
+	}
+
+	public getTimelineInfo(): ReturnType<INcmAdapter["getTimelineInfo"]> {
+		return this.adapter.getTimelineInfo();
+	}
+
+	public getPlayMode(): ReturnType<INcmAdapter["getPlayMode"]> {
+		return this.adapter.getPlayMode();
+	}
+
+	public getVolume(): VolumeInfo {
+		return this.adapter.getVolumeInfo();
 	}
 
 	private readonly onSongChange = (
@@ -126,5 +160,11 @@ export class SmtcProvider {
 		e: NcmAdapterEventMap["timelineUpdate"],
 	): void => {
 		this.dispatch("updateTimeline", e.detail);
+	};
+
+	private readonly onVolumeChange = (
+		e: NcmAdapterEventMap["volumeChange"],
+	): void => {
+		this.dispatch("updateVolume", e.detail);
 	};
 }

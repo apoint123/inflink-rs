@@ -5,6 +5,7 @@ import type {
 	RepeatMode,
 	SongInfo,
 	TimelineInfo,
+	VolumeInfo,
 } from "./smtc";
 
 /**
@@ -15,6 +16,7 @@ export interface IInfLinkApi {
 	getCurrentSong(): SongInfo | null;
 	getTimeline(): TimelineInfo | null;
 	getPlayMode(): PlayModePayload;
+	getVolume(): VolumeInfo;
 
 	play(): void;
 	pause(): void;
@@ -32,6 +34,13 @@ export interface IInfLinkApi {
 	 * @param mode "None" | "Track" | "List" | "AI"
 	 */
 	setRepeatMode(mode: RepeatMode): void;
+
+	/**
+	 * 设置音量
+	 * @param level 音量大小，范围从 0.0 到 1.0
+	 */
+	setVolume(level: number): void;
+	toggleMute(): void;
 
 	addEventListener<K extends keyof ProviderEventMap>(
 		type: K,

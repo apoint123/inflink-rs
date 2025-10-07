@@ -4,6 +4,7 @@ import type {
 	RepeatMode,
 	SongInfo,
 	TimelineInfo,
+	VolumeInfo,
 } from "../../types/smtc";
 import {
 	calculateNextRepeatMode,
@@ -185,6 +186,9 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	private lastPlayMode: string | undefined = undefined;
 	private lastModeBeforeShuffle: string | null = null;
 
+	private lastVolume: number | null = null;
+	private lastIsMuted: boolean | null = null;
+
 	private readonly dispatchTimelineThrottled: () => void;
 
 	constructor() {
@@ -335,6 +339,13 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		return { isShuffling, repeatMode };
 	}
 
+	public getVolumeInfo(): VolumeInfo {
+		const playingInfo = this.reduxStore?.getState().playing;
+		const volume = playingInfo?.playingVolume ?? 1.0;
+		const isMuted = volume === 0;
+		return { volume, isMuted };
+	}
+
 	public play(): void {
 		// triggerScene 应该是用来做数据分析的，大概有 45 种
 		// 这里如果刚启动时不提供这个，就会因为 undefined 而报错
@@ -459,8 +470,21 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		});
 	}
 
+	public setVolume(level: number): void {
+		const clampedLevel = Math.max(0, Math.min(1, level));
+		this.reduxStore?.dispatch({
+			type: "playing/setVolume",
+			payload: { volume: clampedLevel },
+		});
+	}
+
+	public toggleMute(): void {
+		this.reduxStore?.dispatch({ type: "playing/switchMute" });
+	}
+
 	private onStateChanged(): void {
 		if (!this.reduxStore) return;
+		const playingInfo = this.reduxStore.getState().playing;
 		const songInfo = this.getCurrentSongInfo();
 		if (songInfo && songInfo.ncmId !== this.lastTrackId) {
 			this.lastTrackId = songInfo.ncmId;
@@ -489,6 +513,22 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 			this.dispatchEvent(
 				new CustomEvent<PlayModeInfo>("playModeChange", {
 					detail: this.getPlayMode(),
+				}),
+			);
+		}
+
+		const newVolume = playingInfo?.playingVolume;
+		if (typeof newVolume === "number" && newVolume !== this.lastVolume) {
+			this.lastVolume = newVolume;
+			const newIsMuted = newVolume === 0;
+
+			if (newIsMuted !== this.lastIsMuted) {
+				this.lastIsMuted = newIsMuted;
+			}
+
+			this.dispatchEvent(
+				new CustomEvent<VolumeInfo>("volumeChange", {
+					detail: { volume: newVolume, isMuted: newIsMuted },
 				}),
 			);
 		}

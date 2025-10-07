@@ -3,6 +3,7 @@ import type {
 	RepeatMode,
 	SongInfo,
 	TimelineInfo,
+	VolumeInfo,
 } from "../types/smtc";
 
 export type NcmAdapterEventMap = {
@@ -10,6 +11,7 @@ export type NcmAdapterEventMap = {
 	playStateChange: CustomEvent<PlaybackStatus>;
 	playModeChange: CustomEvent<PlayModeInfo>;
 	timelineUpdate: CustomEvent<TimelineInfo>;
+	volumeChange: CustomEvent<VolumeInfo>;
 };
 
 export interface PlayModeInfo {
@@ -24,6 +26,7 @@ export interface INcmAdapter extends EventTarget {
 	getPlaybackStatus(): PlaybackStatus;
 	getTimelineInfo(): TimelineInfo | null;
 	getPlayMode(): PlayModeInfo;
+	getVolumeInfo(): VolumeInfo;
 
 	play(): void;
 	pause(): void;
@@ -33,6 +36,8 @@ export interface INcmAdapter extends EventTarget {
 	toggleShuffle(): void;
 	toggleRepeat(): void;
 	setRepeatMode(mode: RepeatMode): void;
+	setVolume(level: number): void;
+	toggleMute(): void;
 
 	addEventListener<K extends keyof NcmAdapterEventMap>(
 		type: K,

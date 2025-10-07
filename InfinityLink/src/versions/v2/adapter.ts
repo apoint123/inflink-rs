@@ -4,6 +4,7 @@ import type {
 	RepeatMode,
 	SongInfo,
 	TimelineInfo,
+	VolumeInfo,
 } from "../../types/smtc";
 import {
 	calculateNextRepeatMode,
@@ -49,7 +50,7 @@ function isValidNcmPlayMode(
  * 直接使用混淆后的函数名很脆弱，但考虑到网易云 v2 都不更新了，
  * 直接使用问题也不大
  *
- * 如果某天网易云真的又给 v2 更新了一个版本，这里几乎肯定会出错
+ * 如果某天网易云真的又给 v2 更新了一个版本，这里几乎肯定需要全部修改
  */
 class NcmV2PlayerApi {
 	private readonly playerInstance: v2.PlayerInstance;
@@ -104,6 +105,35 @@ class NcmV2PlayerApi {
 	public getFmSongData(): v2.SongData | null {
 		const trackObject = this.playerInstance._t?.();
 		return trackObject?.data ?? null;
+	}
+
+	public static getVolume(): number {
+		return ctl.cefPlayer?.K6() ?? 1.0;
+	}
+
+	public static isMuted(): boolean {
+		return ctl.cefPlayer?.a6 ?? false;
+	}
+
+	public static setVolume(level: number): void {
+		const clampedLevel = Math.max(0, Math.min(1, level));
+		ctl.cefPlayer?.F6(clampedLevel);
+	}
+
+	public static setMuted(mute: boolean): void {
+		ctl.cefPlayer?.T6(mute);
+	}
+
+	public static addVolumeListener(
+		callback: v2.CefPlayerEventMap["onvolumechange"],
+	): void {
+		ctl.cefPlayer?.Ti("onvolumechange", callback);
+	}
+
+	public static addMuteListener(
+		callback: v2.CefPlayerEventMap["onmutechange"],
+	): void {
+		ctl.cefPlayer?.Ti("onmutechange", callback);
 	}
 }
 
@@ -170,6 +200,9 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	private lastPlayMode: NcmPlayMode | undefined = undefined;
 	private lastModeBeforeShuffle: NcmPlayMode | null = null;
 
+	private volume = 1.0;
+	private isMuted = false;
+
 	private readonly dispatchTimelineThrottled: () => void;
 
 	constructor() {
@@ -207,6 +240,13 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 			);
 		} catch (error) {
 			logger.error("[Adapter V2] 初始化 Redux store 失败:", error);
+		}
+
+		try {
+			this.volume = NcmV2PlayerApi.getVolume();
+			this.isMuted = NcmV2PlayerApi.isMuted();
+		} catch (e) {
+			logger.warn("[Adapter V2] 初始化获取音量状态失败:", e);
 		}
 
 		this.registerNcmEvents();
@@ -288,6 +328,10 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		}
 
 		return { isShuffling, repeatMode };
+	}
+
+	public getVolumeInfo(): VolumeInfo {
+		return { volume: this.volume, isMuted: this.isMuted };
 	}
 
 	public play(): void {
@@ -387,6 +431,14 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		this.activePlayerApi?.switchMode(targetMode as NcmPlayMode);
 	}
 
+	public setVolume(level: number): void {
+		NcmV2PlayerApi.setVolume(level);
+	}
+
+	public toggleMute(): void {
+		NcmV2PlayerApi.setMuted(!this.isMuted);
+	}
+
 	private onStateChanged(): void {
 		if (!this.reduxStore) return;
 		const playingState = this.reduxStore.getState()?.playing;
@@ -443,6 +495,42 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 			"PlayProgress",
 			"audioplayer",
 			(_audioId: string, progress: number) => this.onPlayProgress(progress),
+		);
+
+		try {
+			NcmV2PlayerApi.addVolumeListener(this.onVolumeChanged);
+			NcmV2PlayerApi.addMuteListener(this.onMuteChanged);
+		} catch (e) {
+			logger.error("[Adapter V2] 注册音量事件监听失败:", e);
+		}
+	}
+
+	private readonly onVolumeChanged = (
+		payload: v2.CefPlayerVolumePayload,
+	): void => {
+		const newVolume = payload.volume;
+		if (this.volume !== newVolume) {
+			this.volume = newVolume;
+			this.dispatchVolumeChangeEvent();
+		}
+	};
+
+	private readonly onMuteChanged = (payload: v2.CefPlayerMutePayload): void => {
+		const newMuteState = payload.mute;
+		if (this.isMuted !== newMuteState) {
+			this.isMuted = newMuteState;
+			this.dispatchVolumeChangeEvent();
+		}
+	};
+
+	private dispatchVolumeChangeEvent(): void {
+		this.dispatchEvent(
+			new CustomEvent<VolumeInfo>("volumeChange", {
+				detail: {
+					volume: this.volume,
+					isMuted: this.isMuted,
+				},
+			}),
 		);
 	}
 
