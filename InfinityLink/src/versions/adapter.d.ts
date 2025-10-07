@@ -32,6 +32,7 @@ export interface INcmAdapter extends EventTarget {
 	seekTo(positionMs: number): void;
 	toggleShuffle(): void;
 	toggleRepeat(): void;
+	setRepeatMode(mode: RepeatMode): void;
 
 	addEventListener<K extends keyof NcmAdapterEventMap>(
 		type: K,

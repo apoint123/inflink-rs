@@ -21,6 +21,9 @@ const NCM_PLAY_MODES = {
 	LOOP: "playCycle",
 	ONE_LOOP: "playOneCycle",
 	ORDER: "playOrder",
+	AI: "playAi",
+	// 直接切换到这个模式可能会出现问题
+	FM: "playFm",
 } as const;
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -421,6 +424,37 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 			type: "playing/switchPlayingMode",
 			// 这里的 triggerScene 用来确保在所有模式切换中都能工作
 			// 尤其是心动模式 (虽然我们当前不会切换到心动模式)
+			payload: { playingMode: targetMode, triggerScene: "track" },
+		});
+	}
+
+	public setRepeatMode(mode: RepeatMode): void {
+		if (!this.reduxStore) return;
+
+		let targetMode: string;
+		switch (mode) {
+			case "List":
+				targetMode = NCM_PLAY_MODES.LOOP;
+				break;
+			case "Track":
+				targetMode = NCM_PLAY_MODES.ONE_LOOP;
+				break;
+			case "AI":
+				targetMode = NCM_PLAY_MODES.AI;
+				break;
+			default:
+				targetMode = NCM_PLAY_MODES.ORDER;
+				break;
+		}
+
+		// 设置循环模式就退出随机播放
+		const currentMode = this.reduxStore.getState()?.playing?.playingMode;
+		if (currentMode === NCM_PLAY_MODES.SHUFFLE) {
+			this.lastModeBeforeShuffle = null;
+		}
+
+		this.reduxStore.dispatch({
+			type: "playing/switchPlayingMode",
 			payload: { playingMode: targetMode, triggerScene: "track" },
 		});
 	}

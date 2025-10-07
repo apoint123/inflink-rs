@@ -14,7 +14,6 @@ import {
 import logger from "../../utils/logger";
 import type { INcmAdapter, NcmAdapterEventMap, PlayModeInfo } from "../adapter";
 
-// 看起来很奇怪，但是网易云音乐内部确实是这样定义的
 const NCM_PLAY_MODES = {
 	LIST_LOOP: "playorder",
 	SINGLE_LOOP: "playcycle",
@@ -28,6 +27,7 @@ const V2_MODE_CONSTANTS = {
 	LOOP: NCM_PLAY_MODES.LIST_LOOP,
 	ONE_LOOP: NCM_PLAY_MODES.SINGLE_LOOP,
 	ORDER: NCM_PLAY_MODES.ORDER,
+	AI: NCM_PLAY_MODES.AI,
 };
 
 type NcmPlayMode = (typeof NCM_PLAY_MODES)[keyof typeof NCM_PLAY_MODES];
@@ -354,6 +354,32 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		const targetMode = calculateNextRepeatMode(currentMode, V2_MODE_CONSTANTS);
 
 		// 切换循环模式就退出随机播放
+		if (currentMode === V2_MODE_CONSTANTS.SHUFFLE) {
+			this.lastModeBeforeShuffle = null;
+		}
+
+		this.activePlayerApi?.switchMode(targetMode as NcmPlayMode);
+	}
+
+	public setRepeatMode(mode: RepeatMode): void {
+		let targetMode: string;
+		switch (mode) {
+			case "List":
+				targetMode = V2_MODE_CONSTANTS.LOOP;
+				break;
+			case "Track":
+				targetMode = V2_MODE_CONSTANTS.ONE_LOOP;
+				break;
+			case "AI":
+				targetMode = V2_MODE_CONSTANTS.AI;
+				break;
+			default:
+				targetMode = V2_MODE_CONSTANTS.ORDER;
+				break;
+		}
+
+		// 设置循环模式就退出随机播放
+		const currentMode = this.reduxStore?.getState()?.playing?.playMode;
 		if (currentMode === V2_MODE_CONSTANTS.SHUFFLE) {
 			this.lastModeBeforeShuffle = null;
 		}

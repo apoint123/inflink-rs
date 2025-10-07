@@ -3,7 +3,7 @@ import type { INcmAdapter, NcmAdapterEventMap } from "./versions/adapter";
 
 export class SmtcProvider {
 	public readonly ready: Promise<void>;
-	private readonly adapter: INcmAdapter;
+	public readonly adapter: INcmAdapter;
 	private readonly dispatcher = new EventTarget();
 
 	constructor(adapter: INcmAdapter) {
@@ -49,6 +49,9 @@ export class SmtcProvider {
 				break;
 			case "ToggleRepeat":
 				this.adapter.toggleRepeat();
+				break;
+			case "SetRepeat":
+				this.adapter.setRepeatMode(msg.mode);
 				break;
 			default: {
 				const exhaustiveCheck: never = msg;

@@ -37,6 +37,7 @@ import {
 	STORE_KEY_SMTC_ENABLED,
 } from "./keys";
 import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
+import type { IInfLinkApi } from "./types/api";
 import logger, { type LogLevel, setLogLevel } from "./utils/logger";
 
 const configElement = document.createElement("div");
@@ -154,6 +155,43 @@ function Main() {
 	useEffect(() => {
 		SMTCNativeBackendInstance.setBackendLogLevel(backendLogLevel);
 	}, [backendLogLevel]);
+
+	useEffect(() => {
+		if (infoProvider) {
+			const api: IInfLinkApi = {
+				getCurrentSong: () => infoProvider.adapter.getCurrentSongInfo(),
+				getPlaybackStatus: () => infoProvider.adapter.getPlaybackStatus(),
+				getTimeline: () => infoProvider.adapter.getTimelineInfo(),
+				getPlayMode: () => infoProvider.adapter.getPlayMode(),
+
+				play: () => infoProvider.handleControlCommand({ type: "Play" }),
+				pause: () => infoProvider.handleControlCommand({ type: "Pause" }),
+				next: () => infoProvider.handleControlCommand({ type: "NextSong" }),
+				previous: () =>
+					infoProvider.handleControlCommand({ type: "PreviousSong" }),
+				seekTo: (pos) =>
+					infoProvider.handleControlCommand({ type: "Seek", position: pos }),
+
+				toggleShuffle: () =>
+					infoProvider.handleControlCommand({ type: "ToggleShuffle" }),
+				toggleRepeat: () =>
+					infoProvider.handleControlCommand({ type: "ToggleRepeat" }),
+				setRepeatMode: (mode) =>
+					infoProvider.handleControlCommand({ type: "SetRepeat", mode: mode }),
+
+				addEventListener: (type, listener) =>
+					infoProvider.addEventListener(type, listener),
+				removeEventListener: (type, listener) =>
+					infoProvider.removeEventListener(type, listener),
+			};
+
+			window.InfLinkApi = api;
+
+			return () => {
+				delete window.InfLinkApi;
+			};
+		}
+	}, [infoProvider]);
 
 	if (ncmVersion === null) {
 		return <CircularProgress size={24} />;

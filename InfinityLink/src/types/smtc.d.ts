@@ -6,10 +6,9 @@ export interface SongInfo {
 	authorName: string;
 	thumbnailUrl: string;
 	/**
-	 * 上传到流派的歌曲ID，部分应用 (例如 Lyricify Lite)
-	 * 可以通过检测流派 ID 来精确匹配歌曲
+	 * 歌曲ID，可用于精确匹配歌曲
 	 *
-	 * 后端会把 ID 拼接为 `NCM-{ID}`
+	 * 后端会把 ID 拼接为 `NCM-{ID}` 并上传到 SMTC 的流派字段
 	 */
 	ncmId: number;
 }
@@ -32,6 +31,10 @@ export type ControlMessage =
 	| {
 			type: "Seek";
 			position: number;
+	  }
+	| {
+			type: "SetRepeat";
+			mode: RepeatMode;
 	  };
 
 export type SmtcSimpleEvent = {
@@ -63,7 +66,7 @@ export interface PlayModePayload {
 	isShuffling: boolean;
 	repeatMode: RepeatMode;
 }
-export type RepeatMode = "None" | "Track" | "List";
+export type RepeatMode = "None" | "Track" | "List" | "AI";
 
 export type SmtcCommandPayloads = {
 	Metadata: MetadataPayload;

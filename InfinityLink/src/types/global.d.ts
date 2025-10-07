@@ -58,6 +58,11 @@ declare global {
 		 * 调试用的 redux store
 		 */
 		infstore?: Store;
+
+		/**
+		 * 可以给其它插件用的接口
+		 */
+		InfLinkApi?: IInfLinkApi;
 	}
 
 	const BETTERNCM_API_KEY: Window["BETTERNCM_API_KEY"];
