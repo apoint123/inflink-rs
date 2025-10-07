@@ -4,7 +4,7 @@ This document provides an overview of the **InfLink-rs** project, its architectu
 
 ## Project Overview
 
-**InfLink-rs** is a high-performance plugin for the **BetterNCM** modding platform for the Netease Cloud Music desktop client. Its primary function is to integrate the music player with the native **Windows System Media Transport Controls (SMTC)**. This allows users to view song information (title, artist, album art) and control playback (play, pause, next, previous) directly from the Windows volume and media overlay. **A secondary, but powerful feature is the embedding of the Netease Cloud Music song ID into the SMTC's metadata (using the `Genres` field), enabling precise song identification for third-party applications.**
+**InfLink-rs** is a high-performance plugin for the **BetterNCM** modding platform for the Netease Cloud Music desktop client. Its primary function is to integrate the music player with the native **Windows System Media Transport Controls (SMTC)**. This allows users to view song information and control playback directly from the Windows volume and media overlay. A secondary, but powerful feature is the embedding of the Netease Cloud Music song ID into the SMTC's metadata (using the `Genres` field), enabling precise song identification for third-party applications. The plugin also exposes a **public, version-agnostic API** to allow other BetterNCM plugins to control playback and subscribe to state changes.
 
 A key feature of the project is its adaptive architecture, designed to support multiple versions of the Netease Cloud Music client, including both the modern **64-bit (v3)** and legacy **32-bit (v2)** releases, via a **single, universal plugin package**.
 
@@ -15,46 +15,49 @@ The project follows a modern monorepo architecture, combining the strengths of R
 The project is architecturally divided into two main parts that communicate via a native FFI bridge:
 
 1.  **Rust Backend (`smtc_handler`)**:
-    *   **Language**: Rust
-    *   **Role**: The core of the plugin. It is compiled into native dynamic libraries (`.cdylib`) for both **x64 and x86** architectures.
-    *   **Responsibilities**:
-        *   Interfacing directly with the Windows API (`windows-rs` crate) to manage the SMTC session.
-        *   Exposing a set of native functions to the JavaScript environment.
-        *   Receiving commands from the frontend and forwarding events (e.g., SMTC button presses) back to it.
-        *   **Interoperability Feature**: Sets the SMTC `genre` field to `NCM-{ID}` to allow other applications to identify the currently playing track.
-    *   **Key Crates**: `cef-safe` (for safe communication with the Chromium Embedded Framework), `windows`, `tracing` (for structured logging), `serde` (for data serialization).
+    * **Language**: Rust.
+    * **Role**: The core of the plugin, compiled into native dynamic libraries (`.cdylib`) for both **x64 and x86** architectures.
+    * **Responsibilities**:
+        * Interfacing directly with the Windows API to manage the SMTC session.
+        * Exposing a set of native functions to the JavaScript environment.
+        * Receiving commands from the frontend and forwarding events (e.g., SMTC button presses) back to it.
+        * **Interoperability Feature**: Sets the SMTC `genre` field to `NCM-{ID}` to allow other applications to identify the currently playing track.
+    * **Key Crates**: `cef-safe` (for safe communication with the Chromium Embedded Framework), `windows`, `tracing`, `serde`.
 
 2.  **TypeScript Frontend (`InfinityLink`) - Version-Adaptive**:
-    *   **Language**: TypeScript with React and Material UI (MUI).
-    *   **Role**: Acts as a version-aware bridge between the Rust backend and the specific Netease client version it's running on.
-    *   **Core Strategy**: The frontend employs a **dynamic Provider model** to abstract away version-specific implementation details. At runtime, it detects the client version and loads the corresponding "Provider" module, which is responsible for all interaction with the client.
-    *   **Utilities**: Common logic is organized into a modular `utils/` directory, featuring shared functions for playback mode calculations (`playback.ts`) and robust, specialized helpers for interacting with the client's Webpack module system (`webpack.ts`).
+    * **Language**: TypeScript with React and Material UI (MUI).
+    * **Role**: Acts as a version-aware bridge between the Rust backend and the specific Netease client version it's running on.
+    * **Core Strategy**: The frontend employs a robust **Adapter + Provider Pattern**. A single, version-agnostic `SmtcProvider` orchestrates the plugin's logic. At runtime, a version-specific "Adapter" is created and injected into the Provider. This Adapter acts as an anti-corruption layer, handling all direct, fragile interactions with the client.
+    * **Utilities**: Common logic is organized into a modular `utils/` directory, featuring shared pure functions for playback mode calculations (`playModeLogic.ts`) and helpers for interacting with the client's Webpack module system (`webpack.ts`).
 
-### Provider Architecture
+### Frontend Architecture: Adapter + Provider Pattern
 
-All version-specific logic is encapsulated within Provider classes that adhere to a common interface.
+All version-specific logic is encapsulated within **Adapter** classes, which are managed by a single, universal **Provider**. This design favors **composition over inheritance** and ensures a clean separation of concerns.
 
-*   **`BaseProvider` (`versions/provider.ts`)**: A universal abstract class that defines the API contract for all providers. It establishes an event-driven model (`addEventListener`, `dispatchEvent`) that the rest of the application relies on, ensuring the core logic remains decoupled from any specific client version.
+* **`INcmAdapter` Interface (`versions/adapter.d.ts`)**: This is the central contract for the frontend architecture. It defines the standardized API (e.g., `getCurrentSongInfo()`, `play()`, `setRepeatMode()`) that all version-specific adapters must implement. This ensures the `SmtcProvider` remains completely decoupled from any client version's implementation details.
 
-*   **v3 Provider (`versions/v3/index.ts`)**: The implementation for the modern 64-bit client. It employs a sophisticated, hybrid approach to ensure maximum reliability and compatibility.
-    *   **Method**: This provider has been refactored to be highly resilient against conflicts with other plugins. Instead of relying on fragile, easily-overwritten global event listeners for progress updates, it directly taps into the client's internal, high-level `AudioPlayer` API.
-    *   **State & Control**:
-        *   **General State & Playback Control**: Reading most player state (current song info, play/pause status, play mode) and controlling playback (play, pause, next) are still achieved by interacting with the client's **Redux store**.
-        *   **Timeline Updates (Robust Method)**: At initialization, the provider **dynamically obtains a reference to the client's internal Webpack `require` function**. It then searches for and utilizes the official **`AudioPlayer` module**, subscribing to its reliable `subscribePlayStatus` method. This provides event-driven, real-time timeline updates that are completely isolated from other plugins, guaranteeing functionality regardless of what other mods are installed.
+* **`SmtcProvider` (`provider.ts`)**: This is the single, universal, and version-agnostic orchestrator of the frontend.
+    * **Role**: It acts as the central bridge connecting the active `Adapter`, the UI (React hooks), and the Rust backend bridge. It contains no version-specific logic.
+    * **Design**: It receives an `INcmAdapter` instance in its constructor (Dependency Injection). For its own event system, it uses composition by containing a private `EventTarget` instance, allowing it to have a clean, strongly-typed public event API (`addEventListener`) without the complexities of inheritance.
 
-*   **v2 Provider (`versions/v2/index.ts`)**: The implementation for the legacy 32-bit client. This provider is a sophisticated hybrid solution derived from reverse-engineering, designed for maximum robustness.
-    *   **Method**: It combines multiple client-side data sources for state reading but relies exclusively on robust internal JavaScript APIs for playback control.
-    *   **State Reading**:
-        *   Uses the `legacyNativeCmder` global object to subscribe to backend events like `Load`, `PlayState`, and `PlayProgress`.
-        *   Crucially, it also subscribes to the **Redux store** to detect track changes *instantly*, providing a responsive UI experience that `legacyNativeCmder` events alone cannot.
-        *   Reads the current play mode directly from the Redux store state.
-    *   **Playback Control**:
-        *   By dynamically resolving the **currently active player instance** (e.g., `defPlayer`, `fmPlayer`, `mvPlayer`) by calling a discovered global method, `ctl.player.Hn()`, we can ensure that SMTC controls work correctly across all of the client's playback modes.
-        *   All direct interactions with the client's obfuscated internal methods (e.g., `KJ`, `Qn`, `Gn`, `tQ`) have **encapsulated within a dedicated `NcmV2PlayerApi` wrapper class**. This adapter exposes a clean, intention-revealing API (`resume()`, `getProgress()`, etc.) to the provider, completely isolating the core logic from the fragile implementation details of the reverse-engineered API.
+* **Adapter Implementations (`V3NcmAdapter`, `V2NcmAdapter`)**: These classes implement the `INcmAdapter` interface and contain all the "dirty" logic for interacting with a specific client version.
+    * **`V3NcmAdapter`**: The implementation for the modern 64-bit client. It reads state and sends commands by dispatching actions to the client's **Redux store**. For robust timeline updates, it dynamically finds and subscribes to the internal `AudioPlayer` module's `subscribePlayStatus` method.
+    * **`V2NcmAdapter`**: The implementation for the legacy 32-bit client. It uses a hybrid approach of subscribing to both the **Redux store** and the `legacyNativeCmder` for state reading. For playback control, it uses a dedicated `NcmV2PlayerApi` wrapper to interact with the client's obfuscated internal JavaScript APIs.
+
+### Public API for Inter-Plugin Communication
+
+The plugin exposes a clean, version-agnostic public API to allow other BetterNCM plugins to control playback and access state information.
+
+* **Interface**: The formal contract for the API is defined in the `IInfLinkApi` interface (`types/api.d.ts`).
+* **Access**: The API object is exposed globally on `window.InfLinkApi` when the plugin is active.
+* **Functionality**:
+    * **State Retrieval**: `getCurrentSong()`, `getPlaybackStatus()`, `getTimeline()`, `getPlayMode()`.
+    * **Playback Control**: `play()`, `pause()`, `next()`, `previous()`, `seekTo()`, `toggleShuffle()`, `toggleRepeat()`, and `setRepeatMode()`.
+    * **Event Subscription**: A reactive event model using `addEventListener` for key events like `songChange` and `playStateChange`.
 
 ### Build System & Packaging (Universal)
 
-The build process is configured to produce a **single, universal plugin package** that works on both 32-bit and 64-bit clients, leveraging a clever loading mechanism within BetterNCM.
+The build process is configured to produce a **single, universal plugin package** that works on both 32-bit and 64-bit clients.
 
 *   **Dual-Target Backend Compilation**: The Rust backend is compiled for both `x86_64-pc-windows-msvc` (64-bit) and `i686-pc-windows-msvc` (32-bit) targets.
 *   **Unified Frontend Build**: The `vite.config.ts` orchestrates a single build process with a universal output.
