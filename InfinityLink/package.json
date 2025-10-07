@@ -13,7 +13,6 @@
 		"@mui/icons-material": "^7.3.4",
 		"@mui/material": "^7.3.4",
 		"loglevel": "^1.9.2",
-		"mitt": "^3.0.1",
 		"react": "^19.2.0",
 		"react-dom": "^19.2.0"
 	},

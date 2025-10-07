@@ -47,9 +47,6 @@ importers:
       loglevel:
         specifier: ^1.9.2
         version: 1.9.2
-      mitt:
-        specifier: ^3.0.1
-        version: 3.0.1
       react:
         specifier: ^19.2.0
         version: 19.2.0
@@ -1297,9 +1294,6 @@ packages:
 
   minimist@1.2.8:
     resolution: {integrity: sha512-2yyAR8qBkN3YuheJanUpWC5U3bb5osDywNB8RzDVlDwDHbocAJveqqj1u8+SVD7jkWT4yvsHCpWqqWqAxb0zCA==}
-
-  mitt@3.0.1:
-    resolution: {integrity: sha512-vKivATfr97l2/QBCYAkXYDbrIWPM2IIKEl7YPhjCvKlG3kE2gm+uBo6nEXK3M5/Ffh/FLpKExzOQ3JJoJGFKBw==}
 
   mri@1.2.0:
     resolution: {integrity: sha512-tzzskb3bG8LvYGFF/mDTpq3jpI6Q9wc3LEmBaghu+DdCssd1FakN7Bc0hVNmEyGq1bq3RgfkCb3cmQLpNPOroA==}
@@ -2843,8 +2837,6 @@ snapshots:
       picomatch: 2.3.1
 
   minimist@1.2.8: {}
-
-  mitt@3.0.1: {}
 
   mri@1.2.0: {}
 
