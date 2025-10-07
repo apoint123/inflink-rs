@@ -1,0 +1,525 @@
+import type { v3 } from "../../types/ncm";
+import type {
+	PlaybackStatus,
+	RepeatMode,
+	SongInfo,
+	TimelineInfo,
+} from "../../types/smtc";
+import {
+	calculateNextRepeatMode,
+	calculateNextShuffleMode,
+	findModule,
+	getWebpackRequire,
+	throttle,
+	waitForElement,
+} from "../../utils";
+import logger from "../../utils/logger";
+import type { INcmAdapter, NcmAdapterEventMap, PlayModeInfo } from "../adapter";
+
+const NCM_PLAY_MODES = {
+	SHUFFLE: "playRandom",
+	LOOP: "playCycle",
+	ONE_LOOP: "playOneCycle",
+	ORDER: "playOrder",
+} as const;
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+interface FiberNode {
+	memoizedProps?: {
+		store?: v3.NCMStore;
+	};
+	return: FiberNode | null;
+}
+
+function findReduxStoreInFiberTree(node: FiberNode | null): v3.NCMStore | null {
+	let currentNode = node;
+	while (currentNode) {
+		if (currentNode.memoizedProps?.store) {
+			return currentNode.memoizedProps.store;
+		}
+		currentNode = currentNode.return;
+	}
+	return null;
+}
+
+function findStoreFromRootElement(rootEl: HTMLElement): v3.NCMStore | null {
+	const appEl = rootEl.firstElementChild;
+	if (!appEl) {
+		logger.warn("[Adapter V3] #root 元素没有子元素");
+		return null;
+	}
+
+	const fiberKey = Object.keys(appEl).find(
+		(key) =>
+			key.startsWith("__reactFiber$") || // >= react 17
+			key.startsWith("__reactInternalInstance$"), // < react 17, 网易云使用 react 16.14
+	);
+	if (!fiberKey) {
+		logger.warn("[Adapter V3] 找不到 React Fiber key");
+		return null;
+	}
+
+	const startNode = (appEl as unknown as Record<string, FiberNode>)[fiberKey];
+	if (!startNode) {
+		logger.warn("[Adapter V3] 找不到起始 Fiber 节点");
+		return null;
+	}
+
+	return findReduxStoreInFiberTree(startNode);
+}
+
+async function waitForReduxStore(timeoutMs = 10000): Promise<v3.NCMStore> {
+	const rootEl = (await waitForElement(
+		SELECTORS.REACT_ROOT,
+	)) as v3.ReactRootElement;
+	if (!rootEl) {
+		throw new Error("在页面上找不到 React 根元素");
+	}
+
+	const interval = 100;
+	let elapsedTime = 0;
+
+	while (elapsedTime < timeoutMs) {
+		try {
+			// 网易云使用了很多年的react16了，几乎没有可能在不大规模重构的情况下更改下面这个固定的路径，
+			// 但是保险起见，失败时可以遍历搜索一下
+			const store =
+				rootEl._reactRootContainer?._internalRoot?.current?.child?.child
+					?.memoizedProps?.store ?? findStoreFromRootElement(rootEl);
+
+			if (store) {
+				return store;
+			}
+		} catch (e) {
+			logger.info("[Adapter V3] Polling for Redux store failed once:", e);
+		}
+
+		await delay(interval);
+		elapsedTime += interval;
+	}
+
+	throw new Error(`在 ${timeoutMs}ms 后仍未找到 Redux Store`);
+}
+
+/**
+ * CSS 选择器常量
+ */
+const SELECTORS = {
+	// React 应用根节点
+	REACT_ROOT: "#root",
+};
+
+const CONSTANTS = {
+	// 时间线更新节流间隔
+	TIMELINE_THROTTLE_INTERVAL_MS: 1000,
+};
+
+const CHANNEL_EVENTS = new Set<v3.EventName>(["PlayProgress"]);
+
+/**
+ * NCM 事件适配器
+ */
+class NcmEventAdapter {
+	private readonly registeredEvt: Set<string>;
+	private readonly callbacks: Map<string, Set<v3.EventMap[v3.EventName]>>;
+
+	constructor() {
+		this.registeredEvt = new Set<string>();
+		this.callbacks = new Map<string, Set<v3.EventMap[v3.EventName]>>();
+	}
+
+	public on<E extends v3.EventName>(
+		eventName: E,
+		callback: v3.EventMap[E],
+	): void {
+		const namespace = "audioplayer";
+		const fullName = `${namespace}.on${eventName}`;
+
+		if (CHANNEL_EVENTS.has(eventName) && channel) {
+			try {
+				if (!this.registeredEvt.has(fullName)) {
+					this.registeredEvt.add(fullName);
+					channel.registerCall(fullName, (...args: unknown[]) => {
+						this.callbacks?.get(fullName)?.forEach((cb) => {
+							(cb as (...args: unknown[]) => void)(...args);
+						});
+					});
+				}
+				let callbackSet = this.callbacks.get(fullName);
+				if (!callbackSet) {
+					callbackSet = new Set();
+					this.callbacks.set(fullName, callbackSet);
+				}
+				callbackSet.add(callback);
+			} catch (e) {
+				logger.error(`[Adapter V3] 注册 channel 事件 ${eventName} 失败:`, e);
+			}
+		} else {
+			try {
+				legacyNativeCmder.appendRegisterCall(eventName, namespace, callback);
+			} catch (e) {
+				logger.error(
+					`[Adapter V3] 注册 legacyNativeCmder 事件 ${eventName} 失败:`,
+					e,
+				);
+			}
+		}
+	}
+}
+
+export class V3NcmAdapter extends EventTarget implements INcmAdapter {
+	private reduxStore: v3.NCMStore | null = null;
+	private unsubscribeStore: (() => void) | null = null;
+	private audioPlayer: v3.AudioPlayer | null = null;
+	private readonly eventAdapter: NcmEventAdapter;
+
+	private musicDuration = 0;
+	private musicPlayProgress = 0;
+	private playState: PlaybackStatus = "Paused";
+	private lastTrackId: number | null = null;
+	private lastIsPlaying: boolean | null = null;
+	private lastPlayMode: string | undefined = undefined;
+	private lastModeBeforeShuffle: string | null = null;
+
+	private readonly dispatchTimelineThrottled: () => void;
+
+	constructor() {
+		super();
+		this.eventAdapter = new NcmEventAdapter();
+		this.dispatchTimelineThrottled = throttle(() => {
+			this.dispatchEvent(
+				new CustomEvent<TimelineInfo>("timelineUpdate", {
+					detail: {
+						currentTime: this.musicPlayProgress,
+						totalTime: this.musicDuration,
+					},
+				}),
+			);
+		}, CONSTANTS.TIMELINE_THROTTLE_INTERVAL_MS)[0];
+	}
+
+	public async initialize(): Promise<void> {
+		type AudioPlayerModule = { AudioPlayer: v3.AudioPlayer };
+
+		try {
+			const require = await getWebpackRequire();
+			const audioPlayerModule = findModule(
+				require,
+				(exports: unknown): exports is AudioPlayerModule => {
+					if (typeof exports !== "object" || exports === null) {
+						return false;
+					}
+					if (!("AudioPlayer" in exports)) {
+						return false;
+					}
+					const audioPlayerProp = (exports as { AudioPlayer: unknown })
+						.AudioPlayer;
+					if (typeof audioPlayerProp !== "object" || audioPlayerProp === null) {
+						return false;
+					}
+					return (
+						"subscribePlayStatus" in audioPlayerProp &&
+						typeof (audioPlayerProp as { subscribePlayStatus: unknown })
+							.subscribePlayStatus === "function"
+					);
+				},
+			);
+			if (audioPlayerModule) {
+				this.audioPlayer = audioPlayerModule.AudioPlayer;
+			} else {
+				logger.warn(
+					"[V3 Provider] 找不到 AudioPlayer 模块。时间轴更新可能受到其它插件影响",
+				);
+			}
+		} catch (error) {
+			logger.error("[Adapter V3] 获取 Webpack require 失败:", error);
+		}
+
+		try {
+			this.reduxStore = await waitForReduxStore();
+
+			if (import.meta.env.MODE === "development") {
+				window.infstore = this.reduxStore;
+			}
+
+			this.unsubscribeStore = this.reduxStore.subscribe(() =>
+				this.onStateChanged(),
+			);
+			logger.trace("[Adapter V3] 已订阅 Redux store 更新");
+		} catch (error) {
+			logger.error("[Adapter V3] 找不到 Redux store:", error);
+			throw error;
+		}
+
+		this.registerAudioPlayerEvents();
+		this.onStateChanged();
+	}
+
+	public dispose(): void {
+		if (this.unsubscribeStore) {
+			this.unsubscribeStore();
+			this.unsubscribeStore = null;
+		}
+		logger.debug("[Adapter V3] Disposed.");
+	}
+
+	public getCurrentSongInfo(): SongInfo | null {
+		const playingInfo = this.reduxStore?.getState().playing;
+		if (!playingInfo?.resourceTrackId) {
+			return null;
+		}
+
+		const albumName =
+			playingInfo.curTrack?.album?.albumName ??
+			playingInfo.curTrack?.album?.name ??
+			playingInfo.resourceName ??
+			"未知专辑";
+
+		const currentTrackId = parseInt(String(playingInfo.resourceTrackId), 10);
+		if (Number.isNaN(currentTrackId) || currentTrackId === 0) {
+			return null;
+		}
+
+		return {
+			songName: playingInfo.resourceName || "未知歌名",
+			authorName:
+				playingInfo.resourceArtists?.map((v) => v.name).join(" / ") || "",
+			albumName: albumName,
+			thumbnailUrl: playingInfo.resourceCoverUrl || "",
+			ncmId: currentTrackId,
+		};
+	}
+
+	public getPlaybackStatus(): PlaybackStatus {
+		const isPlaying = !!this.reduxStore?.getState().playing?.playing;
+		return isPlaying ? "Playing" : "Paused";
+	}
+
+	public getTimelineInfo(): TimelineInfo | null {
+		if (this.musicDuration > 0) {
+			return {
+				currentTime: this.musicPlayProgress,
+				totalTime: this.musicDuration,
+			};
+		}
+		return null;
+	}
+
+	public getPlayMode(): PlayModeInfo {
+		const newNcmMode = this.reduxStore?.getState().playing?.playingMode;
+		let isShuffling = false;
+		let repeatMode: RepeatMode = "None";
+
+		switch (newNcmMode) {
+			case NCM_PLAY_MODES.SHUFFLE:
+				isShuffling = true;
+				repeatMode = "List";
+				break;
+			case NCM_PLAY_MODES.ORDER:
+				isShuffling = false;
+				repeatMode = "None";
+				break;
+			case NCM_PLAY_MODES.LOOP:
+				isShuffling = false;
+				repeatMode = "List";
+				break;
+			case NCM_PLAY_MODES.ONE_LOOP:
+				isShuffling = false;
+				repeatMode = "Track";
+				break;
+		}
+		return { isShuffling, repeatMode };
+	}
+
+	public play(): void {
+		// triggerScene 应该是用来做数据分析的，大概有 45 种
+		// 这里如果刚启动时不提供这个，就会因为 undefined 而报错
+		this.reduxStore?.dispatch({
+			type: "playing/resume",
+			payload: { triggerScene: "track" },
+		});
+	}
+
+	public pause(): void {
+		// 网易云点击暂停后会有一两秒的淡出效果，此时还没有暂停
+		// 要立刻认为已暂停并更新，不然会有延迟感
+		this.reduxStore?.dispatch({ type: "playing/pause" });
+		if (this.playState !== "Paused") {
+			this.playState = "Paused";
+			this.dispatchEvent(
+				new CustomEvent<PlaybackStatus>("playStateChange", {
+					detail: this.playState,
+				}),
+			);
+		}
+	}
+
+	public nextSong(): void {
+		this.reduxStore?.dispatch({
+			type: "playingList/jump2Track",
+			payload: { flag: 1, type: "call", triggerScene: "track" },
+		});
+	}
+
+	public previousSong(): void {
+		this.reduxStore?.dispatch({
+			type: "playingList/jump2Track",
+			payload: { flag: -1, type: "call", triggerScene: "track" },
+		});
+	}
+
+	public seekTo(positionMs: number): void {
+		this.musicPlayProgress = positionMs;
+		this.dispatchEvent(
+			new CustomEvent<TimelineInfo>("timelineUpdate", {
+				detail: {
+					currentTime: this.musicPlayProgress,
+					totalTime: this.musicDuration,
+				},
+			}),
+		);
+		this.reduxStore?.dispatch({
+			type: "playing/setPlayingPosition",
+			// 一个有误导性的名称，实际上是跳转位置
+			payload: { duration: positionMs / 1000 },
+		});
+	}
+
+	public toggleShuffle(): void {
+		if (!this.reduxStore) return;
+		const currentMode = this.reduxStore.getState()?.playing?.playingMode;
+		if (!currentMode) return;
+
+		const { targetMode, nextLastModeBeforeShuffle } = calculateNextShuffleMode(
+			currentMode,
+			this.lastModeBeforeShuffle,
+			NCM_PLAY_MODES,
+		);
+
+		this.lastModeBeforeShuffle = nextLastModeBeforeShuffle;
+
+		this.reduxStore.dispatch({
+			type: "playing/switchPlayingMode",
+			payload: { playingMode: targetMode, triggerScene: "track" },
+		});
+	}
+
+	public toggleRepeat(): void {
+		if (!this.reduxStore) return;
+		const currentMode = this.reduxStore.getState()?.playing?.playingMode;
+		if (!currentMode) return;
+
+		const targetMode = calculateNextRepeatMode(currentMode, NCM_PLAY_MODES);
+
+		// 切换循环模式就退出随机播放
+		if (currentMode === NCM_PLAY_MODES.SHUFFLE) {
+			this.lastModeBeforeShuffle = null;
+		}
+
+		this.reduxStore.dispatch({
+			type: "playing/switchPlayingMode",
+			// 这里的 triggerScene 用来确保在所有模式切换中都能工作
+			// 尤其是心动模式 (虽然我们当前不会切换到心动模式)
+			payload: { playingMode: targetMode, triggerScene: "track" },
+		});
+	}
+
+	private onStateChanged(): void {
+		if (!this.reduxStore) return;
+		const songInfo = this.getCurrentSongInfo();
+		if (songInfo && songInfo.ncmId !== this.lastTrackId) {
+			this.lastTrackId = songInfo.ncmId;
+			const playingInfo = this.reduxStore.getState().playing;
+			if (playingInfo?.curTrack?.duration) {
+				this.musicDuration = playingInfo.curTrack.duration;
+			}
+			this.dispatchEvent(
+				new CustomEvent<SongInfo>("songChange", { detail: songInfo }),
+			);
+		}
+
+		const isPlaying = this.getPlaybackStatus() === "Playing";
+		if (isPlaying !== this.lastIsPlaying) {
+			this.lastIsPlaying = isPlaying;
+			this.dispatchEvent(
+				new CustomEvent<PlaybackStatus>("playStateChange", {
+					detail: isPlaying ? "Playing" : "Paused",
+				}),
+			);
+		}
+
+		const playMode = this.reduxStore.getState().playing?.playingMode;
+		if (playMode && playMode !== this.lastPlayMode) {
+			this.lastPlayMode = playMode;
+			this.dispatchEvent(
+				new CustomEvent<PlayModeInfo>("playModeChange", {
+					detail: this.getPlayMode(),
+				}),
+			);
+		}
+	}
+
+	private registerAudioPlayerEvents(): void {
+		this.eventAdapter.on("PlayState", (_audioId: string, state: string) =>
+			this.onPlayStateChanged(state),
+		);
+		if (this.audioPlayer) {
+			this.audioPlayer.subscribePlayStatus({
+				type: "playprogress",
+				callback: (info) => this.onPlayProgress(info.current),
+			});
+		} else {
+			// 已知多个插件同时注册 PlayProgress 的事件回调会导致前一个插件的回调被后一个覆盖
+			// 所以尽量使用上面的 audioPlayer.subscribePlayStatus 方法
+			this.eventAdapter.on(
+				"PlayProgress",
+				(_audioId: string, progress: number) => this.onPlayProgress(progress),
+			);
+		}
+	}
+
+	private onPlayProgress(progressInSeconds: number): void {
+		this.musicPlayProgress = Math.floor(progressInSeconds * 1000);
+		this.dispatchTimelineThrottled();
+	}
+
+	private onPlayStateChanged(stateInfo: string): void {
+		let newPlayState: PlaybackStatus = this.playState;
+
+		const parts = stateInfo.split("|");
+		if (parts.length >= 2) {
+			const stateKeyword = parts[1];
+			switch (stateKeyword) {
+				case "resume":
+				case "play":
+					newPlayState = "Playing";
+					break;
+				case "pause":
+					newPlayState = "Paused";
+					break;
+				default:
+					logger.warn(`[Adapter V3] 未知的播放状态: ${stateKeyword}`);
+					return;
+			}
+		} else {
+			logger.warn(`[Adapter V3] 意外的播放状态: ${stateInfo}`);
+			return;
+		}
+
+		if (this.playState !== newPlayState) {
+			this.playState = newPlayState;
+			this.dispatchEvent(
+				new CustomEvent<PlaybackStatus>("playStateChange", {
+					detail: this.playState,
+				}),
+			);
+		}
+	}
+
+	public override dispatchEvent<K extends keyof NcmAdapterEventMap>(
+		event: NcmAdapterEventMap[K],
+	): boolean {
+		return super.dispatchEvent(event);
+	}
+}

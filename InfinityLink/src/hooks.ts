@@ -1,9 +1,12 @@
 import type { PaletteMode } from "@mui/material";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { SmtcProvider } from "./provider";
 import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
-import type { ControlMessage } from "./types/smtc";
+import type { ControlMessage, ProviderEventMap } from "./types/smtc";
 import logger from "./utils/logger";
-import type { BaseProvider, ProviderEventMap } from "./versions/provider";
+import type { INcmAdapter } from "./versions/adapter";
+import { V2NcmAdapter } from "./versions/v2/adapter";
+import { V3NcmAdapter } from "./versions/v3/adapter";
 
 export function useLocalStorage<T>(
 	key: string,
@@ -68,65 +71,66 @@ export function useNcmVersion(): NcmVersion | null {
 
 export function useInfoProvider(
 	version: NcmVersion | null,
-): BaseProvider | null {
-	const providerRef = useRef<BaseProvider | null>(null);
-	const [isReady, setIsReady] = useState(false);
+): SmtcProvider | null {
+	const [provider, setProvider] = useState<SmtcProvider | null>(null);
 
 	useEffect(() => {
+		let newProvider: SmtcProvider | null = null;
+		let didUnmount = false;
+
 		const initializeProvider = async () => {
 			if (!version || version === "unsupported") {
-				providerRef.current = null;
-				setIsReady(true);
+				if (!didUnmount) {
+					setProvider(null);
+				}
 				return;
 			}
 
-			let providerInstance: BaseProvider | null = null;
+			let adapter: INcmAdapter | null = null;
 			try {
 				switch (version) {
 					case "v3": {
-						const { default: ProviderV3 } = await import("./versions/v3");
-						providerInstance = new ProviderV3();
+						adapter = new V3NcmAdapter();
 						break;
 					}
 					case "v2": {
-						const { default: ProviderV2 } = await import("./versions/v2");
-						providerInstance = new ProviderV2();
+						adapter = new V2NcmAdapter();
 						break;
 					}
 				}
 			} catch (e) {
 				logger.error(`[InfLink] 加载数据提供源时失败:`, e);
-				providerInstance = null;
 			}
 
-			providerRef.current = providerInstance;
-			setIsReady(true);
+			if (adapter) {
+				newProvider = new SmtcProvider(adapter);
+			}
+
+			if (!didUnmount) {
+				setProvider(newProvider);
+			}
 		};
 
 		initializeProvider();
 
 		return () => {
-			if (providerRef.current) {
-				providerRef.current.disabled = true;
-				providerRef.current.dispatchEvent(new CustomEvent<void>("disable"));
-				if (typeof providerRef.current.dispose === "function") {
-					providerRef.current.dispose();
-				}
-				providerRef.current = null;
+			didUnmount = true;
+			if (newProvider) {
+				newProvider.dispose();
 			}
-			setIsReady(false);
 		};
 	}, [version]);
 
-	return isReady ? providerRef.current : null;
+	return provider;
 }
 
 export function useSmtcConnection(
-	infoProvider: BaseProvider | null,
+	infoProvider: SmtcProvider | null,
 	isEnabled: boolean,
+	isProviderReady: boolean,
 ) {
 	useEffect(() => {
-		if (!infoProvider) {
+		if (!isProviderReady || !infoProvider) {
 			return;
 		}
 
@@ -139,17 +143,15 @@ export function useSmtcConnection(
 
 		const onUpdateSongInfo = (e: ProviderEventMap["updateSongInfo"]) =>
 			smtcImplObj.update(e.detail);
-		const onUpdatePlayState = (e: ProviderEventMap["updatePlayState"]) => {
-			const status = e.detail === "Playing" ? "Playing" : "Paused";
-			smtcImplObj.updatePlayState(status);
-		};
+		const onUpdatePlayState = (e: ProviderEventMap["updatePlayState"]) =>
+			smtcImplObj.updatePlayState(e.detail);
 		const onUpdateTimeline = (e: ProviderEventMap["updateTimeline"]) =>
 			smtcImplObj.updateTimeline(e.detail);
 		const onUpdatePlayMode = (e: ProviderEventMap["updatePlayMode"]) =>
 			smtcImplObj.updatePlayMode(e.detail);
 
 		const onControl = (msg: ControlMessage) => {
-			infoProvider.dispatchEvent(new CustomEvent("control", { detail: msg }));
+			infoProvider.handleControlCommand(msg);
 		};
 
 		infoProvider.addEventListener("updateSongInfo", onUpdateSongInfo);
@@ -171,7 +173,7 @@ export function useSmtcConnection(
 			infoProvider.removeEventListener("updatePlayMode", onUpdatePlayMode);
 			smtcImplObj.disable();
 		};
-	}, [infoProvider, isEnabled]);
+	}, [infoProvider, isEnabled, isProviderReady]);
 }
 
 export interface NewVersionInfo {

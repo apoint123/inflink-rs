@@ -82,3 +82,12 @@ export type LogEntry = {
 	message: string;
 	target: string;
 };
+
+export interface ProviderEventMap {
+	updateSongInfo: CustomEvent<SongInfo>;
+	updatePlayState: CustomEvent<PlaybackStatus>;
+	updateTimeline: CustomEvent<TimelineInfo>;
+	updatePlayMode: CustomEvent<PlayModePayload>;
+	disable: CustomEvent<void>;
+	control: CustomEvent<ControlMessage>;
+}

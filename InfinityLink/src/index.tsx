@@ -132,7 +132,9 @@ function Main() {
 
 	const newVersionInfo = useVersionCheck(GITHUB_REPO);
 	const infoProvider = useInfoProvider(ncmVersion);
-	useSmtcConnection(infoProvider, SMTCEnabled);
+	const isReady = infoProvider !== null;
+
+	useSmtcConnection(infoProvider, SMTCEnabled, isReady);
 
 	useEffect(() => {
 		if (ncmVersion !== null) {

@@ -1,4 +1,5 @@
 import type { NCMInjectPlugin, NCMPlugin } from "plugin";
+import type { Store } from "redux";
 
 declare global {
 	interface Window {
@@ -52,6 +53,11 @@ declare global {
 		legacyNativeCmder: OrpheusCommand;
 
 		webpackJsonp?: unknown[];
+
+		/**
+		 * 调试用的 redux store
+		 */
+		infstore?: Store;
 	}
 
 	const BETTERNCM_API_KEY: Window["BETTERNCM_API_KEY"];

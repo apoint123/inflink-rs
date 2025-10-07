@@ -22,16 +22,28 @@ export namespace v3 {
 	/** 播放状态的数字表示。1: 已暂停, 2: 播放中 */
 	export type PlayState = 1 | 2;
 
+	export interface TrackAlbum {
+		id?: string;
+		name?: string;
+		albumName?: string;
+		picUrl?: string;
+	}
+
+	export interface CurTrack {
+		id?: string;
+		name?: string;
+		duration?: number;
+		album?: TrackAlbum;
+		artists?: Artist[];
+	}
+
 	export interface PlayingInfo {
 		resourceTrackId?: string;
 		resourceName?: string;
 		resourceArtists?: Artist[];
-		musicAlbumName?: string;
 		resourceCoverUrl?: string;
 		playing?: boolean;
-		curTrack?: {
-			duration?: number;
-		};
+		curTrack?: CurTrack;
 		playingState?: PlayState;
 		playingMode?: PlayMode;
 	}
@@ -109,11 +121,7 @@ export namespace v2 {
 		playing: ReduxPlayingState;
 	}
 
-	export interface NCMStore {
-		getState: () => ReduxState;
-		subscribe: (listener: () => void) => () => void;
-		dispatch: (action: ReduxAction) => ReduxAction;
-	}
+	export type NCMStore = Store<ReduxState, ReduxAction>;
 
 	export interface PlayerInstance {
 		/**

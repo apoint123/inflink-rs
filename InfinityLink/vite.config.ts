@@ -85,7 +85,6 @@ export default defineConfig(({ mode }) => {
 	return {
 		plugins: [react(), copyAssetsPlugin(mode)],
 		define: {
-			"process.env": {},
 			DEBUG: mode === "development",
 			__APP_VERSION__: JSON.stringify(packageJson.version),
 		},

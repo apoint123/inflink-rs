@@ -142,10 +142,7 @@ class SMTCNativeBackend {
 	}
 
 	public update(songInfo: MetadataPayload) {
-		this.dispatch("Metadata", {
-			...songInfo,
-			albumName: songInfo.albumName ?? songInfo.songName,
-		});
+		this.dispatch("Metadata", songInfo);
 	}
 
 	public updatePlayState(status: PlaybackStatus) {
