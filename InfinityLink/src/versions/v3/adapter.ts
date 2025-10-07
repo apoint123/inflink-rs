@@ -23,7 +23,8 @@ const NCM_PLAY_MODES = {
 	ONE_LOOP: "playOneCycle",
 	ORDER: "playOrder",
 	AI: "playAi",
-	// 直接切换到这个模式可能会出现问题
+	// 直接切换到 FM 播放模式会让网易云进入一个不一致的状态
+	// 如果要进入 FM 模式，应该用别的方式
 	FM: "playFm",
 } as const;
 
