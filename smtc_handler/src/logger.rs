@@ -1,14 +1,15 @@
 use serde::Serialize;
+use std::fmt::Write;
 use std::fs;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::OnceLock;
 use std::sync::{LazyLock, Mutex};
-use tracing::{Subscriber, trace};
+use tracing::{Subscriber, error, trace};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling::RollingFileAppender;
 use tracing_subscriber::{
-    EnvFilter, Layer, filter::LevelFilter, fmt::format::FmtSpan, layer::SubscriberExt,
-    util::SubscriberInitExt,
+    EnvFilter, Layer, filter::LevelFilter, layer::SubscriberExt, util::SubscriberInitExt,
 };
 
 #[derive(Serialize)]
@@ -116,15 +117,25 @@ struct MessageVisitor {
 }
 
 impl tracing::field::Visit for MessageVisitor {
-    fn record_debug(&mut self, _field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-        self.message = format!("{}{:?} ", self.message, value);
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        if field.name() == "message" {
+            self.message = format!("{value:?}");
+        } else {
+            if !self.message.is_empty() {
+                self.message.push(' ');
+            }
+            write!(&mut self.message, "{}={:?}", field.name(), value).unwrap();
+        }
     }
 
     fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
         if field.name() == "message" {
             self.message = value.to_string();
         } else {
-            self.message = format!("{} {}={}", self.message, field.name(), value);
+            if !self.message.is_empty() {
+                self.message.push(' ');
+            }
+            write!(&mut self.message, "{}={}", field.name(), value).unwrap();
         }
     }
 }
@@ -155,17 +166,52 @@ pub fn set_frontend_log_level(level_str: &str) -> Result<(), String> {
         *guard = level;
     }
 
-    trace!("前端日志级别已设置为 {}", level_str);
+    trace!("前端日志级别已设置为 {level_str}");
     Ok(())
 }
 
+fn cleanup_old_logs(log_dir: &PathBuf, max_files: usize) {
+    if let Ok(entries) = fs::read_dir(log_dir) {
+        let mut log_files: Vec<_> = entries
+            .filter_map(Result::ok)
+            .filter(|e| {
+                e.path().is_file()
+                    && e.file_name().to_string_lossy().starts_with("inflink-rs.")
+                    && e.file_name().to_string_lossy().ends_with(".log")
+            })
+            .collect();
+
+        if log_files.len() <= max_files {
+            return;
+        }
+
+        log_files.sort_by_key(fs::DirEntry::file_name);
+
+        let files_to_delete_count = log_files.len() - max_files;
+
+        for entry in log_files.iter().take(files_to_delete_count) {
+            let path = entry.path();
+            if let Err(e) = fs::remove_file(&path) {
+                error!("删除旧日志文件 {path:?} 失败: {e}");
+            }
+        }
+    }
+}
+
 pub fn init() {
-    let default_filter = EnvFilter::new("trace");
+    let default_filter = EnvFilter::builder()
+        .with_default_directive(tracing::level_filters::LevelFilter::WARN.into())
+        .from_env_lossy()
+        .add_directive("smtc_handler=trace".parse().unwrap());
+
+    let mut log_path: Option<PathBuf> = None;
 
     let file_layer = dirs::data_dir().map_or_else(
         || None,
         |mut path| {
             path.push("InfLink-rs");
+            log_path = Some(path.clone());
+
             if fs::create_dir_all(&path).is_ok() {
                 let rotation = tracing_appender::rolling::Rotation::DAILY;
 
@@ -183,15 +229,14 @@ pub fn init() {
                     tracing::error!("[InfLink-rs] Logger Guard 已经被初始化，不应重复调用 init()");
                 }
 
-                trace!(log_path = ?path, "文件日志已初始化。");
                 Some(
                     tracing_subscriber::fmt::layer()
                         .with_writer(non_blocking)
-                        .with_span_events(FmtSpan::CLOSE)
                         .with_ansi(false)
-                        .with_filter(EnvFilter::new("info")),
+                        .with_filter(EnvFilter::new("trace")),
                 )
             } else {
+                log_path = None;
                 None
             }
         },
@@ -206,6 +251,10 @@ pub fn init() {
         .init();
 
     trace!("Tracing subscriber 已初始化");
+
+    if let Some(path) = log_path {
+        cleanup_old_logs(&path, 7);
+    }
 }
 
 pub fn clear_callback() {

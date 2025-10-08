@@ -119,7 +119,6 @@ fn dispatch_event(event: &SmtcEvent) {
 
     if let Some(context) = maybe_context {
         let post_result = renderer_post_task_in_v8_ctx(context, move || {
-            debug!("执行 SMTC 事件回调...");
             let Ok(guard) = EVENT_CALLBACK.lock() else {
                 error!("SMTC 事件回调锁在任务中毒化");
                 return;
