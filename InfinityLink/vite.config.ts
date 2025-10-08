@@ -82,17 +82,22 @@ const copyAssetsPlugin = (mode: string): Plugin => {
 };
 
 export default defineConfig(({ mode }) => {
+	const isProduction = mode === "production";
 	return {
 		plugins: [react(), copyAssetsPlugin(mode)],
 		define: {
-			"process.env.NODE_ENV": JSON.stringify("development"),
-			DEBUG: mode === "development",
+			process: JSON.stringify({
+				env: {
+					NODE_ENV: isProduction ? "production" : "development",
+				},
+			}),
+			DEBUG: !isProduction,
 			__APP_VERSION__: JSON.stringify(packageJson.version),
 		},
 		build: {
 			outDir: "dist",
 			target: "chrome91",
-			sourcemap: mode === "development" ? "inline" : false,
+			sourcemap: !isProduction,
 			lib: {
 				entry: "src/index.tsx",
 				name: "InfinityLink",
