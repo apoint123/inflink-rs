@@ -9,6 +9,7 @@ import type {
 import {
 	calculateNextRepeatMode,
 	calculateNextShuffleMode,
+	resizeImageUrl,
 	throttle,
 	waitForElement,
 } from "../../utils";
@@ -135,6 +136,18 @@ class NcmV2PlayerApi {
 	): void {
 		ctl.cefPlayer?.Ti("onmutechange", callback);
 	}
+
+	public static removeVolumeListener(
+		callback: v2.CefPlayerEventMap["onvolumechange"],
+	): void {
+		ctl.cefPlayer?.Ii("onvolumechange", callback);
+	}
+
+	public static removeMuteListener(
+		callback: v2.CefPlayerEventMap["onmutechange"],
+	): void {
+		ctl.cefPlayer?.Ii("onmutechange", callback);
+	}
 }
 
 interface FiberNode {
@@ -258,6 +271,8 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 			this.unsubscribeStore();
 			this.unsubscribeStore = null;
 		}
+		this.unregisterNcmEvents();
+
 		logger.debug("[Adapter V2] Disposed.");
 	}
 
@@ -279,7 +294,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 			songName: songData.name || "未知歌名",
 			authorName: songData.artists?.map((v) => v.name).join(" / ") || "",
 			albumName: songData.album?.name || "未知专辑",
-			thumbnailUrl: songData.album?.picUrl || "",
+			thumbnailUrl: resizeImageUrl(songData.album?.picUrl),
 			ncmId: songData.id,
 		};
 	}
@@ -505,6 +520,26 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		}
 	}
 
+	private unregisterNcmEvents(): void {
+		try {
+			legacyNativeCmder.removeRegisterCall(
+				"PlayState",
+				"audioplayer",
+				this.onPlayStateChanged,
+			);
+			legacyNativeCmder.removeRegisterCall(
+				"PlayProgress",
+				"audioplayer",
+				this.onPlayProgress,
+			);
+
+			NcmV2PlayerApi.removeVolumeListener(this.onVolumeChanged);
+			NcmV2PlayerApi.removeMuteListener(this.onMuteChanged);
+		} catch (e) {
+			logger.error("[Adapter V2] 清理原生事件监听时发生错误:", e);
+		}
+	}
+
 	private readonly onVolumeChanged = (
 		payload: v2.CefPlayerVolumePayload,
 	): void => {
@@ -534,16 +569,16 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		);
 	}
 
-	private onPlayProgress(progressInSeconds: number): void {
+	private readonly onPlayProgress = (progressInSeconds: number): void => {
 		this.musicPlayProgress = Math.floor(progressInSeconds * 1000);
 		const newDuration = this.activePlayerApi?.getDuration() ?? 0;
 		if (newDuration > 0) {
 			this.musicDuration = Math.floor(newDuration * 1000);
 		}
 		this.dispatchTimelineThrottled();
-	}
+	};
 
-	private onPlayStateChanged(stateInfo: string): void {
+	private readonly onPlayStateChanged = (stateInfo: string): void => {
 		const parts = stateInfo.split("|");
 		let newPlayState: PlaybackStatus = this.playStatus;
 
@@ -574,7 +609,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 				}),
 			);
 		}
-	}
+	};
 
 	public override dispatchEvent<K extends keyof NcmAdapterEventMap>(
 		event: NcmAdapterEventMap[K],

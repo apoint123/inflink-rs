@@ -42,7 +42,6 @@ export namespace v3 {
 		resourceName?: string;
 		resourceArtists?: Artist[];
 		resourceCoverUrl?: string;
-		playing?: boolean;
 		curTrack?: CurTrack;
 		playingState?: PlayState;
 		playingMode?: PlayMode;
@@ -248,6 +247,15 @@ export namespace v2 {
 		 * @param callback 事件回调函数
 		 */
 		Ti<K extends keyof CefPlayerEventMap>(
+			eventName: K,
+			callback: CefPlayerEventMap[K],
+		): void;
+		/**
+		 * 移除播放器事件监听
+		 * @param eventName 事件名称
+		 * @param callback 注册时使用的同一个回调函数
+		 */
+		Ii<K extends keyof CefPlayerEventMap>(
 			eventName: K,
 			callback: CefPlayerEventMap[K],
 		): void;

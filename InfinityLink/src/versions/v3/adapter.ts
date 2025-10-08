@@ -11,6 +11,7 @@ import {
 	calculateNextShuffleMode,
 	findModule,
 	getWebpackRequire,
+	resizeImageUrl,
 	throttle,
 	waitForElement,
 } from "../../utils";
@@ -120,19 +121,34 @@ const CONSTANTS = {
 	TIMELINE_THROTTLE_INTERVAL_MS: 1000,
 };
 
+/**
+ * 这个事件非常莫名其妙，使用 `appendRegisterCall` 来注册它会导致 UI 进度条静止
+ *
+ * 但 `audioPlayer.subscribePlayStatus` 底层也使用 `appendRegisterCall`，
+ * 它却可以工作
+ *
+ * 用 `channel.registerCall` 也可以正确工作，尽管它会覆盖所有之前注册的监听器，
+ * 理论上比 `appendRegisterCall` 更具破坏性，并且没有清理方法
+ *
+ * 并且如果有其它插件 (比如 AMLL 的 WS 插件) 也用 `channel.registerCall` 来注册，
+ * 我们注册的监听器就会被覆盖了。所以这个事件只作为 `audioPlayer.subscribePlayStatus`
+ * 无法工作的情况下，备用的获取进度条的方式
+ */
 const CHANNEL_EVENTS = new Set<v3.EventName>(["PlayProgress"]);
 
 /**
  * NCM 事件适配器
  */
 class NcmEventAdapter {
-	private readonly registeredEvt: Set<string>;
-	private readonly callbacks: Map<string, Set<v3.EventMap[v3.EventName]>>;
+	private readonly registeredLegacyEvents = new Map<
+		string,
+		Set<v3.EventMap[v3.EventName]>
+	>();
 
-	constructor() {
-		this.registeredEvt = new Set<string>();
-		this.callbacks = new Map<string, Set<v3.EventMap[v3.EventName]>>();
-	}
+	private readonly callbacks = new Map<
+		string,
+		Set<v3.EventMap[v3.EventName]>
+	>();
 
 	public on<E extends v3.EventName>(
 		eventName: E,
@@ -141,34 +157,66 @@ class NcmEventAdapter {
 		const namespace = "audioplayer";
 		const fullName = `${namespace}.on${eventName}`;
 
-		if (CHANNEL_EVENTS.has(eventName) && channel) {
+		let callbackSet = this.callbacks.get(fullName);
+		if (!callbackSet) {
+			callbackSet = new Set();
+			this.callbacks.set(fullName, callbackSet);
+		}
+		callbackSet.add(callback);
+
+		if (CHANNEL_EVENTS.has(eventName) && window.channel) {
 			try {
-				if (!this.registeredEvt.has(fullName)) {
-					this.registeredEvt.add(fullName);
-					channel.registerCall(fullName, (...args: unknown[]) => {
-						this.callbacks?.get(fullName)?.forEach((cb) => {
-							(cb as (...args: unknown[]) => void)(...args);
-						});
+				window.channel.registerCall(fullName, (...args: unknown[]) => {
+					this.callbacks?.get(fullName)?.forEach((cb) => {
+						(cb as (...args: unknown[]) => void)(...args);
 					});
-				}
-				let callbackSet = this.callbacks.get(fullName);
-				if (!callbackSet) {
-					callbackSet = new Set();
-					this.callbacks.set(fullName, callbackSet);
-				}
-				callbackSet.add(callback);
+				});
 			} catch (e) {
 				logger.error(`[Adapter V3] 注册 channel 事件 ${eventName} 失败:`, e);
 			}
 		} else {
-			try {
-				legacyNativeCmder.appendRegisterCall(eventName, namespace, callback);
-			} catch (e) {
-				logger.error(
-					`[Adapter V3] 注册 legacyNativeCmder 事件 ${eventName} 失败:`,
-					e,
-				);
+			if (!this.registeredLegacyEvents.has(fullName)) {
+				const legacyCallbackSet = new Set<v3.EventMap[v3.EventName]>();
+				this.registeredLegacyEvents.set(fullName, legacyCallbackSet);
+
+				const stub = (...args: unknown[]) => {
+					this.callbacks?.get(fullName)?.forEach((cb) => {
+						(cb as (...args: unknown[]) => void)(...args);
+					});
+				};
+				legacyCallbackSet.add(stub);
+
+				try {
+					legacyNativeCmder.appendRegisterCall(eventName, namespace, stub);
+				} catch (e) {
+					logger.error(
+						`[Adapter V3] 注册 legacyNativeCmder 事件 ${eventName} 失败:`,
+						e,
+					);
+				}
 			}
+		}
+	}
+
+	public off<E extends v3.EventName>(
+		eventName: E,
+		callback: v3.EventMap[E],
+	): void {
+		const namespace = "audioplayer";
+		const fullName = `${namespace}.on${eventName}`;
+
+		const callbackSet = this.callbacks.get(fullName);
+		if (callbackSet) {
+			callbackSet.delete(callback);
+		}
+
+		const legacyCallbackSet = this.registeredLegacyEvents.get(fullName);
+		if (legacyCallbackSet && callbackSet?.size === 0) {
+			legacyCallbackSet.forEach((stub) => {
+				legacyNativeCmder.removeRegisterCall(eventName, namespace, stub);
+			});
+			this.registeredLegacyEvents.delete(fullName);
+			this.callbacks.delete(fullName);
 		}
 	}
 }
@@ -191,6 +239,9 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	private lastIsMuted: boolean | null = null;
 
 	private readonly dispatchTimelineThrottled: () => void;
+
+	private onPlayProgressCallback: ((info: { current: number }) => void) | null =
+		null;
 
 	constructor() {
 		super();
@@ -269,6 +320,8 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 			this.unsubscribeStore();
 			this.unsubscribeStore = null;
 		}
+		this.unregisterAudioPlayerEvents();
+
 		logger.debug("[Adapter V3] Disposed.");
 	}
 
@@ -294,14 +347,17 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 			authorName:
 				playingInfo.resourceArtists?.map((v) => v.name).join(" / ") || "",
 			albumName: albumName,
-			thumbnailUrl: playingInfo.resourceCoverUrl || "",
+			thumbnailUrl: resizeImageUrl(playingInfo.resourceCoverUrl),
 			ncmId: currentTrackId,
 		};
 	}
 
 	public getPlaybackStatus(): PlaybackStatus {
-		const isPlaying = !!this.reduxStore?.getState().playing?.playing;
-		return isPlaying ? "Playing" : "Paused";
+		const playingInfo = this.reduxStore?.getState().playing;
+		if (typeof playingInfo?.playingState === "number") {
+			return playingInfo.playingState === 2 ? "Playing" : "Paused";
+		}
+		return "Paused";
 	}
 
 	public getTimelineInfo(): TimelineInfo | null {
@@ -536,21 +592,30 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	}
 
 	private registerAudioPlayerEvents(): void {
-		this.eventAdapter.on("PlayState", (_audioId: string, state: string) =>
-			this.onPlayStateChanged(state),
-		);
+		this.eventAdapter.on("PlayState", this.onPlayStateChanged);
 		if (this.audioPlayer) {
+			this.onPlayProgressCallback = (info) => this.onPlayProgress(info.current);
 			this.audioPlayer.subscribePlayStatus({
 				type: "playprogress",
-				callback: (info) => this.onPlayProgress(info.current),
+				callback: this.onPlayProgressCallback,
 			});
 		} else {
-			// 已知多个插件同时注册 PlayProgress 的事件回调会导致前一个插件的回调被后一个覆盖
-			// 所以尽量使用上面的 audioPlayer.subscribePlayStatus 方法
-			this.eventAdapter.on(
-				"PlayProgress",
-				(_audioId: string, progress: number) => this.onPlayProgress(progress),
-			);
+			this.eventAdapter.on("PlayProgress", this.onPlayProgressLegacy);
+		}
+	}
+
+	private unregisterAudioPlayerEvents(): void {
+		try {
+			this.eventAdapter.off("PlayState", this.onPlayStateChanged);
+
+			if (this.audioPlayer && this.onPlayProgressCallback) {
+				this.audioPlayer.unSubscribePlayStatus(this.onPlayProgressCallback);
+				this.onPlayProgressCallback = null;
+			} else {
+				this.eventAdapter.off("PlayProgress", this.onPlayProgressLegacy);
+			}
+		} catch (e) {
+			logger.error("[Adapter V3] 清理原生事件监听时发生错误:", e);
 		}
 	}
 
@@ -559,7 +624,17 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		this.dispatchTimelineThrottled();
 	}
 
-	private onPlayStateChanged(stateInfo: string): void {
+	private readonly onPlayProgressLegacy = (
+		_audioId: string,
+		progress: number,
+	): void => {
+		this.onPlayProgress(progress);
+	};
+
+	private readonly onPlayStateChanged = (
+		_audioId: string,
+		stateInfo: string,
+	): void => {
 		let newPlayState: PlaybackStatus = this.playState;
 
 		const parts = stateInfo.split("|");
@@ -590,7 +665,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 				}),
 			);
 		}
-	}
+	};
 
 	public override dispatchEvent<K extends keyof NcmAdapterEventMap>(
 		event: NcmAdapterEventMap[K],
