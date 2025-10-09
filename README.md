@@ -64,3 +64,40 @@
 ## 更新日志
 
 [**CHANGELOG.md**](./InfinityLink/CHANGELOG.md)
+
+## 构建
+
+先决条件：
+
+* Node.js (v18+)
+* pnpm
+* Rust 工具链
+
+1. 克隆仓库
+
+```bash
+git clone https://github.com/apoint123/infLink-rs.git
+```
+
+2. 安装构建目标
+
+`i686-pc-windows-msvc` 目标用于构建适用于网易云音乐 v2 的原生插件
+
+```bash
+rustup target add x86_64-pc-windows-msvc
+rustup target add i686-pc-windows-msvc
+```
+
+3. 安装依赖
+
+```bash
+pnpm install
+```
+
+4. 构建
+
+```bash
+pnpm build
+```
+
+这个命令会自动完成整个扩展 (包括前端和后端) 的构建，你可以在 `InfinityLink\dist` 找到构建产物
