@@ -14,15 +14,10 @@ import type {
 	TimelineInfo,
 	VolumeInfo,
 } from "../../types/smtc";
-import {
-	calculateNextRepeatMode,
-	calculateNextShuffleMode,
-	resizeImageUrl,
-	throttle,
-	waitForElement,
-} from "../../utils";
+import { resizeImageUrl, throttle, waitForElement } from "../../utils";
 import logger from "../../utils/logger";
 import type { INcmAdapter, NcmAdapterEventMap, PlayModeInfo } from "../adapter";
+import { PlayModeController } from "../playModeController";
 
 const NCM_PLAY_MODES = {
 	LIST_LOOP: "playorder",
@@ -220,12 +215,14 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	private playStatus: PlaybackStatus = "Paused";
 	private lastReduxTrackId: number | null = null;
 	private lastPlayMode: NcmPlayMode | undefined = undefined;
-	private lastModeBeforeShuffle: NcmPlayMode | null = null;
 
 	private volume = 1.0;
 	private isMuted = false;
 
 	private readonly dispatchTimelineThrottled: () => void;
+	private readonly playModeController = new PlayModeController(
+		V2_MODE_CONSTANTS,
+	);
 
 	constructor() {
 		super();
@@ -402,59 +399,26 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	}
 
 	public toggleShuffle(): void {
-		if (!this.reduxStore) return;
-		const currentMode = this.reduxStore.getState()?.playing?.playMode;
+		const currentMode = this.reduxStore?.getState()?.playing?.playMode;
 		if (!isValidNcmPlayMode(currentMode) || !currentMode) return;
 
-		const { targetMode, nextLastModeBeforeShuffle } = calculateNextShuffleMode(
-			currentMode,
-			this.lastModeBeforeShuffle,
-			V2_MODE_CONSTANTS,
-		);
-
-		this.lastModeBeforeShuffle =
-			nextLastModeBeforeShuffle as NcmPlayMode | null;
+		const targetMode = this.playModeController.getNextShuffleMode(currentMode);
 		this.activePlayerApi?.switchMode(targetMode as NcmPlayMode);
 	}
 
 	public toggleRepeat(): void {
-		if (!this.reduxStore) return;
-		const currentMode = this.reduxStore.getState()?.playing?.playMode;
+		const currentMode = this.reduxStore?.getState()?.playing?.playMode;
 		if (!isValidNcmPlayMode(currentMode) || !currentMode) return;
 
-		const targetMode = calculateNextRepeatMode(currentMode, V2_MODE_CONSTANTS);
-
-		// 切换循环模式就退出随机播放
-		if (currentMode === V2_MODE_CONSTANTS.SHUFFLE) {
-			this.lastModeBeforeShuffle = null;
-		}
-
+		const targetMode = this.playModeController.getNextRepeatMode(currentMode);
 		this.activePlayerApi?.switchMode(targetMode as NcmPlayMode);
 	}
 
 	public setRepeatMode(mode: RepeatMode): void {
-		let targetMode: string;
-		switch (mode) {
-			case "List":
-				targetMode = V2_MODE_CONSTANTS.LOOP;
-				break;
-			case "Track":
-				targetMode = V2_MODE_CONSTANTS.ONE_LOOP;
-				break;
-			case "AI":
-				targetMode = V2_MODE_CONSTANTS.AI;
-				break;
-			default:
-				targetMode = V2_MODE_CONSTANTS.ORDER;
-				break;
-		}
-
-		// 设置循环模式就退出随机播放
 		const currentMode = this.reduxStore?.getState()?.playing?.playMode;
-		if (currentMode === V2_MODE_CONSTANTS.SHUFFLE) {
-			this.lastModeBeforeShuffle = null;
-		}
+		if (!isValidNcmPlayMode(currentMode) || !currentMode) return;
 
+		const targetMode = this.playModeController.getRepeatMode(mode, currentMode);
 		this.activePlayerApi?.switchMode(targetMode as NcmPlayMode);
 	}
 
@@ -594,7 +558,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 
 	private readonly onPlayStateChanged = (stateInfo: string): void => {
 		const parts = stateInfo.split("|");
-		let newPlayState: PlaybackStatus = this.playStatus;
+		let newPlayState: PlaybackStatus | undefined;
 
 		if (parts.length >= 2) {
 			const stateKeyword = parts[1];
@@ -615,7 +579,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 			return;
 		}
 
-		if (this.playStatus !== newPlayState) {
+		if (newPlayState && this.playStatus !== newPlayState) {
 			this.playStatus = newPlayState;
 			this.dispatchEvent(
 				new CustomEvent<PlaybackStatus>("playStateChange", {
