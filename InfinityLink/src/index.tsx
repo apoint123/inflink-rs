@@ -132,10 +132,11 @@ function Main() {
 	const backendId = useId();
 
 	const newVersionInfo = useVersionCheck(GITHUB_REPO);
-	const infoProvider = useInfoProvider(ncmVersion);
-	const isReady = infoProvider !== null;
 
-	useSmtcConnection(infoProvider, SMTCEnabled, isReady);
+	const providerState = useInfoProvider(ncmVersion);
+	const { provider, status, error } = providerState;
+
+	useSmtcConnection(providerState, SMTCEnabled);
 
 	useEffect(() => {
 		if (ncmVersion !== null) {
@@ -157,37 +158,35 @@ function Main() {
 	}, [backendLogLevel]);
 
 	useEffect(() => {
-		if (infoProvider) {
+		if (provider) {
 			const api: IInfLinkApi = {
-				getCurrentSong: () => infoProvider.getCurrentSongInfo(),
-				getPlaybackStatus: () => infoProvider.getPlaybackStatus(),
-				getTimeline: () => infoProvider.getTimelineInfo(),
-				getPlayMode: () => infoProvider.getPlayMode(),
-				getVolume: () => infoProvider.getVolume(),
+				getCurrentSong: () => provider.getCurrentSongInfo().unwrapOr(null),
+				getPlaybackStatus: () => provider.getPlaybackStatus(),
+				getTimeline: () => provider.getTimelineInfo().unwrapOr(null),
+				getPlayMode: () => provider.getPlayMode(),
+				getVolume: () => provider.getVolume(),
 
-				play: () => infoProvider.handleControlCommand({ type: "Play" }),
-				pause: () => infoProvider.handleControlCommand({ type: "Pause" }),
-				next: () => infoProvider.handleControlCommand({ type: "NextSong" }),
-				previous: () =>
-					infoProvider.handleControlCommand({ type: "PreviousSong" }),
+				play: () => provider.handleControlCommand({ type: "Play" }),
+				pause: () => provider.handleControlCommand({ type: "Pause" }),
+				next: () => provider.handleControlCommand({ type: "NextSong" }),
+				previous: () => provider.handleControlCommand({ type: "PreviousSong" }),
 				seekTo: (pos) =>
-					infoProvider.handleControlCommand({ type: "Seek", position: pos }),
+					provider.handleControlCommand({ type: "Seek", position: pos }),
 
 				toggleShuffle: () =>
-					infoProvider.handleControlCommand({ type: "ToggleShuffle" }),
+					provider.handleControlCommand({ type: "ToggleShuffle" }),
 				toggleRepeat: () =>
-					infoProvider.handleControlCommand({ type: "ToggleRepeat" }),
+					provider.handleControlCommand({ type: "ToggleRepeat" }),
 				setRepeatMode: (mode) =>
-					infoProvider.handleControlCommand({ type: "SetRepeat", mode }),
+					provider.handleControlCommand({ type: "SetRepeat", mode }),
 				setVolume: (level) =>
-					infoProvider.handleControlCommand({ type: "SetVolume", level }),
-				toggleMute: () =>
-					infoProvider.handleControlCommand({ type: "ToggleMute" }),
+					provider.handleControlCommand({ type: "SetVolume", level }),
+				toggleMute: () => provider.handleControlCommand({ type: "ToggleMute" }),
 
 				addEventListener: (type, listener) =>
-					infoProvider.addEventListener(type, listener),
+					provider.addEventListener(type, listener),
 				removeEventListener: (type, listener) =>
-					infoProvider.removeEventListener(type, listener),
+					provider.removeEventListener(type, listener),
 			};
 
 			window.InfLinkApi = api;
@@ -196,10 +195,15 @@ function Main() {
 				delete window.InfLinkApi;
 			};
 		}
-	}, [infoProvider]);
+	}, [provider]);
 
-	if (ncmVersion === null) {
-		return <CircularProgress size={24} />;
+	if (ncmVersion === null || status === "loading") {
+		return (
+			<Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+				<CircularProgress size={24} />
+				<Typography variant="body2">正在初始化...</Typography>
+			</Box>
+		);
 	}
 
 	if (ncmVersion === "unsupported") {
@@ -207,6 +211,17 @@ function Main() {
 			<Alert severity="error">
 				<AlertTitle>不兼容的网易云音乐版本</AlertTitle>
 				InfLink-rs 不支持当前版本的网易云音乐, 请使用原版 InfLink 作为代替
+			</Alert>
+		);
+	}
+
+	if (status === "error") {
+		return (
+			<Alert severity="error">
+				<AlertTitle>插件初始化失败</AlertTitle>
+				部分组件未能初始化, 请尝试重启网易云音乐, 或者打开控制台查看详细信息
+				<br />
+				错误信息: {error?.message || "未知错误"}
 			</Alert>
 		);
 	}

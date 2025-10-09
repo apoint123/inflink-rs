@@ -12,17 +12,16 @@ export class SmtcProvider {
 
 	constructor(adapter: INcmAdapter) {
 		this.adapter = adapter;
-		this.ready = this.initialize();
+		this.ready = Promise.resolve();
+		this.initialize();
 	}
 
-	private async initialize(): Promise<void> {
+	private initialize(): void {
 		this.adapter.addEventListener("songChange", this.onSongChange);
 		this.adapter.addEventListener("playStateChange", this.onPlayStateChange);
 		this.adapter.addEventListener("playModeChange", this.onPlayModeChange);
 		this.adapter.addEventListener("timelineUpdate", this.onTimelineUpdate);
 		this.adapter.addEventListener("volumeChange", this.onVolumeChange);
-
-		await this.adapter.initialize();
 	}
 
 	private dispatch<K extends keyof ProviderEventMap>(
@@ -73,18 +72,22 @@ export class SmtcProvider {
 	}
 
 	public forceDispatchFullState(): void {
-		const songInfo = this.adapter.getCurrentSongInfo();
-		if (songInfo) {
-			this.dispatch("updateSongInfo", songInfo);
+		const songInfoResult = this.adapter.getCurrentSongInfo();
+		if (songInfoResult.isOk()) {
+			this.dispatch("updateSongInfo", songInfoResult.value);
 		}
+
 		const playState = this.adapter.getPlaybackStatus();
 		this.dispatch("updatePlayState", playState);
+
 		const playMode = this.adapter.getPlayMode();
 		this.dispatch("updatePlayMode", playMode);
-		const timeline = this.adapter.getTimelineInfo();
-		if (timeline) {
-			this.dispatch("updateTimeline", timeline);
+
+		const timelineResult = this.adapter.getTimelineInfo();
+		if (timelineResult.isOk()) {
+			this.dispatch("updateTimeline", timelineResult.value);
 		}
+
 		const volume = this.adapter.getVolumeInfo();
 		this.dispatch("updateVolume", volume);
 	}

@@ -1,3 +1,11 @@
+import { err, ok, type Result } from "neverthrow";
+import {
+	DomElementNotFoundError,
+	type NcmAdapterError,
+	ReduxStoreNotFoundError,
+	SongNotFoundError,
+	TimelineNotAvailableError,
+} from "../../types/errors";
 import type { v3 } from "../../types/ncm";
 import type {
 	PlaybackStatus,
@@ -75,12 +83,20 @@ function findStoreFromRootElement(rootEl: HTMLElement): v3.NCMStore | null {
 	return findReduxStoreInFiberTree(startNode);
 }
 
-async function waitForReduxStore(timeoutMs = 10000): Promise<v3.NCMStore> {
+async function waitForReduxStore(
+	timeoutMs = 10000,
+): Promise<
+	Result<v3.NCMStore, DomElementNotFoundError | ReduxStoreNotFoundError>
+> {
 	const rootEl = (await waitForElement(
 		SELECTORS.REACT_ROOT,
 	)) as v3.ReactRootElement;
 	if (!rootEl) {
-		throw new Error("在页面上找不到 React 根元素");
+		return err(
+			new DomElementNotFoundError(
+				`找不到 React 根元素 (${SELECTORS.REACT_ROOT})`,
+			),
+		);
 	}
 
 	const interval = 100;
@@ -88,14 +104,12 @@ async function waitForReduxStore(timeoutMs = 10000): Promise<v3.NCMStore> {
 
 	while (elapsedTime < timeoutMs) {
 		try {
-			// 网易云使用了很多年的react16了，几乎没有可能在不大规模重构的情况下更改下面这个固定的路径，
-			// 但是保险起见，失败时可以遍历搜索一下
 			const store =
 				rootEl._reactRootContainer?._internalRoot?.current?.child?.child
 					?.memoizedProps?.store ?? findStoreFromRootElement(rootEl);
 
 			if (store) {
-				return store;
+				return ok(store);
 			}
 		} catch (e) {
 			logger.info("[Adapter V3] Polling for Redux store failed once:", e);
@@ -105,7 +119,9 @@ async function waitForReduxStore(timeoutMs = 10000): Promise<v3.NCMStore> {
 		elapsedTime += interval;
 	}
 
-	throw new Error(`在 ${timeoutMs}ms 后仍未找到 Redux Store`);
+	return err(
+		new ReduxStoreNotFoundError(`在 ${timeoutMs}ms 后仍未找到 Redux Store`),
+	);
 }
 
 /**
@@ -132,7 +148,7 @@ const CONSTANTS = {
  *
  * 并且如果有其它插件 (比如 AMLL 的 WS 插件) 也用 `channel.registerCall` 来注册，
  * 我们注册的监听器就会被覆盖了。所以这个事件只作为 `audioPlayer.subscribePlayStatus`
- * 无法工作的情况下，备用的获取进度条的方式
+ * 无法工作的情况下，备用的获取时间轴的方式
  */
 const CHANNEL_EVENTS = new Set<v3.EventName>(["PlayProgress"]);
 
@@ -258,7 +274,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		}, CONSTANTS.TIMELINE_THROTTLE_INTERVAL_MS)[0];
 	}
 
-	public async initialize(): Promise<void> {
+	public async initialize(): Promise<Result<void, NcmAdapterError>> {
 		type AudioPlayerModule = { AudioPlayer: v3.AudioPlayer };
 
 		try {
@@ -295,24 +311,25 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 			logger.error("[Adapter V3] 获取 Webpack require 失败:", error);
 		}
 
-		try {
-			this.reduxStore = await waitForReduxStore();
-
-			if (import.meta.env.MODE === "development") {
-				window.infstore = this.reduxStore;
-			}
-
-			this.unsubscribeStore = this.reduxStore.subscribe(() =>
-				this.onStateChanged(),
-			);
-			logger.trace("[Adapter V3] 已订阅 Redux store 更新");
-		} catch (error) {
-			logger.error("[Adapter V3] 找不到 Redux store:", error);
-			throw error;
+		const storeResult = await waitForReduxStore();
+		if (storeResult.isErr()) {
+			return err(storeResult.error);
 		}
+		this.reduxStore = storeResult.value;
+
+		if (import.meta.env.MODE === "development") {
+			window.infstore = this.reduxStore;
+		}
+
+		this.unsubscribeStore = this.reduxStore.subscribe(() =>
+			this.onStateChanged(),
+		);
+		logger.trace("[Adapter V3] 已订阅 Redux store 更新");
 
 		this.registerAudioPlayerEvents();
 		this.onStateChanged();
+
+		return ok(undefined);
 	}
 
 	public dispose(): void {
@@ -325,10 +342,10 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		logger.debug("[Adapter V3] Disposed.");
 	}
 
-	public getCurrentSongInfo(): SongInfo | null {
+	public getCurrentSongInfo(): Result<SongInfo, NcmAdapterError> {
 		const playingInfo = this.reduxStore?.getState().playing;
 		if (!playingInfo?.resourceTrackId) {
-			return null;
+			return err(new SongNotFoundError("Redux state 中找不到 resourceTrackId"));
 		}
 
 		const albumName =
@@ -339,17 +356,17 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 
 		const currentTrackId = parseInt(String(playingInfo.resourceTrackId), 10);
 		if (Number.isNaN(currentTrackId) || currentTrackId === 0) {
-			return null;
+			return err(new SongNotFoundError("当前 trackId 无效"));
 		}
 
-		return {
+		return ok({
 			songName: playingInfo.resourceName || "未知歌名",
 			authorName:
 				playingInfo.resourceArtists?.map((v) => v.name).join(" / ") || "",
 			albumName: albumName,
 			thumbnailUrl: resizeImageUrl(playingInfo.resourceCoverUrl),
 			ncmId: currentTrackId,
-		};
+		});
 	}
 
 	public getPlaybackStatus(): PlaybackStatus {
@@ -360,14 +377,14 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		return "Paused";
 	}
 
-	public getTimelineInfo(): TimelineInfo | null {
+	public getTimelineInfo(): Result<TimelineInfo, NcmAdapterError> {
 		if (this.musicDuration > 0) {
-			return {
+			return ok({
 				currentTime: this.musicPlayProgress,
 				totalTime: this.musicDuration,
-			};
+			});
 		}
-		return null;
+		return err(new TimelineNotAvailableError());
 	}
 
 	public getPlayMode(): PlayModeInfo {
@@ -542,15 +559,20 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	private onStateChanged(): void {
 		if (!this.reduxStore) return;
 		const playingInfo = this.reduxStore.getState().playing;
-		const songInfo = this.getCurrentSongInfo();
-		if (songInfo && songInfo.ncmId !== this.lastTrackId) {
-			this.lastTrackId = songInfo.ncmId;
+		const songInfoResult = this.getCurrentSongInfo();
+		if (
+			songInfoResult.isOk() &&
+			songInfoResult.value.ncmId !== this.lastTrackId
+		) {
+			this.lastTrackId = songInfoResult.value.ncmId;
 			const playingInfo = this.reduxStore.getState().playing;
 			if (playingInfo?.curTrack?.duration) {
 				this.musicDuration = playingInfo.curTrack.duration;
 			}
 			this.dispatchEvent(
-				new CustomEvent<SongInfo>("songChange", { detail: songInfo }),
+				new CustomEvent<SongInfo>("songChange", {
+					detail: songInfoResult.value,
+				}),
 			);
 		}
 

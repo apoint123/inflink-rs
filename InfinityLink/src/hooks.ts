@@ -2,6 +2,7 @@ import type { PaletteMode } from "@mui/material";
 import { useEffect, useState } from "react";
 import { SmtcProvider } from "./provider";
 import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
+import type { NcmAdapterError } from "./types/errors";
 import type { ControlMessage, ProviderEventMap } from "./types/smtc";
 import logger from "./utils/logger";
 import type { INcmAdapter } from "./versions/adapter";
@@ -69,68 +70,103 @@ export function useNcmVersion(): NcmVersion | null {
 	return version;
 }
 
-export function useInfoProvider(
-	version: NcmVersion | null,
-): SmtcProvider | null {
-	const [provider, setProvider] = useState<SmtcProvider | null>(null);
+export interface ProviderState {
+	provider: SmtcProvider | null;
+	status: "loading" | "ready" | "error";
+	error: NcmAdapterError | null;
+}
+
+const INITIAL_PROVIDER_STATE: ProviderState = {
+	provider: null,
+	status: "loading",
+	error: null,
+};
+
+export function useInfoProvider(version: NcmVersion | null): ProviderState {
+	const [providerState, setProviderState] = useState<ProviderState>(
+		INITIAL_PROVIDER_STATE,
+	);
 
 	useEffect(() => {
-		let newProvider: SmtcProvider | null = null;
 		let didUnmount = false;
 
 		const initializeProvider = async () => {
 			if (!version || version === "unsupported") {
 				if (!didUnmount) {
-					setProvider(null);
+					setProviderState(INITIAL_PROVIDER_STATE);
 				}
 				return;
 			}
 
 			let adapter: INcmAdapter | null = null;
-			try {
-				switch (version) {
-					case "v3": {
-						adapter = new V3NcmAdapter();
-						break;
-					}
-					case "v2": {
-						adapter = new V2NcmAdapter();
-						break;
-					}
-				}
-			} catch (e) {
-				logger.error(`[InfLink] 加载数据提供源时失败:`, e);
+			switch (version) {
+				case "v3":
+					adapter = new V3NcmAdapter();
+					break;
+				case "v2":
+					adapter = new V2NcmAdapter();
+					break;
 			}
 
 			if (adapter) {
-				newProvider = new SmtcProvider(adapter);
-			}
+				const initResult = await adapter.initialize();
 
-			if (!didUnmount) {
-				setProvider(newProvider);
+				if (didUnmount) {
+					return;
+				}
+
+				if (initResult.isErr()) {
+					logger.error(`[InfLink] Adapter 初始化失败:`, initResult.error);
+					setProviderState({
+						provider: null,
+						status: "error",
+						error: initResult.error,
+					});
+				} else {
+					const newProvider = new SmtcProvider(adapter);
+					setProviderState({
+						provider: newProvider,
+						status: "ready",
+						error: null,
+					});
+
+					return () => {
+						newProvider.dispose();
+					};
+				}
+			} else {
+				if (!didUnmount) {
+					setProviderState(INITIAL_PROVIDER_STATE);
+				}
 			}
 		};
 
-		initializeProvider();
+		let cleanupProvider: (() => void) | undefined;
+		initializeProvider().then((cleanup) => {
+			if (typeof cleanup === "function") {
+				cleanupProvider = cleanup;
+			}
+		});
 
 		return () => {
 			didUnmount = true;
-			if (newProvider) {
-				newProvider.dispose();
+			if (cleanupProvider) {
+				cleanupProvider();
 			}
 		};
 	}, [version]);
 
-	return provider;
+	return providerState;
 }
 
 export function useSmtcConnection(
-	infoProvider: SmtcProvider | null,
+	providerState: ProviderState,
 	isEnabled: boolean,
-	isProviderReady: boolean,
 ) {
+	const { provider, status } = providerState;
+
 	useEffect(() => {
-		if (!isProviderReady || !infoProvider) {
+		if (status !== "ready" || !provider) {
 			return;
 		}
 
@@ -151,29 +187,29 @@ export function useSmtcConnection(
 			smtcImplObj.updatePlayMode(e.detail);
 
 		const onControl = (msg: ControlMessage) => {
-			infoProvider.handleControlCommand(msg);
+			provider.handleControlCommand(msg);
 		};
 
-		infoProvider.addEventListener("updateSongInfo", onUpdateSongInfo);
-		infoProvider.addEventListener("updatePlayState", onUpdatePlayState);
-		infoProvider.addEventListener("updateTimeline", onUpdateTimeline);
-		infoProvider.addEventListener("updatePlayMode", onUpdatePlayMode);
+		provider.addEventListener("updateSongInfo", onUpdateSongInfo);
+		provider.addEventListener("updatePlayState", onUpdatePlayState);
+		provider.addEventListener("updateTimeline", onUpdateTimeline);
+		provider.addEventListener("updatePlayMode", onUpdatePlayMode);
 
 		const connectCallback = async () => {
-			await infoProvider.ready;
-			infoProvider.forceDispatchFullState();
+			await provider.ready;
+			provider.forceDispatchFullState();
 		};
 
 		smtcImplObj.initialize(onControl, connectCallback);
 
 		return () => {
-			infoProvider.removeEventListener("updateSongInfo", onUpdateSongInfo);
-			infoProvider.removeEventListener("updatePlayState", onUpdatePlayState);
-			infoProvider.removeEventListener("updateTimeline", onUpdateTimeline);
-			infoProvider.removeEventListener("updatePlayMode", onUpdatePlayMode);
+			provider.removeEventListener("updateSongInfo", onUpdateSongInfo);
+			provider.removeEventListener("updatePlayState", onUpdatePlayState);
+			provider.removeEventListener("updateTimeline", onUpdateTimeline);
+			provider.removeEventListener("updatePlayMode", onUpdatePlayMode);
 			smtcImplObj.disable();
 		};
-	}, [infoProvider, isEnabled, isProviderReady]);
+	}, [provider, status, isEnabled]);
 }
 
 export interface NewVersionInfo {

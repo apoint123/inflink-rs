@@ -1,3 +1,5 @@
+import type { Result } from "neverthrow";
+import type { NcmAdapterError } from "../types/errors";
 import type {
 	PlaybackStatus,
 	RepeatMode,
@@ -20,11 +22,11 @@ export interface PlayModeInfo {
 }
 
 export interface INcmAdapter extends EventTarget {
-	initialize(): Promise<void>;
+	initialize(): Promise<Result<void, NcmAdapterError>>;
 	dispose(): void;
-	getCurrentSongInfo(): SongInfo | null;
+	getCurrentSongInfo(): Result<SongInfo, NcmAdapterError>;
 	getPlaybackStatus(): PlaybackStatus;
-	getTimelineInfo(): TimelineInfo | null;
+	getTimelineInfo(): Result<TimelineInfo, NcmAdapterError>;
 	getPlayMode(): PlayModeInfo;
 	getVolumeInfo(): VolumeInfo;
 

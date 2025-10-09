@@ -1,3 +1,11 @@
+import { err, ok, type Result } from "neverthrow";
+import {
+	DomElementNotFoundError,
+	type NcmAdapterError,
+	ReduxStoreNotFoundError,
+	SongNotFoundError,
+	TimelineNotAvailableError,
+} from "../../types/errors";
 import type { v2 } from "../../types/ncm";
 import type {
 	PlaybackStatus,
@@ -158,26 +166,32 @@ interface FiberNode {
 }
 
 // 网易云v2的store路径包含每次启动都变化的哈希，所以得每次都寻找它
-async function findReduxStore(selector: string): Promise<v2.NCMStore> {
+async function findReduxStore(
+	selector: string,
+): Promise<
+	Result<v2.NCMStore, DomElementNotFoundError | ReduxStoreNotFoundError>
+> {
 	const rootEl = await waitForElement(selector);
 	if (!rootEl) {
-		throw new Error(`根元素 ('${selector}') 未找到`);
+		return err(new DomElementNotFoundError(selector));
 	}
 
-	const findStoreInFiberTree = (node: FiberNode | null): v2.NCMStore | null => {
+	const findStoreInFiberTree = (
+		node: FiberNode | null,
+	): Result<v2.NCMStore, ReduxStoreNotFoundError> => {
 		let currentNode = node;
 		while (currentNode) {
 			if (currentNode.memoizedProps?.store) {
-				return currentNode.memoizedProps.store;
+				return ok(currentNode.memoizedProps.store);
 			}
 			currentNode = currentNode.return;
 		}
-		return null;
+		return err(new ReduxStoreNotFoundError("找不到 redux store"));
 	};
 
 	const appEl = rootEl.firstElementChild as HTMLElement;
 	if (!appEl) {
-		throw new Error("根元素没有子元素");
+		return err(new ReduxStoreNotFoundError("根元素没有子元素"));
 	}
 
 	const fiberKey = Object.keys(appEl).find(
@@ -186,20 +200,15 @@ async function findReduxStore(selector: string): Promise<v2.NCMStore> {
 			key.startsWith("__reactInternalInstance$"),
 	);
 	if (!fiberKey) {
-		throw new Error("找不到 Fiber key");
+		return err(new ReduxStoreNotFoundError("找不到 Fiber key"));
 	}
 
 	const startNode = (appEl as unknown as Record<string, FiberNode>)[fiberKey];
 	if (!startNode) {
-		throw new Error("找不到起始 Fiber 节点");
+		return err(new ReduxStoreNotFoundError("找不到起始 Fiber 节点"));
 	}
 
-	const store = findStoreInFiberTree(startNode);
-	if (!store) {
-		throw new Error("找不到 redux store");
-	}
-
-	return store;
+	return findStoreInFiberTree(startNode);
 }
 
 export class V2NcmAdapter extends EventTarget implements INcmAdapter {
@@ -240,20 +249,21 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		return null;
 	}
 
-	public async initialize(): Promise<void> {
-		try {
-			this.reduxStore = await findReduxStore("#portal_root");
-
-			if (import.meta.env.MODE === "development") {
-				window.infstore = this.reduxStore;
-			}
-
-			this.unsubscribeStore = this.reduxStore.subscribe(() =>
-				this.onStateChanged(),
-			);
-		} catch (error) {
-			logger.error("[Adapter V2] 初始化 Redux store 失败:", error);
+	public async initialize(): Promise<Result<void, NcmAdapterError>> {
+		const storeResult = await findReduxStore("#portal_root");
+		if (storeResult.isErr()) {
+			logger.error("[Adapter V2] 初始化 Redux store 失败:", storeResult.error);
+			return err(storeResult.error);
 		}
+		this.reduxStore = storeResult.value;
+
+		if (import.meta.env.MODE === "development") {
+			window.infstore = this.reduxStore;
+		}
+
+		this.unsubscribeStore = this.reduxStore.subscribe(() =>
+			this.onStateChanged(),
+		);
 
 		try {
 			this.volume = NcmV2PlayerApi.getVolume();
@@ -264,6 +274,8 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 
 		this.registerNcmEvents();
 		this.onStateChanged();
+
+		return ok(undefined);
 	}
 
 	public dispose(): void {
@@ -276,7 +288,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		logger.debug("[Adapter V2] Disposed.");
 	}
 
-	public getCurrentSongInfo(): SongInfo | null {
+	public getCurrentSongInfo(): Result<SongInfo, NcmAdapterError> {
 		let songData: v2.SongData | null = null;
 		const playerApi = this.activePlayerApi;
 
@@ -288,15 +300,15 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 			}
 		}
 
-		if (!songData?.id) return null;
+		if (!songData?.id) return err(new SongNotFoundError());
 
-		return {
+		return ok({
 			songName: songData.name || "未知歌名",
 			authorName: songData.artists?.map((v) => v.name).join(" / ") || "",
 			albumName: songData.album?.name || "未知专辑",
 			thumbnailUrl: resizeImageUrl(songData.album?.picUrl),
 			ncmId: songData.id,
-		};
+		});
 	}
 
 	public getPlaybackStatus(): PlaybackStatus {
@@ -306,14 +318,14 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		return this.playStatus;
 	}
 
-	public getTimelineInfo(): TimelineInfo | null {
+	public getTimelineInfo(): Result<TimelineInfo, NcmAdapterError> {
 		if (this.musicDuration > 0) {
-			return {
+			return ok({
 				currentTime: this.musicPlayProgress,
 				totalTime: this.musicDuration,
-			};
+			});
 		}
-		return null;
+		return err(new TimelineNotAvailableError());
 	}
 
 	public getPlayMode(): PlayModeInfo {
@@ -463,10 +475,12 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		if (newTrackId && newTrackId !== this.lastReduxTrackId) {
 			this.lastReduxTrackId = newTrackId;
 
-			const songInfo = this.getCurrentSongInfo();
-			if (songInfo) {
+			const songInfoResult = this.getCurrentSongInfo();
+			if (songInfoResult.isOk()) {
 				this.dispatchEvent(
-					new CustomEvent<SongInfo>("songChange", { detail: songInfo }),
+					new CustomEvent<SongInfo>("songChange", {
+						detail: songInfoResult.value,
+					}),
 				);
 				const songData = this.activePlayerApi?.currentSongData;
 				const newDuration = songData?.duration || 0;
