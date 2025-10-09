@@ -168,6 +168,7 @@ function Main() {
 
 				play: () => provider.handleControlCommand({ type: "Play" }),
 				pause: () => provider.handleControlCommand({ type: "Pause" }),
+				stop: () => provider.handleControlCommand({ type: "Stop" }),
 				next: () => provider.handleControlCommand({ type: "NextSong" }),
 				previous: () => provider.handleControlCommand({ type: "PreviousSong" }),
 				seekTo: (pos) =>

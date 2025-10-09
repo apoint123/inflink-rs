@@ -372,6 +372,11 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		);
 	}
 
+	public stop(): void {
+		this.pause();
+		this.seekTo(0);
+	}
+
 	public nextSong(): void {
 		this.activePlayerApi?.next();
 	}

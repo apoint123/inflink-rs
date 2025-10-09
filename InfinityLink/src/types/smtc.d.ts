@@ -24,28 +24,17 @@ export interface VolumeInfo {
 }
 
 export type ControlMessage =
-	| {
-			type:
-				| "Pause"
-				| "Play"
-				| "PreviousSong"
-				| "NextSong"
-				| "ToggleShuffle"
-				| "ToggleRepeat"
-				| "ToggleMute";
-	  }
-	| {
-			type: "Seek";
-			position: number;
-	  }
-	| {
-			type: "SetRepeat";
-			mode: RepeatMode;
-	  }
-	| {
-			type: "SetVolume";
-			level: number;
-	  };
+	| { type: "Play" }
+	| { type: "Pause" }
+	| { type: "Stop" }
+	| { type: "NextSong" }
+	| { type: "PreviousSong" }
+	| { type: "Seek"; position: number }
+	| { type: "ToggleShuffle" }
+	| { type: "ToggleRepeat" }
+	| { type: "SetRepeat"; mode: RepeatMode }
+	| { type: "SetVolume"; level: number }
+	| { type: "ToggleMute" };
 
 export type SmtcSimpleEvent = {
 	type:

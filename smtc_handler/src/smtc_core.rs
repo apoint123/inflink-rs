@@ -54,6 +54,7 @@ static HANDLER_TOKENS: LazyLock<Mutex<Option<SmtcHandlerTokens>>> =
 enum SmtcEvent {
     Play,
     Pause,
+    Stop,
     NextSong,
     PreviousSong,
     ToggleShuffle,
@@ -196,6 +197,7 @@ pub fn initialize() -> Result<()> {
         smtc.SetIsEnabled(true)?;
         smtc.SetIsPlayEnabled(true)?;
         smtc.SetIsPauseEnabled(true)?;
+        smtc.SetIsStopEnabled(true)?;
         smtc.SetIsNextEnabled(true)?;
         smtc.SetIsPreviousEnabled(true)?;
         debug!("已启用各个 SMTC 控制能力");
@@ -210,6 +212,7 @@ pub fn initialize() -> Result<()> {
                     let event = match button {
                         SystemMediaTransportControlsButton::Play => SmtcEvent::Play,
                         SystemMediaTransportControlsButton::Pause => SmtcEvent::Pause,
+                        SystemMediaTransportControlsButton::Stop => SmtcEvent::Stop,
                         SystemMediaTransportControlsButton::Next => SmtcEvent::NextSong,
                         SystemMediaTransportControlsButton::Previous => SmtcEvent::PreviousSong,
                         _ => return Ok(()),

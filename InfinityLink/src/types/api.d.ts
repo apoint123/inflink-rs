@@ -20,6 +20,7 @@ export interface IInfLinkApi {
 
 	play(): void;
 	pause(): void;
+	stop(): void;
 	next(): void;
 	previous(): void;
 	seekTo(positionMs: number): void;

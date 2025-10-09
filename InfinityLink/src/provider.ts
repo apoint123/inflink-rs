@@ -39,6 +39,9 @@ export class SmtcProvider {
 			case "Pause":
 				this.adapter.pause();
 				break;
+			case "Stop":
+				this.adapter.stop();
+				break;
 			case "NextSong":
 				this.adapter.nextSong();
 				break;

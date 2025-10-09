@@ -32,6 +32,7 @@ export interface INcmAdapter extends EventTarget {
 
 	play(): void;
 	pause(): void;
+	stop(): void;
 	nextSong(): void;
 	previousSong(): void;
 	seekTo(positionMs: number): void;

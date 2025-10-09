@@ -442,6 +442,11 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		}
 	}
 
+	public stop(): void {
+		this.pause();
+		this.seekTo(0);
+	}
+
 	public nextSong(): void {
 		this.reduxStore?.dispatch({
 			type: "playingList/jump2Track",
