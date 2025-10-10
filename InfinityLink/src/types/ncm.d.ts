@@ -80,28 +80,53 @@ export namespace v3 {
 		End: (audioId: string) => void;
 		PlayProgress: (audioId: string, progress: number) => void;
 		PlayState: (audioId: string, state: string) => void;
+		Seek: (payload: unknown[]) => void;
 	}
 
 	export type EventName = keyof EventMap;
 
+	export type SubscriptionType = "playprogress" | "seek";
+
+	export interface PlayProgressInfo {
+		playId: string;
+		current: number;
+		cacheProgress: number;
+		force: boolean;
+	}
+
+	export interface SeekInfo {
+		playId: string;
+		seekId: string;
+		code: number;
+		position: number;
+	}
+
 	export interface AudioPlayer {
-		subscribePlayStatus: (options: {
+		/**
+		 * 订阅播放器状态
+		 * @param options.type - 订阅的事件类型
+		 * @param options.callback - 事件回调
+		 */
+		subscribePlayStatus(options: {
 			type: "playprogress";
-			callback: (info: {
-				playId: string;
-				current: number; // 播放进度 (秒)
-				cacheProgress: number;
-				force: boolean;
-			}) => void;
-		}) => void;
-		unSubscribePlayStatus: (
-			callback: (info: {
-				playId: string;
-				current: number;
-				cacheProgress: number;
-				force: boolean;
-			}) => void,
-		) => void;
+			callback: (info: PlayProgressInfo) => void;
+		}): void;
+		subscribePlayStatus(options: {
+			type: "seek";
+			callback: (info: SeekInfo) => void;
+		}): void;
+
+		/**
+		 * 取消订阅播放器状态
+		 * @param callback - 注册时使用的同一个回调函数
+		 */
+		unSubscribePlayStatus(callback: (info: PlayProgressInfo) => void): void;
+		/**
+		 * 网易云的 `unSubscribePlayStatus` 方法似乎只会只尝试从 "PlayState" 事件上移除监听器
+		 *
+		 * 但我们还是保留这个重载，说不定网易云之后又会从其它事件上移除监听器了
+		 */
+		unSubscribePlayStatus(callback: (info: SeekInfo) => void): void;
 	}
 }
 

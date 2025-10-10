@@ -67,7 +67,7 @@ const copyAssetsPlugin = (mode: string): Plugin => {
 					fs.cpSync(outputDir, devPluginDir, { recursive: true });
 				} catch (error) {
 					if (error && typeof error === "object" && "code" in error) {
-						if (error.code === "EBUSY" || error.code === "EPERM") {
+						if (error.code === "EBUSY" || error.code === "EPIPE") {
 							console.warn("[Vite] 无法同步到开发目录 (文件可能被网易云占用)");
 						} else {
 							console.error("同步到开发目录时发生错误:", error);

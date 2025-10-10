@@ -15,7 +15,7 @@ import type {
 	VolumeInfo,
 } from "../../types/smtc";
 import { resizeImageUrl, throttle, waitForElement } from "../../utils";
-import { NcmEventAdapter } from "../../utils/event";
+import { NcmEventAdapter, type ParsedEventMap } from "../../utils/event";
 import logger from "../../utils/logger";
 import type { INcmAdapter, NcmAdapterEventMap, PlayModeInfo } from "../adapter";
 import { PlayModeController } from "../playModeController";
@@ -221,24 +221,22 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	private volume = 1.0;
 	private isMuted = false;
 
-	private readonly dispatchTimelineThrottled: () => void;
 	private readonly playModeController = new PlayModeController(
 		V2_MODE_CONSTANTS,
 	);
 
+	private readonly dispatchTimelineThrottled: () => void;
+	private readonly resetTimelineThrottle: () => void;
+
 	constructor() {
 		super();
 		this.eventAdapter = new NcmEventAdapter("v2");
-		this.dispatchTimelineThrottled = throttle(() => {
-			this.dispatchEvent(
-				new CustomEvent<TimelineInfo>("timelineUpdate", {
-					detail: {
-						currentTime: this.musicPlayProgress,
-						totalTime: this.musicDuration,
-					},
-				}),
-			);
-		}, 1000)[0];
+		[this.dispatchTimelineThrottled, , this.resetTimelineThrottle] = throttle(
+			() => {
+				this._dispatchTimelineUpdateNow();
+			},
+			1000,
+		);
 	}
 
 	private get activePlayerApi(): NcmV2PlayerApi | null {
@@ -283,6 +281,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 			this.unsubscribeStore();
 			this.unsubscribeStore = null;
 		}
+		this.eventAdapter.dispose();
 		this.unregisterNcmEvents();
 
 		logger.debug("[Adapter V2] Disposed.");
@@ -487,8 +486,12 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	}
 
 	private registerNcmEvents(): void {
-		this.eventAdapter.on("PlayState", this.onPlayStateChanged);
-		this.eventAdapter.on("PlayProgress", this.onPlayProgress);
+		this.eventAdapter.addEventListener(
+			"playStateChange",
+			this.onPlayStateChanged,
+		);
+		this.eventAdapter.addEventListener("progressUpdate", this.onProgressUpdate);
+		this.eventAdapter.addEventListener("seekUpdate", this.onSeekUpdate);
 
 		try {
 			NcmV2PlayerApi.addVolumeListener(this.onVolumeChanged);
@@ -499,15 +502,46 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	}
 
 	private unregisterNcmEvents(): void {
-		try {
-			this.eventAdapter.off("PlayState", this.onPlayStateChanged);
-			this.eventAdapter.off("PlayProgress", this.onPlayProgress);
+		this.eventAdapter.removeEventListener(
+			"playStateChange",
+			this.onPlayStateChanged,
+		);
+		this.eventAdapter.removeEventListener(
+			"progressUpdate",
+			this.onProgressUpdate,
+		);
+		this.eventAdapter.removeEventListener("seekUpdate", this.onSeekUpdate);
 
+		try {
 			NcmV2PlayerApi.removeVolumeListener(this.onVolumeChanged);
 			NcmV2PlayerApi.removeMuteListener(this.onMuteChanged);
 		} catch (e) {
 			logger.error("[Adapter V2] 清理原生事件监听时发生错误:", e);
 		}
+	}
+
+	private readonly onProgressUpdate = (
+		e: ParsedEventMap["progressUpdate"],
+	): void => {
+		this.musicPlayProgress = e.detail;
+		this.dispatchTimelineThrottled();
+	};
+
+	private readonly onSeekUpdate = (e: ParsedEventMap["seekUpdate"]): void => {
+		this.musicPlayProgress = e.detail;
+		this.resetTimelineThrottle();
+		this._dispatchTimelineUpdateNow();
+	};
+
+	private _dispatchTimelineUpdateNow(): void {
+		this.dispatchEvent(
+			new CustomEvent<TimelineInfo>("timelineUpdate", {
+				detail: {
+					currentTime: this.musicPlayProgress,
+					totalTime: this.musicDuration,
+				},
+			}),
+		);
 	}
 
 	private readonly onVolumeChanged = (
@@ -539,45 +573,11 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		);
 	}
 
-	private readonly onPlayProgress = (
-		_audioId: string,
-		progressInSeconds: number,
-	): void => {
-		this.musicPlayProgress = Math.floor(progressInSeconds * 1000);
-		const newDuration = this.activePlayerApi?.getDuration() ?? 0;
-		if (newDuration > 0) {
-			this.musicDuration = Math.floor(newDuration * 1000);
-		}
-		this.dispatchTimelineThrottled();
-	};
-
 	private readonly onPlayStateChanged = (
-		_audioId: string,
-		stateInfo: string,
+		e: ParsedEventMap["playStateChange"],
 	): void => {
-		const parts = stateInfo.split("|");
-		let newPlayState: PlaybackStatus | undefined;
-
-		if (parts.length >= 2) {
-			const stateKeyword = parts[1];
-			switch (stateKeyword) {
-				case "resume":
-				case "play":
-					newPlayState = "Playing";
-					break;
-				case "pause":
-					newPlayState = "Paused";
-					break;
-				default:
-					logger.warn(`[Adapter V2] 未知的播放状态: ${stateKeyword}`);
-					return;
-			}
-		} else {
-			logger.warn(`[Adapter V2] 意外的播放状态: ${stateInfo}`);
-			return;
-		}
-
-		if (newPlayState && this.playStatus !== newPlayState) {
+		const newPlayState = e.detail;
+		if (this.playStatus !== newPlayState) {
 			this.playStatus = newPlayState;
 			this.dispatchEvent(
 				new CustomEvent<PlaybackStatus>("playStateChange", {

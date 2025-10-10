@@ -21,7 +21,7 @@ import {
 	throttle,
 	waitForElement,
 } from "../../utils";
-import { NcmEventAdapter } from "../../utils/event";
+import { NcmEventAdapter, type ParsedEventMap } from "../../utils/event";
 import logger from "../../utils/logger";
 import type { INcmAdapter, NcmAdapterEventMap, PlayModeInfo } from "../adapter";
 import { PlayModeController } from "../playModeController";
@@ -154,24 +154,21 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	private lastIsMuted: boolean | null = null;
 
 	private readonly dispatchTimelineThrottled: () => void;
+	private readonly resetTimelineThrottle: () => void;
+
 	private readonly playModeController = new PlayModeController(NCM_PLAY_MODES);
 
-	private onPlayProgressCallback: ((info: { current: number }) => void) | null =
+	private onPlayProgressCallback: ((info: v3.PlayProgressInfo) => void) | null =
 		null;
+	private onSeekCallback: ((info: v3.SeekInfo) => void) | null = null;
 
 	constructor() {
 		super();
 		this.eventAdapter = new NcmEventAdapter("v3");
-		this.dispatchTimelineThrottled = throttle(() => {
-			this.dispatchEvent(
-				new CustomEvent<TimelineInfo>("timelineUpdate", {
-					detail: {
-						currentTime: this.musicPlayProgress,
-						totalTime: this.musicDuration,
-					},
-				}),
-			);
-		}, CONSTANTS.TIMELINE_THROTTLE_INTERVAL_MS)[0];
+		[this.dispatchTimelineThrottled, , this.resetTimelineThrottle] = throttle(
+			() => this._dispatchTimelineUpdateNow(),
+			CONSTANTS.TIMELINE_THROTTLE_INTERVAL_MS,
+		);
 	}
 
 	public async initialize(): Promise<Result<void, NcmAdapterError>> {
@@ -238,6 +235,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 			this.unsubscribeStore = null;
 		}
 		this.unregisterAudioPlayerEvents();
+		this.eventAdapter.dispose();
 
 		logger.debug("[Adapter V3] Disposed.");
 	}
@@ -490,80 +488,108 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	}
 
 	private registerAudioPlayerEvents(): void {
-		this.eventAdapter.on("PlayState", this.onPlayStateChanged);
+		this.eventAdapter.addEventListener(
+			"playStateChange",
+			this.onPlayStateChanged,
+		);
+
 		if (this.audioPlayer) {
-			this.onPlayProgressCallback = (info) => this.onPlayProgress(info.current);
+			this.onPlayProgressCallback = (info) => {
+				if ("current" in info) {
+					this.musicPlayProgress = info.current * 1000;
+					this.dispatchTimelineThrottled();
+				}
+			};
 			this.audioPlayer.subscribePlayStatus({
 				type: "playprogress",
 				callback: this.onPlayProgressCallback,
 			});
+
+			this.onSeekCallback = (info) => {
+				if ("position" in info) {
+					const positionInMs = Math.floor(info.position * 1000);
+					this.onSeekUpdate({
+						detail: positionInMs,
+					} as CustomEvent<number>);
+				}
+			};
+			this.audioPlayer.subscribePlayStatus({
+				type: "seek",
+				callback: this.onSeekCallback,
+			});
 		} else {
-			this.eventAdapter.on("PlayProgress", this.onPlayProgressLegacy);
+			this.eventAdapter.addEventListener(
+				"progressUpdate",
+				this.onProgressUpdate,
+			);
 		}
 	}
 
 	private unregisterAudioPlayerEvents(): void {
 		try {
-			this.eventAdapter.off("PlayState", this.onPlayStateChanged);
+			this.eventAdapter.removeEventListener(
+				"playStateChange",
+				this.onPlayStateChanged,
+			);
 
-			if (this.audioPlayer && this.onPlayProgressCallback) {
-				this.audioPlayer.unSubscribePlayStatus(this.onPlayProgressCallback);
-				this.onPlayProgressCallback = null;
+			if (this.audioPlayer) {
+				if (this.onPlayProgressCallback) {
+					this.audioPlayer.unSubscribePlayStatus(this.onPlayProgressCallback);
+					this.onPlayProgressCallback = null;
+				}
+				// 反注册 Seek 事件似乎是无效的，因为 unSubscribePlayStatus
+				// 实际上只会尝试从 PlayState 事件上移除监听器
+				// 猜测这可能和 PlayProgress 和 seek 等事件的怪癖有关
+				if (this.onSeekCallback) {
+					this.audioPlayer.unSubscribePlayStatus(this.onSeekCallback);
+					this.onSeekCallback = null;
+				}
 			} else {
-				this.eventAdapter.off("PlayProgress", this.onPlayProgressLegacy);
+				this.eventAdapter.removeEventListener(
+					"progressUpdate",
+					this.onProgressUpdate,
+				);
 			}
 		} catch (e) {
 			logger.error("[Adapter V3] 清理原生事件监听时发生错误:", e);
 		}
 	}
 
-	private onPlayProgress(progressInSeconds: number): void {
-		this.musicPlayProgress = Math.floor(progressInSeconds * 1000);
-		this.dispatchTimelineThrottled();
-	}
-
-	private readonly onPlayProgressLegacy = (
-		_audioId: string,
-		progress: number,
+	private readonly onProgressUpdate = (
+		e: ParsedEventMap["progressUpdate"],
 	): void => {
-		this.onPlayProgress(progress);
+		this.musicPlayProgress = e.detail;
+		this.dispatchTimelineThrottled();
+	};
+
+	private readonly onSeekUpdate = (e: ParsedEventMap["seekUpdate"]): void => {
+		this.musicPlayProgress = e.detail;
+		this.resetTimelineThrottle();
+		this._dispatchTimelineUpdateNow();
 	};
 
 	private readonly onPlayStateChanged = (
-		_audioId: string,
-		stateInfo: string,
+		e: ParsedEventMap["playStateChange"],
 	): void => {
-		let newPlayState: PlaybackStatus | undefined;
-
-		const parts = stateInfo.split("|");
-		if (parts.length >= 2) {
-			const stateKeyword = parts[1];
-			switch (stateKeyword) {
-				case "resume":
-				case "play":
-					newPlayState = "Playing";
-					break;
-				case "pause":
-					newPlayState = "Paused";
-					break;
-				default:
-					logger.warn(`[Adapter V3] 未知的播放状态: ${stateKeyword}`);
-					return;
-			}
-		} else {
-			logger.warn(`[Adapter V3] 意外的播放状态: ${stateInfo}`);
-			return;
-		}
-
-		if (newPlayState && this.playState !== newPlayState) {
-			this.playState = newPlayState;
-			this.dispatchEvent(
-				new CustomEvent<PlaybackStatus>("playStateChange", {
-					detail: this.playState,
-				}),
-			);
+		const newPlayState = e.detail;
+		if (this.playState !== newPlayState) {
+			// v3 的播放状态由 redux store 更新
+			// 在这里也同步的话，乐观暂停时这里也会尝试同步状态
+			// 导致暂停按钮闪烁
+			// this.playState = newPlayState;
 		}
 	};
+
+	private _dispatchTimelineUpdateNow(): void {
+		this.dispatchEvent(
+			new CustomEvent<TimelineInfo>("timelineUpdate", {
+				detail: {
+					currentTime: this.musicPlayProgress,
+					totalTime: this.musicDuration,
+				},
+			}),
+		);
+	}
 
 	public override dispatchEvent<K extends keyof NcmAdapterEventMap>(
 		event: NcmAdapterEventMap[K],
