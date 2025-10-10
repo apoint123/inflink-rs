@@ -15,6 +15,7 @@ import type {
 	VolumeInfo,
 } from "../../types/smtc";
 import { resizeImageUrl, throttle, waitForElement } from "../../utils";
+import { NcmEventAdapter } from "../../utils/event";
 import logger from "../../utils/logger";
 import type { INcmAdapter, NcmAdapterEventMap, PlayModeInfo } from "../adapter";
 import { PlayModeController } from "../playModeController";
@@ -209,6 +210,7 @@ async function findReduxStore(
 export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	private reduxStore: v2.NCMStore | null = null;
 	private unsubscribeStore: (() => void) | null = null;
+	private readonly eventAdapter: NcmEventAdapter;
 
 	private musicDuration = 0;
 	private musicPlayProgress = 0;
@@ -226,6 +228,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 
 	constructor() {
 		super();
+		this.eventAdapter = new NcmEventAdapter("v2");
 		this.dispatchTimelineThrottled = throttle(() => {
 			this.dispatchEvent(
 				new CustomEvent<TimelineInfo>("timelineUpdate", {
@@ -484,16 +487,8 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	}
 
 	private registerNcmEvents(): void {
-		legacyNativeCmder.appendRegisterCall(
-			"PlayState",
-			"audioplayer",
-			(_audioId: string, state: string) => this.onPlayStateChanged(state),
-		);
-		legacyNativeCmder.appendRegisterCall(
-			"PlayProgress",
-			"audioplayer",
-			(_audioId: string, progress: number) => this.onPlayProgress(progress),
-		);
+		this.eventAdapter.on("PlayState", this.onPlayStateChanged);
+		this.eventAdapter.on("PlayProgress", this.onPlayProgress);
 
 		try {
 			NcmV2PlayerApi.addVolumeListener(this.onVolumeChanged);
@@ -505,16 +500,8 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 
 	private unregisterNcmEvents(): void {
 		try {
-			legacyNativeCmder.removeRegisterCall(
-				"PlayState",
-				"audioplayer",
-				this.onPlayStateChanged,
-			);
-			legacyNativeCmder.removeRegisterCall(
-				"PlayProgress",
-				"audioplayer",
-				this.onPlayProgress,
-			);
+			this.eventAdapter.off("PlayState", this.onPlayStateChanged);
+			this.eventAdapter.off("PlayProgress", this.onPlayProgress);
 
 			NcmV2PlayerApi.removeVolumeListener(this.onVolumeChanged);
 			NcmV2PlayerApi.removeMuteListener(this.onMuteChanged);
@@ -552,7 +539,10 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		);
 	}
 
-	private readonly onPlayProgress = (progressInSeconds: number): void => {
+	private readonly onPlayProgress = (
+		_audioId: string,
+		progressInSeconds: number,
+	): void => {
 		this.musicPlayProgress = Math.floor(progressInSeconds * 1000);
 		const newDuration = this.activePlayerApi?.getDuration() ?? 0;
 		if (newDuration > 0) {
@@ -561,7 +551,10 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		this.dispatchTimelineThrottled();
 	};
 
-	private readonly onPlayStateChanged = (stateInfo: string): void => {
+	private readonly onPlayStateChanged = (
+		_audioId: string,
+		stateInfo: string,
+	): void => {
 		const parts = stateInfo.split("|");
 		let newPlayState: PlaybackStatus | undefined;
 
