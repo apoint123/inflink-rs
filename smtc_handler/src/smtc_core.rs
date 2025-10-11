@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use cef_safe::{CefResult, CefV8Context, CefV8Value, renderer_post_task_in_v8_ctx};
 use serde::Serialize;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{LazyLock, Mutex};
 use tracing::{debug, error, info, instrument, trace, warn};
 use windows::{
@@ -20,6 +21,8 @@ use windows::{
 use crate::model::{
     CommandResult, CommandStatus, MetadataPayload, PlaybackStatus, RepeatMode, SmtcCommand,
 };
+
+static SMTC_ACTIVATED: LazyLock<AtomicBool> = LazyLock::new(|| AtomicBool::new(false));
 
 const HNS_PER_MILLISECOND: f64 = 10_000.0;
 
@@ -186,6 +189,8 @@ where
 #[instrument]
 pub fn initialize() -> Result<()> {
     info!("正在初始化 SMTC...");
+    SMTC_ACTIVATED.store(false, Ordering::SeqCst);
+
     let tokens = with_smtc("初始化", |smtc| {
         if HANDLER_TOKENS.lock().unwrap().is_some() {
             warn!("发现残留的 SMTC 处理器，可能是上次未能正常关闭。正在清理");
@@ -194,7 +199,6 @@ pub fn initialize() -> Result<()> {
             }
         }
 
-        smtc.SetIsEnabled(true)?;
         smtc.SetIsPlayEnabled(true)?;
         smtc.SetIsPauseEnabled(true)?;
         smtc.SetIsStopEnabled(true)?;
@@ -285,6 +289,7 @@ pub fn shutdown() -> Result<()> {
         Ok(())
     })?;
     clear_callback();
+    SMTC_ACTIVATED.store(false, Ordering::SeqCst);
     debug!("SMTC 已关闭");
     Ok(())
 }
@@ -374,6 +379,13 @@ pub fn update_metadata(payload: MetadataPayload) {
         };
 
         let result = with_smtc("更新元数据", |smtc| {
+            if SMTC_ACTIVATED
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+            {
+                smtc.SetIsEnabled(true)?;
+            }
+
             let updater = smtc.DisplayUpdater()?;
             updater.SetType(MediaPlaybackType::Music)?;
 
