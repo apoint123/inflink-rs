@@ -153,7 +153,11 @@ fn dispatch_event(event: &SmtcEvent) {
 }
 
 fn cleanup_smtc_handlers(smtc: &SystemMediaTransportControls) -> Result<()> {
-    let maybe_tokens = HANDLER_TOKENS.lock().unwrap().take();
+    let maybe_tokens = HANDLER_TOKENS
+        .lock()
+        .map_err(|e| anyhow::anyhow!("HANDLER_TOKENS 锁中毒: {e}"))?
+        .take();
+
     if let Some(tokens) = maybe_tokens {
         smtc.RemoveButtonPressed(tokens.button_pressed)?;
         smtc.RemoveShuffleEnabledChangeRequested(tokens.shuffle_changed)?;
@@ -192,7 +196,11 @@ pub fn initialize() -> Result<()> {
     SMTC_ACTIVATED.store(false, Ordering::SeqCst);
 
     let tokens = with_smtc("初始化", |smtc| {
-        if HANDLER_TOKENS.lock().unwrap().is_some() {
+        if HANDLER_TOKENS
+            .lock()
+            .map_err(|e| anyhow::anyhow!("HANDLER_TOKENS 锁中毒: {e}"))?
+            .is_some()
+        {
             warn!("发现残留的 SMTC 处理器，可能是上次未能正常关闭。正在清理");
             if let Err(e) = cleanup_smtc_handlers(smtc) {
                 error!("清理残留的 SMTC 处理器失败: {e:?}");
@@ -275,7 +283,9 @@ pub fn initialize() -> Result<()> {
         })
     })?;
 
-    *HANDLER_TOKENS.lock().unwrap() = Some(tokens);
+    *HANDLER_TOKENS
+        .lock()
+        .map_err(|e| anyhow::anyhow!("HANDLER_TOKENS 锁中毒: {e}"))? = Some(tokens);
 
     debug!("SMTC 已初始化");
     Ok(())

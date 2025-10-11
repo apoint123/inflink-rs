@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use serde::Serialize;
 use std::fmt::Write;
 use std::fs;
@@ -42,14 +43,22 @@ pub fn register_callback(v8_func_ptr: *mut cef_safe::cef_sys::_cef_v8value_t) {
             })
         });
 
+    let mut guard = match LOGGING_CALLBACK.lock() {
+        Ok(guard) => guard,
+        Err(e) => {
+            error!("LOGGING_CALLBACK 锁中毒: {e}");
+            return;
+        }
+    };
+
     match callback_result {
         Ok(callback) => {
-            *LOGGING_CALLBACK.lock().unwrap() = Some(callback);
+            *guard = Some(callback);
             trace!("JS 日志回调注册成功。");
         }
         Err(e) => {
             eprintln!("JS 日志回调注册失败: {e}");
-            *LOGGING_CALLBACK.lock().unwrap() = None;
+            *guard = None;
         }
     }
 }
@@ -124,7 +133,7 @@ impl tracing::field::Visit for MessageVisitor {
             if !self.message.is_empty() {
                 self.message.push(' ');
             }
-            write!(&mut self.message, "{}={:?}", field.name(), value).unwrap();
+            let _ = write!(&mut self.message, "{}={:?}", field.name(), value);
         }
     }
 
@@ -135,7 +144,7 @@ impl tracing::field::Visit for MessageVisitor {
             if !self.message.is_empty() {
                 self.message.push(' ');
             }
-            write!(&mut self.message, "{}={}", field.name(), value).unwrap();
+            let _ = write!(&mut self.message, "{}={}", field.name(), value);
         }
     }
 }
@@ -152,8 +161,9 @@ impl<S: Subscriber> tracing_subscriber::layer::Filter<S> for FrontendFilter {
         meta: &tracing::Metadata<'_>,
         _ctx: &tracing_subscriber::layer::Context<'_, S>,
     ) -> bool {
-        let guard = FRONTEND_FILTER_LEVEL.lock().expect("日志级别锁已毒化");
-        meta.level() <= &*guard
+        FRONTEND_FILTER_LEVEL
+            .lock()
+            .is_ok_and(|guard| meta.level() <= &*guard)
     }
 }
 
@@ -162,7 +172,9 @@ pub fn set_frontend_log_level(level_str: &str) -> Result<(), String> {
         .map_err(|e| format!("无效的日志级别 '{level_str}': {e}"))?;
 
     {
-        let mut guard = FRONTEND_FILTER_LEVEL.lock().expect("日志级别锁已毒化");
+        let mut guard = FRONTEND_FILTER_LEVEL
+            .lock()
+            .map_err(|e| format!("FRONTEND_FILTER_LEVEL 锁中毒: {e}"))?;
         *guard = level;
     }
 
@@ -198,49 +210,46 @@ fn cleanup_old_logs(log_dir: &PathBuf, max_files: usize) {
     }
 }
 
-pub fn init() {
+pub fn init() -> Result<()> {
+    let directive = "smtc_handler=trace"
+        .parse()
+        .context("硬编码的日志指令无效，这不应该发生")?;
     let default_filter = EnvFilter::builder()
         .with_default_directive(tracing::level_filters::LevelFilter::WARN.into())
         .from_env_lossy()
-        .add_directive("smtc_handler=trace".parse().unwrap());
+        .add_directive(directive);
 
     let mut log_path: Option<PathBuf> = None;
 
-    let file_layer = dirs::data_dir().map_or_else(
-        || None,
-        |mut path| {
-            path.push("InfLink-rs");
-            log_path = Some(path.clone());
+    let file_layer = dirs::data_dir().and_then(|mut path| {
+        path.push("InfLink-rs");
+        log_path = Some(path.clone());
 
-            if fs::create_dir_all(&path).is_ok() {
-                let rotation = tracing_appender::rolling::Rotation::DAILY;
+        fs::create_dir_all(&path).ok()?;
 
-                let file_appender = RollingFileAppender::builder()
-                    .rotation(rotation)
-                    .filename_prefix("inflink-rs")
-                    .filename_suffix("log")
-                    .max_log_files(7)
-                    .build(&path)
-                    .expect("初始化日志文件失败");
+        let rotation = tracing_appender::rolling::Rotation::DAILY;
 
-                let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+        let file_appender = RollingFileAppender::builder()
+            .rotation(rotation)
+            .filename_prefix("inflink-rs")
+            .filename_suffix("log")
+            .max_log_files(7)
+            .build(&path)
+            .ok()?;
 
-                if LOG_GUARD.set(guard).is_err() {
-                    tracing::error!("[InfLink-rs] Logger Guard 已经被初始化，不应重复调用 init()");
-                }
+        let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
-                Some(
-                    tracing_subscriber::fmt::layer()
-                        .with_writer(non_blocking)
-                        .with_ansi(false)
-                        .with_filter(EnvFilter::new("trace")),
-                )
-            } else {
-                log_path = None;
-                None
-            }
-        },
-    );
+        if LOG_GUARD.set(guard).is_err() {
+            error!("Logger Guard 已经被初始化，不应重复调用 init()");
+        }
+
+        Some(
+            tracing_subscriber::fmt::layer()
+                .with_writer(non_blocking)
+                .with_ansi(false)
+                .with_filter(EnvFilter::new("trace")),
+        )
+    });
 
     let frontend_layer = FrontendTracingLayer.with_filter(FrontendFilter);
 
@@ -248,13 +257,16 @@ pub fn init() {
         .with(default_filter)
         .with(file_layer)
         .with(frontend_layer)
-        .init();
+        .try_init()
+        .context("无法初始化 Tracing subscriber")?;
 
     trace!("Tracing subscriber 已初始化");
 
     if let Some(path) = log_path {
         cleanup_old_logs(&path, 7);
     }
+
+    Ok(())
 }
 
 pub fn clear_callback() {
