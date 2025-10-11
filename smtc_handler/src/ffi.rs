@@ -53,7 +53,7 @@ unsafe fn register_api(
     let identifier = match CString::new(identifier_str) {
         Ok(s) => s,
         Err(e) => {
-            error!("[InfLink-rs] 无法创建 CString '{}': {}", identifier_str, e);
+            error!("无法创建 CString '{identifier_str}': {e}");
             return Err(-1);
         }
     };
@@ -75,7 +75,7 @@ unsafe fn c_char_to_string(s: *const c_char) -> String {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn inflink_initialize(_args: *mut *mut c_void) -> *mut c_char {
     if let Err(e) = smtc_core::initialize() {
-        error!("[InfLink-rs] 初始化失败: {}", e);
+        error!("初始化失败: {e}");
     }
     ptr::null_mut()
 }
@@ -85,7 +85,7 @@ pub unsafe extern "C" fn inflink_initialize(_args: *mut *mut c_void) -> *mut c_c
 pub unsafe extern "C" fn inflink_shutdown(_args: *mut *mut c_void) -> *mut c_char {
     smtc_core::clear_callback();
     if let Err(e) = smtc_core::shutdown() {
-        error!("[InfLink-rs] 关闭失败: {}", e);
+        error!("关闭失败: {e}");
     }
     ptr::null_mut()
 }
@@ -115,12 +115,12 @@ static RETURN_BUFFER: LazyLock<Mutex<CString>> =
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn inflink_dispatch(args: *mut *mut c_void) -> *mut c_char {
     if args.is_null() {
-        error!("[InfLink-rs] inflink_dispatch 收到了空指针");
+        error!("inflink_dispatch 收到了空指针");
         return ptr::null_mut();
     }
     let command_ptr = unsafe { *args.add(0) };
     if command_ptr.is_null() {
-        error!("[InfLink-rs] inflink_dispatch 收到了空命令指针");
+        error!("inflink_dispatch 收到了空命令指针");
         return ptr::null_mut();
     }
 
@@ -133,7 +133,7 @@ pub unsafe extern "C" fn inflink_dispatch(args: *mut *mut c_void) -> *mut c_char
     let mut buffer_guard = match RETURN_BUFFER.lock() {
         Ok(guard) => guard,
         Err(e) => {
-            error!("[InfLink-rs] RETURN_BUFFER 锁毒化: {e}");
+            error!("RETURN_BUFFER 锁毒化: {e}");
             return ptr::null_mut();
         }
     };
@@ -141,7 +141,7 @@ pub unsafe extern "C" fn inflink_dispatch(args: *mut *mut c_void) -> *mut c_char
     *buffer_guard = match CString::new(result_json) {
         Ok(s) => s,
         Err(e) => {
-            error!("[InfLink-rs] 无法创建返回的 CString: {e}");
+            error!("无法创建返回的 CString: {e}");
             CString::new("").unwrap()
         }
     };
@@ -171,18 +171,18 @@ pub unsafe extern "C" fn inflink_cleanup(_args: *mut *mut c_void) -> *mut c_char
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn inflink_set_log_level(args: *mut *mut c_void) -> *mut c_char {
     if args.is_null() {
-        error!("[InfLink-rs] inflink_set_log_level 收到了空指针");
+        error!("inflink_set_log_level 收到了空指针");
         return ptr::null_mut();
     }
     let level_pointer = unsafe { *args.add(0) };
     if level_pointer.is_null() {
-        error!("[InfLink-rs] inflink_set_log_level 收到了空日志级别指针");
+        error!("inflink_set_log_level 收到了空日志级别指针");
         return ptr::null_mut();
     }
 
     let level_string = unsafe { c_char_to_string(level_pointer.cast::<c_char>()) };
     if let Err(e) = logger::set_frontend_log_level(&level_string) {
-        error!("[InfLink-rs] 设置日志级别失败: {}", e);
+        error!("设置日志级别失败: {e}");
     }
 
     ptr::null_mut()
@@ -205,7 +205,7 @@ pub unsafe extern "C" fn BetterNCMPluginMain(api: *mut PluginAPI) -> c_int {
     unsafe {
         let api_ref = &*api;
         if api_ref.process_type == NCMProcessType::Renderer {
-            trace!(process_type = ?api_ref.process_type, "[InfLink-rs] 正在注册 API");
+            trace!(process_type = ?api_ref.process_type, "正在注册 API");
             let add_api = api_ref.add_native_api;
 
             let registrations = [
