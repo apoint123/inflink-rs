@@ -317,6 +317,21 @@ export namespace v2 {
 			callback: CefPlayerEventMap[K],
 		): void;
 	}
+
+	/**
+	 * 从 dc.program.$ 缓存中获取的播客/电台节目数据结构
+	 */
+	export interface ProgramCacheData {
+		id: number;
+		name: string;
+		coverUrl: string;
+		dj?: {
+			nickname: string;
+		};
+		radio?: {
+			name: string;
+		};
+	}
 }
 
 declare global {
@@ -324,5 +339,15 @@ declare global {
 		defPlayer: v2.PlayerInstance;
 		player: v2.PlayerInstance;
 		cefPlayer: v2.CefPlayer;
+	};
+	const dc: {
+		program: {
+			/**
+			 * 从内部缓存获取节目详情
+			 * @param id 节目 ID (programId)
+			 * @returns 缓存中的节目数据，如果未找到则返回 null 或 undefined
+			 */
+			$: (id: number | string) => v2.ProgramCacheData | null | undefined;
+		};
 	};
 }

@@ -20,6 +20,9 @@ import logger from "../../utils/logger";
 import type { INcmAdapter, NcmAdapterEventMap, PlayModeInfo } from "../adapter";
 import { PlayModeController } from "../playModeController";
 
+const Controller = ctl;
+const DataController = dc;
+
 const NCM_PLAY_MODES = {
 	LIST_LOOP: "playorder",
 	SINGLE_LOOP: "playcycle",
@@ -107,46 +110,56 @@ class NcmV2PlayerApi {
 		const trackObject = this.playerInstance.MF?.U();
 		return trackObject?.data ?? null;
 	}
+}
 
-	public static getVolume(): number {
-		return ctl.cefPlayer?.K6() ?? 1.0;
+class NcmV2ApiClient {
+	public getActivePlayerInstance(): v2.PlayerInstance | null {
+		return Controller.player?.Hn() ?? null;
 	}
 
-	public static isMuted(): boolean {
-		return ctl.cefPlayer?.a6 ?? false;
+	public getProgramFromCache(
+		id: number | string,
+	): v2.ProgramCacheData | null | undefined {
+		return DataController.program.$(id);
 	}
 
-	public static setVolume(level: number): void {
+	public getVolume(): number {
+		return Controller.cefPlayer?.K6() ?? 1.0;
+	}
+
+	public isMuted(): boolean {
+		return Controller.cefPlayer?.a6 ?? false;
+	}
+
+	public setVolume(level: number): void {
 		const clampedLevel = Math.max(0, Math.min(1, level));
-		ctl.cefPlayer?.F6(clampedLevel);
+		Controller.cefPlayer?.F6(clampedLevel);
 	}
 
-	public static setMuted(mute: boolean): void {
-		ctl.cefPlayer?.T6(mute);
+	public setMuted(mute: boolean): void {
+		Controller.cefPlayer?.T6(mute);
 	}
 
-	public static addVolumeListener(
+	public addVolumeListener(
 		callback: v2.CefPlayerEventMap["onvolumechange"],
 	): void {
-		ctl.cefPlayer?.Ti("onvolumechange", callback);
+		Controller.cefPlayer?.Ti("onvolumechange", callback);
 	}
 
-	public static addMuteListener(
-		callback: v2.CefPlayerEventMap["onmutechange"],
-	): void {
-		ctl.cefPlayer?.Ti("onmutechange", callback);
-	}
-
-	public static removeVolumeListener(
+	public removeVolumeListener(
 		callback: v2.CefPlayerEventMap["onvolumechange"],
 	): void {
-		ctl.cefPlayer?.Ii("onvolumechange", callback);
+		Controller.cefPlayer?.Ii("onvolumechange", callback);
 	}
 
-	public static removeMuteListener(
+	public addMuteListener(callback: v2.CefPlayerEventMap["onmutechange"]): void {
+		Controller.cefPlayer?.Ti("onmutechange", callback);
+	}
+
+	public removeMuteListener(
 		callback: v2.CefPlayerEventMap["onmutechange"],
 	): void {
-		ctl.cefPlayer?.Ii("onmutechange", callback);
+		Controller.cefPlayer?.Ii("onmutechange", callback);
 	}
 }
 
@@ -207,6 +220,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	private reduxStore: v2.NCMStore | null = null;
 	private unsubscribeStore: (() => void) | null = null;
 	private readonly eventAdapter: NcmEventAdapter;
+	private readonly apiClient = new NcmV2ApiClient();
 
 	private musicDuration = 0;
 	private musicPlayProgress = 0;
@@ -236,7 +250,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	}
 
 	private get activePlayerApi(): NcmV2PlayerApi | null {
-		const currentPlayerInstance = ctl.player?.Hn();
+		const currentPlayerInstance = this.apiClient.getActivePlayerInstance();
 		if (currentPlayerInstance) {
 			return new NcmV2PlayerApi(currentPlayerInstance);
 		}
@@ -260,8 +274,8 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		);
 
 		try {
-			this.volume = NcmV2PlayerApi.getVolume();
-			this.isMuted = NcmV2PlayerApi.isMuted();
+			this.volume = this.apiClient.getVolume();
+			this.isMuted = this.apiClient.isMuted();
 		} catch (e) {
 			logger.warn("[Adapter V2] 初始化获取音量状态失败:", e);
 		}
@@ -290,6 +304,20 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		if (!songData?.id) return err(new SongNotFoundError());
 
 		if (typeof songData.programId === "number") {
+			const programCache = this.apiClient.getProgramFromCache(
+				songData.programId,
+			);
+
+			if (programCache) {
+				return ok({
+					songName: programCache.name || "未知播客",
+					authorName: programCache.dj?.nickname || "未知主播",
+					albumName: programCache.radio?.name || "未知播单",
+					thumbnailUrl: resizeImageUrl(programCache.coverUrl),
+					ncmId: programCache.id,
+				});
+			}
+
 			return ok({
 				songName: songData.name || "未知播客",
 				authorName:
@@ -432,11 +460,11 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	}
 
 	public setVolume(level: number): void {
-		NcmV2PlayerApi.setVolume(level);
+		this.apiClient.setVolume(level);
 	}
 
 	public toggleMute(): void {
-		NcmV2PlayerApi.setMuted(!this.isMuted);
+		this.apiClient.setMuted(!this.isMuted);
 	}
 
 	private onStateChanged(): void {
@@ -496,8 +524,8 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		this.eventAdapter.addEventListener("seekUpdate", this.onSeekUpdate);
 
 		try {
-			NcmV2PlayerApi.addVolumeListener(this.onVolumeChanged);
-			NcmV2PlayerApi.addMuteListener(this.onMuteChanged);
+			this.apiClient.addVolumeListener(this.onVolumeChanged);
+			this.apiClient.addMuteListener(this.onMuteChanged);
 		} catch (e) {
 			logger.error("[Adapter V2] 注册音量事件监听失败:", e);
 		}
@@ -515,8 +543,8 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		this.eventAdapter.removeEventListener("seekUpdate", this.onSeekUpdate);
 
 		try {
-			NcmV2PlayerApi.removeVolumeListener(this.onVolumeChanged);
-			NcmV2PlayerApi.removeMuteListener(this.onMuteChanged);
+			this.apiClient.removeVolumeListener(this.onVolumeChanged);
+			this.apiClient.removeMuteListener(this.onMuteChanged);
 		} catch (e) {
 			logger.error("[Adapter V2] 清理原生事件监听时发生错误:", e);
 		}
