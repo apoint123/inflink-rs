@@ -214,6 +214,11 @@ export namespace v2 {
 
 		/** 获取当前轨道（FM模式下）详细信息的 getter 函数 */
 		_t: () => PlayerTrack | null;
+
+		/** 统一获取当前轨道信息的对象 */
+		MF: {
+			U: () => PlayerTrack | null;
+		};
 	}
 
 	/**
@@ -259,6 +264,13 @@ export namespace v2 {
 		album: Album;
 		duration: number; // 毫秒
 		alias: string[]; // 歌曲后缀，说明原曲之类的
+		programId?: number; // 适用于播客的ID
+		radio?: Radio; // 播客的相关对象
+	}
+
+	export interface Radio {
+		name: string;
+		picUrl: string;
 	}
 
 	export interface CefPlayerVolumePayload {

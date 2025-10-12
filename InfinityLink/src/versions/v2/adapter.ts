@@ -104,11 +104,7 @@ class NcmV2PlayerApi {
 	}
 
 	public get currentSongData(): v2.SongData | null {
-		return this.playerInstance.x6?.data ?? null;
-	}
-
-	public getFmSongData(): v2.SongData | null {
-		const trackObject = this.playerInstance._t?.();
+		const trackObject = this.playerInstance.MF?.U();
 		return trackObject?.data ?? null;
 	}
 
@@ -288,22 +284,28 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	}
 
 	public getCurrentSongInfo(): Result<SongInfo, NcmAdapterError> {
-		let songData: v2.SongData | null = null;
 		const playerApi = this.activePlayerApi;
-
-		if (playerApi) {
-			songData = playerApi.currentSongData;
-			// FM 模式
-			if (!songData) {
-				songData = playerApi.getFmSongData();
-			}
-		}
+		const songData = playerApi?.currentSongData ?? null;
 
 		if (!songData?.id) return err(new SongNotFoundError());
 
+		if (typeof songData.programId === "number") {
+			return ok({
+				songName: songData.name || "未知播客",
+				authorName:
+					songData.artists?.map((v) => v.name).join(" / ") || "未知主播",
+				albumName: songData.radio?.name || "未知播单",
+				thumbnailUrl: resizeImageUrl(
+					songData.radio?.picUrl ?? songData.album?.picUrl,
+				),
+				ncmId: songData.programId,
+			});
+		}
+
 		return ok({
 			songName: songData.name || "未知歌名",
-			authorName: songData.artists?.map((v) => v.name).join(" / ") || "",
+			authorName:
+				songData.artists?.map((v) => v.name).join(" / ") || "未知艺术家",
 			albumName: songData.album?.name || "未知专辑",
 			thumbnailUrl: resizeImageUrl(songData.album?.picUrl),
 			ncmId: songData.id,
