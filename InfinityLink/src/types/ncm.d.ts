@@ -42,14 +42,34 @@ export namespace v3 {
 		resourceName?: string;
 		resourceArtists?: Artist[];
 		resourceCoverUrl?: string;
-		curTrack?: CurTrack;
+		resourceType?: "song" | "voice";
+		curTrack?: CurTrack | null;
 		playingState?: PlayState;
 		playingMode?: PlayMode;
 		playingVolume?: number; // 0-1
 	}
 
+	export interface CurrentVoice {
+		id: string;
+		name: string;
+		coverUrl: string;
+		/** 单位毫秒 */
+		duration: number;
+		radio?: {
+			name?: string;
+		};
+		track?: {
+			artists?: Artist[];
+		};
+	}
+
+	export interface VinylPageInfo {
+		currentVoice?: CurrentVoice;
+	}
+
 	export interface ReduxState {
-		playing: PlayingInfo | null;
+		playing: PlayingInfo;
+		"page:vinylPage"?: VinylPageInfo;
 	}
 
 	export type NCMStore = Store<ReduxState>;

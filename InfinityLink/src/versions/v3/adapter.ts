@@ -241,7 +241,37 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	}
 
 	public getCurrentSongInfo(): Result<SongInfo, NcmAdapterError> {
-		const playingInfo = this.reduxStore?.getState().playing;
+		const state = this.reduxStore?.getState();
+		const playingInfo = state?.playing;
+
+		if (playingInfo?.resourceType === "voice") {
+			const vinylInfo = state?.["page:vinylPage"];
+			const currentVoice = vinylInfo?.currentVoice;
+
+			if (!currentVoice?.id) {
+				return err(
+					new SongNotFoundError(
+						"正在播放播客，但在 page:vinylPage 中找不到 currentVoice",
+					),
+				);
+			}
+
+			const voiceId = parseInt(currentVoice.id, 10);
+			if (Number.isNaN(voiceId) || voiceId === 0) {
+				return err(new SongNotFoundError("当前播客 voiceId 无效"));
+			}
+
+			return ok({
+				songName: currentVoice.name || "未知播客",
+				authorName:
+					currentVoice.track?.artists?.map((v) => v.name).join(" / ") ||
+					"未知主播",
+				albumName: currentVoice.radio?.name || "未知播单",
+				thumbnailUrl: resizeImageUrl(currentVoice.coverUrl),
+				ncmId: voiceId,
+			});
+		}
+
 		if (!playingInfo?.resourceTrackId) {
 			return err(new SongNotFoundError("Redux state 中找不到 resourceTrackId"));
 		}
@@ -260,7 +290,8 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		return ok({
 			songName: playingInfo.resourceName || "未知歌名",
 			authorName:
-				playingInfo.resourceArtists?.map((v) => v.name).join(" / ") || "",
+				playingInfo.resourceArtists?.map((v) => v.name).join(" / ") ||
+				"未知艺术家",
 			albumName: albumName,
 			thumbnailUrl: resizeImageUrl(playingInfo.resourceCoverUrl),
 			ncmId: currentTrackId,
@@ -432,17 +463,27 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 
 	private onStateChanged(): void {
 		if (!this.reduxStore) return;
-		const playingInfo = this.reduxStore.getState().playing;
+		const state = this.reduxStore.getState();
+		const playingInfo = state.playing;
 		const songInfoResult = this.getCurrentSongInfo();
+
 		if (
 			songInfoResult.isOk() &&
 			songInfoResult.value.ncmId !== this.lastTrackId
 		) {
 			this.lastTrackId = songInfoResult.value.ncmId;
-			const playingInfo = this.reduxStore.getState().playing;
-			if (playingInfo?.curTrack?.duration) {
-				this.musicDuration = playingInfo.curTrack.duration;
+
+			if (playingInfo?.resourceType === "voice") {
+				const duration = state["page:vinylPage"]?.currentVoice?.duration;
+				if (typeof duration === "number") {
+					this.musicDuration = duration;
+				}
+			} else {
+				if (playingInfo?.curTrack?.duration) {
+					this.musicDuration = playingInfo.curTrack.duration;
+				}
 			}
+
 			this.dispatchEvent(
 				new CustomEvent<SongInfo>("songChange", {
 					detail: songInfoResult.value,
@@ -460,7 +501,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 			);
 		}
 
-		const playMode = this.reduxStore.getState().playing?.playingMode;
+		const playMode = playingInfo?.playingMode;
 		if (playMode && playMode !== this.lastPlayMode) {
 			this.lastPlayMode = playMode;
 			this.dispatchEvent(
