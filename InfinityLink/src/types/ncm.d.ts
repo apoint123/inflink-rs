@@ -42,11 +42,13 @@ export namespace v3 {
 		resourceName?: string;
 		resourceArtists?: Artist[];
 		resourceCoverUrl?: string;
-		resourceType?: "song" | "voice";
+		resourceType?: "song" | "voice" | "localTrack";
 		curTrack?: CurTrack | null;
 		playingState?: PlayState;
 		playingMode?: PlayMode;
 		playingVolume?: number; // 0-1
+		trackFileType?: "local" | string;
+		onlineResourceId?: string;
 	}
 
 	export interface CurrentVoice {

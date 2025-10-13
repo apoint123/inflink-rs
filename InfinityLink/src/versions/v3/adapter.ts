@@ -282,9 +282,31 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 			playingInfo.resourceName ??
 			"未知专辑";
 
-		const currentTrackId = parseInt(String(playingInfo.resourceTrackId), 10);
-		if (Number.isNaN(currentTrackId) || currentTrackId === 0) {
-			return err(new SongNotFoundError("当前 trackId 无效"));
+		const trackIdSource =
+			(playingInfo.trackFileType === "local" && playingInfo.onlineResourceId) ||
+			playingInfo.resourceTrackId;
+
+		if (!trackIdSource) {
+			return err(
+				new SongNotFoundError(
+					"Redux state 中找不到有效的 resourceTrackId 或 onlineResourceId",
+				),
+			);
+		}
+
+		let currentTrackId: number;
+		const trackIdStr = String(trackIdSource);
+
+		if (/^\d+$/.test(trackIdStr) && trackIdStr !== "0") {
+			currentTrackId = parseInt(trackIdStr, 10);
+		} else {
+			currentTrackId = 0;
+		}
+
+		if (Number.isNaN(currentTrackId)) {
+			return err(
+				new SongNotFoundError(`解析 trackId 失败: "${trackIdSource}"`),
+			);
 		}
 
 		return ok({
