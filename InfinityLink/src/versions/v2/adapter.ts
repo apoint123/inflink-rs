@@ -20,8 +20,8 @@ import logger from "../../utils/logger";
 import type { INcmAdapter, NcmAdapterEventMap, PlayModeInfo } from "../adapter";
 import { PlayModeController } from "../playModeController";
 
-const Controller = ctl;
-const DataController = dc;
+const Controller = typeof ctl !== "undefined" ? ctl : null;
+const DataController = typeof dc !== "undefined" ? dc : null;
 
 const NCM_PLAY_MODES = {
 	LIST_LOOP: "playorder",
@@ -113,52 +113,52 @@ class NcmV2PlayerApi {
 
 class NcmV2ApiClient {
 	public getActivePlayerInstance(): v2.PlayerInstance | null {
-		return Controller.player?.Hn() ?? null;
+		return Controller?.player?.Hn() ?? null;
 	}
 
 	public getProgramFromCache(
 		id: number | string,
 	): v2.ProgramCacheData | null | undefined {
-		return DataController.program.$(id);
+		return DataController?.program.$(id);
 	}
 
 	public getVolume(): number {
-		return Controller.cefPlayer?.K6() ?? 1.0;
+		return Controller?.cefPlayer?.K6() ?? 1.0;
 	}
 
 	public isMuted(): boolean {
-		return Controller.cefPlayer?.a6 ?? false;
+		return Controller?.cefPlayer?.a6 ?? false;
 	}
 
 	public setVolume(level: number): void {
 		const clampedLevel = Math.max(0, Math.min(1, level));
-		Controller.cefPlayer?.F6(clampedLevel);
+		Controller?.cefPlayer?.F6(clampedLevel);
 	}
 
 	public setMuted(mute: boolean): void {
-		Controller.cefPlayer?.T6(mute);
+		Controller?.cefPlayer?.T6(mute);
 	}
 
 	public addVolumeListener(
 		callback: v2.CefPlayerEventMap["onvolumechange"],
 	): void {
-		Controller.cefPlayer?.Ti("onvolumechange", callback);
+		Controller?.cefPlayer?.Ti("onvolumechange", callback);
 	}
 
 	public removeVolumeListener(
 		callback: v2.CefPlayerEventMap["onvolumechange"],
 	): void {
-		Controller.cefPlayer?.Ii("onvolumechange", callback);
+		Controller?.cefPlayer?.Ii("onvolumechange", callback);
 	}
 
 	public addMuteListener(callback: v2.CefPlayerEventMap["onmutechange"]): void {
-		Controller.cefPlayer?.Ti("onmutechange", callback);
+		Controller?.cefPlayer?.Ti("onmutechange", callback);
 	}
 
 	public removeMuteListener(
 		callback: v2.CefPlayerEventMap["onmutechange"],
 	): void {
-		Controller.cefPlayer?.Ii("onmutechange", callback);
+		Controller?.cefPlayer?.Ii("onmutechange", callback);
 	}
 }
 

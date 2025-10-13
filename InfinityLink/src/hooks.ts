@@ -6,8 +6,6 @@ import type { NcmAdapterError } from "./types/errors";
 import type { ControlMessage, ProviderEventMap } from "./types/smtc";
 import logger from "./utils/logger";
 import type { INcmAdapter } from "./versions/adapter";
-import { V2NcmAdapter } from "./versions/v2/adapter";
-import { V3NcmAdapter } from "./versions/v3/adapter";
 
 export function useLocalStorage<T>(
 	key: string,
@@ -100,12 +98,16 @@ export function useInfoProvider(version: NcmVersion | null): ProviderState {
 
 			let adapter: INcmAdapter | null = null;
 			switch (version) {
-				case "v3":
+				case "v3": {
+					const { V3NcmAdapter } = await import("./versions/v3/adapter");
 					adapter = new V3NcmAdapter();
 					break;
-				case "v2":
+				}
+				case "v2": {
+					const { V2NcmAdapter } = await import("./versions/v2/adapter");
 					adapter = new V2NcmAdapter();
 					break;
+				}
 			}
 
 			if (adapter) {

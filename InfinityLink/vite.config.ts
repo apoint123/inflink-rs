@@ -107,6 +107,7 @@ export default defineConfig(({ mode }) => {
 			rollupOptions: {
 				output: {
 					entryFileNames: "index.js",
+					inlineDynamicImports: true,
 				},
 			},
 		},
