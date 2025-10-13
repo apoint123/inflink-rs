@@ -369,7 +369,7 @@ pub fn update_metadata(payload: MetadataPayload) {
 
     TOKIO_RUNTIME.spawn(async move {
         let maybe_bytes = if payload.thumbnail_url.is_empty() {
-            warn!("未提供封面URL");
+            warn!("未提供封面URL, 将清空现有封面");
             None
         } else {
             debug!("正在从 URL 下载封面: {}", payload.thumbnail_url);
@@ -404,12 +404,13 @@ pub fn update_metadata(payload: MetadataPayload) {
             props.SetArtist(&HSTRING::from(&payload.author_name))?;
             props.SetAlbumTitle(&HSTRING::from(&payload.album_name))?;
 
-            // Lyricify Lite 会使用*流派*的歌曲ID来精确匹配歌曲
+            let genres_collection = props.Genres()?;
+            genres_collection.Clear()?;
+
+            // 让部分应用可以精确匹配歌曲
             if let Some(ncm_id) = payload.ncm_id
                 && ncm_id > 0
             {
-                let genres_collection = props.Genres()?;
-                genres_collection.Clear()?;
                 genres_collection.Append(&HSTRING::from(format!("NCM-{ncm_id}")))?;
                 debug!("将 SMTC 流派设置为 NCM ID: {ncm_id}");
             }
@@ -423,6 +424,9 @@ pub fn update_metadata(payload: MetadataPayload) {
                 stream.Seek(0)?;
                 let stream_ref = RandomAccessStreamReference::CreateFromStream(&stream)?;
                 updater.SetThumbnail(&stream_ref)?;
+            } else {
+                updater.SetThumbnail(None)?;
+                debug!("SMTC 封面已清空");
             }
 
             updater.Update()?;

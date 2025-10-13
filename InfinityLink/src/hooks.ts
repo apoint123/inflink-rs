@@ -236,7 +236,7 @@ export function useVersionCheck(repo: string): NewVersionInfo | null {
 				const currentVersion = __APP_VERSION__;
 
 				if (
-					latestVersion.localeCompare(currentVersion, undefined, {
+					(latestVersion as string).localeCompare(currentVersion, undefined, {
 						numeric: true,
 					}) > 0
 				) {

@@ -2,7 +2,7 @@ import type { Store } from "redux";
 
 // --- 通用类型 ---
 export interface Artist {
-	id: string;
+	id: string | undefined | null;
 	name: string;
 }
 
@@ -160,6 +160,7 @@ export namespace v2 {
 	export interface ReduxPlayingState {
 		playMode: string;
 		resourceTrackId: number;
+		resourceType?: "song" | "local" | "voice";
 	}
 
 	export interface ReduxState {
@@ -242,7 +243,9 @@ export namespace v2 {
 	export interface PlayerTrack {
 		bitrate: number;
 		data: SongData | null;
-		from: unknown | null;
+		from: {
+			lrcid?: number;
+		} | null;
 		state: number;
 		uiOpts: UiOptions | null;
 	}
@@ -258,7 +261,7 @@ export namespace v2 {
 	 * 从播放器实例中获取的数据
 	 */
 	export interface SongData {
-		id: number;
+		id: number | string;
 		name: string;
 		artists: Artist[];
 		album: Album;

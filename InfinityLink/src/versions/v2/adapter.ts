@@ -106,9 +106,8 @@ class NcmV2PlayerApi {
 		);
 	}
 
-	public get currentSongData(): v2.SongData | null {
-		const trackObject = this.playerInstance.MF?.U();
-		return trackObject?.data ?? null;
+	public getCurrentTrackObject(): v2.PlayerTrack | null {
+		return this.playerInstance.MF?.U() ?? null;
 	}
 }
 
@@ -225,8 +224,9 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	private musicDuration = 0;
 	private musicPlayProgress = 0;
 	private playStatus: PlaybackStatus = "Paused";
-	private lastReduxTrackId: number | null = null;
 	private lastPlayMode: NcmPlayMode | undefined = undefined;
+
+	private lastDispatchedSongInfo: SongInfo | null = null;
 
 	private volume = 1.0;
 	private isMuted = false;
@@ -299,9 +299,26 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 
 	public getCurrentSongInfo(): Result<SongInfo, NcmAdapterError> {
 		const playerApi = this.activePlayerApi;
-		const songData = playerApi?.currentSongData ?? null;
+		const trackObject = playerApi?.getCurrentTrackObject() ?? null;
+		const songData = trackObject?.data;
 
-		if (!songData?.id) return err(new SongNotFoundError());
+		if (!songData) {
+			return err(new SongNotFoundError("找不到 trackObject.data"));
+		}
+
+		if (typeof songData.id === "string") {
+			const lrcid = trackObject?.from?.lrcid;
+			const ncmId = typeof lrcid === "number" && lrcid > 0 ? lrcid : 0;
+
+			return ok({
+				songName: songData.name || "未知歌曲",
+				authorName:
+					songData.artists?.map((v) => v.name).join(" / ") || "未知作者",
+				albumName: songData.album?.name || "未知专辑",
+				thumbnailUrl: resizeImageUrl(songData.album.picUrl),
+				ncmId: ncmId,
+			});
+		}
 
 		if (typeof songData.programId === "number") {
 			const programCache = this.apiClient.getProgramFromCache(
@@ -472,32 +489,47 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		const playingState = this.reduxStore.getState()?.playing;
 		if (!playingState) return;
 
-		const newTrackId = playingState.resourceTrackId;
-		if (newTrackId && newTrackId !== this.lastReduxTrackId) {
-			this.lastReduxTrackId = newTrackId;
+		const songInfoResult = this.getCurrentSongInfo();
+		if (songInfoResult.isErr()) {
+			this.lastDispatchedSongInfo = null;
+			return;
+		}
+		const currentSongInfo = songInfoResult.value;
 
-			const songInfoResult = this.getCurrentSongInfo();
-			if (songInfoResult.isOk()) {
-				this.dispatchEvent(
-					new CustomEvent<SongInfo>("songChange", {
-						detail: songInfoResult.value,
-					}),
-				);
-				const songData = this.activePlayerApi?.currentSongData;
-				const newDuration = songData?.duration || 0;
-				if (newDuration > 0) {
-					this.musicDuration = newDuration;
-				}
-				this.musicPlayProgress = 0;
-				this.dispatchEvent(
-					new CustomEvent<TimelineInfo>("timelineUpdate", {
-						detail: {
-							currentTime: 0,
-							totalTime: this.musicDuration,
-						},
-					}),
-				);
+		if (currentSongInfo.ncmId !== this.lastDispatchedSongInfo?.ncmId) {
+			this.dispatchEvent(
+				new CustomEvent<SongInfo>("songChange", {
+					detail: currentSongInfo,
+				}),
+			);
+
+			this.lastDispatchedSongInfo = currentSongInfo;
+
+			const trackObject = this.activePlayerApi?.getCurrentTrackObject();
+			const newDuration = trackObject?.data?.duration || 0;
+			if (newDuration > 0) {
+				this.musicDuration = newDuration;
 			}
+			this.musicPlayProgress = 0;
+			this.dispatchEvent(
+				new CustomEvent<TimelineInfo>("timelineUpdate", {
+					detail: {
+						currentTime: 0,
+						totalTime: this.musicDuration,
+					},
+				}),
+			);
+		} else if (
+			this.lastDispatchedSongInfo &&
+			!this.lastDispatchedSongInfo.thumbnailUrl &&
+			currentSongInfo.thumbnailUrl
+		) {
+			this.dispatchEvent(
+				new CustomEvent<SongInfo>("songChange", {
+					detail: currentSongInfo,
+				}),
+			);
+			this.lastDispatchedSongInfo = currentSongInfo;
 		}
 
 		const newPlayMode = playingState.playMode;
