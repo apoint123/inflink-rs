@@ -1,6 +1,7 @@
 import { err, ok, type Result } from "neverthrow";
 import {
 	DomElementNotFoundError,
+	InconsistentStateError,
 	type NcmAdapterError,
 	ReduxStoreNotFoundError,
 	SongNotFoundError,
@@ -146,7 +147,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	private musicDuration = 0;
 	private musicPlayProgress = 0;
 	private playState: PlaybackStatus = "Paused";
-	private lastTrackId: number | null = null;
+	private lastTrackId: string | null = null;
 	private lastIsPlaying: boolean | null = null;
 	private lastPlayMode: string | undefined = undefined;
 
@@ -248,10 +249,13 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 			const vinylInfo = state?.["page:vinylPage"];
 			const currentVoice = vinylInfo?.currentVoice;
 
-			if (!currentVoice?.id) {
+			if (
+				!currentVoice ||
+				String(currentVoice.id) !== String(playingInfo.onlineResourceId)
+			) {
 				return err(
-					new SongNotFoundError(
-						"正在播放播客，但在 page:vinylPage 中找不到 currentVoice",
+					new InconsistentStateError(
+						"播客信息尚未同步 (page:vinylPage 与 playing state 不一致)",
 					),
 				);
 			}
@@ -309,13 +313,18 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 			);
 		}
 
+		const coverUrl = playingInfo.resourceCoverUrl || "";
+		const thumbnailUrl = coverUrl.startsWith("orpheus://")
+			? coverUrl
+			: resizeImageUrl(coverUrl);
+
 		return ok({
 			songName: playingInfo.resourceName || "未知歌名",
 			authorName:
 				playingInfo.resourceArtists?.map((v) => v.name).join(" / ") ||
 				"未知艺术家",
 			albumName: albumName,
-			thumbnailUrl: resizeImageUrl(playingInfo.resourceCoverUrl),
+			thumbnailUrl: thumbnailUrl,
 			ncmId: currentTrackId,
 		});
 	}
@@ -483,17 +492,40 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		this.reduxStore?.dispatch({ type: "playing/switchMute" });
 	}
 
+	private async convertBlobToDataUri(blob: Blob): Promise<string> {
+		return new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = () => resolve(reader.result as string);
+			reader.onerror = (error) => reject(error);
+			reader.readAsDataURL(blob);
+		});
+	}
+
 	private onStateChanged(): void {
 		if (!this.reduxStore) return;
 		const state = this.reduxStore.getState();
 		const playingInfo = state.playing;
-		const songInfoResult = this.getCurrentSongInfo();
 
-		if (
-			songInfoResult.isOk() &&
-			songInfoResult.value.ncmId !== this.lastTrackId
-		) {
-			this.lastTrackId = songInfoResult.value.ncmId;
+		const currentRawTrackId = playingInfo.resourceTrackId;
+		if (currentRawTrackId && currentRawTrackId !== this.lastTrackId) {
+			const songInfoResult = this.getCurrentSongInfo();
+
+			if (songInfoResult.isErr()) {
+				if (songInfoResult.error instanceof InconsistentStateError) {
+					return;
+				}
+
+				logger.warn(
+					"[Adapter V3] 获取歌曲信息失败，但 trackId 已变更:",
+					songInfoResult.error,
+				);
+				this.lastTrackId = currentRawTrackId;
+				this.musicDuration = 0;
+				return;
+			}
+
+			this.lastTrackId = currentRawTrackId;
+			const songInfo = songInfoResult.value;
 
 			if (playingInfo?.resourceType === "voice") {
 				const duration = state["page:vinylPage"]?.currentVoice?.duration;
@@ -506,11 +538,55 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 				}
 			}
 
-			this.dispatchEvent(
-				new CustomEvent<SongInfo>("songChange", {
-					detail: songInfoResult.value,
-				}),
-			);
+			if (songInfo.thumbnailUrl?.startsWith("orpheus://")) {
+				// 尝试在 50ms 内获取封面以避免闪烁
+				(async () => {
+					const timeout = new Promise((resolve) =>
+						setTimeout(() => resolve("timeout"), 50),
+					);
+					const fetchCoverPromise = (async () => {
+						try {
+							const response = await fetch(songInfo.thumbnailUrl as string);
+							if (!response.ok) return null;
+							const blob = await response.blob();
+							return await this.convertBlobToDataUri(blob);
+						} catch (e) {
+							logger.warn("[Adapter V3] 获取 orpheus 封面失败:", e);
+							return null;
+						}
+					})();
+
+					const winner = await Promise.race([fetchCoverPromise, timeout]);
+
+					if (winner === "timeout") {
+						this.dispatchEvent(
+							new CustomEvent<SongInfo>("songChange", {
+								detail: { ...songInfo, thumbnailUrl: "" },
+							}),
+						);
+						const dataUri = await fetchCoverPromise;
+						if (dataUri) {
+							this.dispatchEvent(
+								new CustomEvent<SongInfo>("songChange", {
+									detail: { ...songInfo, thumbnailUrl: dataUri },
+								}),
+							);
+						}
+					} else {
+						this.dispatchEvent(
+							new CustomEvent<SongInfo>("songChange", {
+								detail: { ...songInfo, thumbnailUrl: (winner as string) || "" },
+							}),
+						);
+					}
+				})();
+			} else {
+				this.dispatchEvent(
+					new CustomEvent<SongInfo>("songChange", {
+						detail: songInfo,
+					}),
+				);
+			}
 		}
 
 		const isPlaying = this.getPlaybackStatus() === "Playing";

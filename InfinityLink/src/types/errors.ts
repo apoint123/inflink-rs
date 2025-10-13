@@ -26,8 +26,16 @@ export class TimelineNotAvailableError extends Error {
 	}
 }
 
+export class InconsistentStateError extends Error {
+	constructor(message = "Redux store 状态不一致") {
+		super(message);
+		this.name = "InconsistentStateError";
+	}
+}
+
 export type NcmAdapterError =
 	| DomElementNotFoundError
 	| ReduxStoreNotFoundError
 	| SongNotFoundError
-	| TimelineNotAvailableError;
+	| TimelineNotAvailableError
+	| ReduxStoreNotFoundError;

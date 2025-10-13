@@ -1,8 +1,11 @@
 use anyhow::{Context, Result};
+use base64::Engine;
+use base64::engine::general_purpose;
 use cef_safe::{CefResult, CefV8Context, CefV8Value, renderer_post_task_in_v8_ctx};
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{LazyLock, Mutex};
+use std::time::Instant;
 use tracing::{debug, error, info, instrument, trace, warn};
 use windows::{
     Foundation::{TimeSpan, TypedEventHandler},
@@ -371,18 +374,40 @@ pub fn update_metadata(payload: MetadataPayload) {
         let maybe_bytes = if payload.thumbnail_url.is_empty() {
             warn!("未提供封面URL, 将清空现有封面");
             None
+        } else if payload.thumbnail_url.starts_with("data:") {
+            debug!("正在从 Data URI 解码封面");
+            if let Some(comma_index) = payload.thumbnail_url.find(',') {
+                let base64_data = &payload.thumbnail_url[comma_index + 1..];
+                match general_purpose::STANDARD.decode(base64_data) {
+                    Ok(bytes) => Some(bytes),
+                    Err(e) => {
+                        warn!("解码封面 Data URI 失败: {e}");
+                        None
+                    }
+                }
+            } else {
+                warn!("无效的 Data URI 格式: 找不到逗号");
+                None
+            }
         } else {
             debug!("正在从 URL 下载封面: {}", payload.thumbnail_url);
+            let start_time = Instant::now();
             match reqwest::get(&payload.thumbnail_url).await {
                 Ok(response) => match response.bytes().await {
-                    Ok(bytes) => Some(bytes.to_vec()),
+                    Ok(bytes) => {
+                        let elapsed = start_time.elapsed();
+                        debug!(duration = ?elapsed, "封面下载成功");
+                        Some(bytes.to_vec())
+                    }
                     Err(e) => {
-                        warn!("读取封面响应失败: {}", e);
+                        let elapsed = start_time.elapsed();
+                        warn!(duration = ?elapsed, "读取封面响应失败: {e}");
                         None
                     }
                 },
                 Err(e) => {
-                    warn!("下载封面失败: {}", e);
+                    let elapsed = start_time.elapsed();
+                    warn!(duration = ?elapsed, "下载封面失败: {e}");
                     None
                 }
             }
