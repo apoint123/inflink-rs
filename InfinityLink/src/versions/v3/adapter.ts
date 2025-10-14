@@ -7,6 +7,7 @@ import {
 	SongNotFoundError,
 	TimelineNotAvailableError,
 } from "../../types/errors";
+import type { OrpheusCommand } from "../../types/global";
 import type { v3 } from "../../types/ncm";
 import type {
 	PlaybackStatus,
@@ -141,8 +142,7 @@ const CONSTANTS = {
 export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	private reduxStore: v3.NCMStore | null = null;
 	private unsubscribeStore: (() => void) | null = null;
-	private audioPlayer: v3.AudioPlayer | null = null;
-	private readonly eventAdapter: NcmEventAdapter;
+	private eventAdapter!: NcmEventAdapter;
 
 	private musicDuration = 0;
 	private musicPlayProgress = 0;
@@ -159,13 +159,8 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 
 	private readonly playModeController = new PlayModeController(NCM_PLAY_MODES);
 
-	private onPlayProgressCallback: ((info: v3.PlayProgressInfo) => void) | null =
-		null;
-	private onSeekCallback: ((info: v3.SeekInfo) => void) | null = null;
-
 	constructor() {
 		super();
-		this.eventAdapter = new NcmEventAdapter("v3");
 		[this.dispatchTimelineThrottled, , this.resetTimelineThrottle] = throttle(
 			() => this._dispatchTimelineUpdateNow(),
 			CONSTANTS.TIMELINE_THROTTLE_INTERVAL_MS,
@@ -173,41 +168,57 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	}
 
 	public async initialize(): Promise<Result<void, NcmAdapterError>> {
-		type AudioPlayerModule = { AudioPlayer: v3.AudioPlayer };
+		type BridgeContainerModule = { Bridge: OrpheusCommand };
 
-		try {
-			const require = await getWebpackRequire();
-			const audioPlayerModule = findModule(
-				require,
-				(exports: unknown): exports is AudioPlayerModule => {
-					if (typeof exports !== "object" || exports === null) {
-						return false;
-					}
-					if (!("AudioPlayer" in exports)) {
-						return false;
-					}
-					const audioPlayerProp = (exports as { AudioPlayer: unknown })
-						.AudioPlayer;
-					if (typeof audioPlayerProp !== "object" || audioPlayerProp === null) {
-						return false;
-					}
-					return (
-						"subscribePlayStatus" in audioPlayerProp &&
-						typeof (audioPlayerProp as { subscribePlayStatus: unknown })
-							.subscribePlayStatus === "function"
-					);
-				},
-			);
-			if (audioPlayerModule) {
-				this.audioPlayer = audioPlayerModule.AudioPlayer;
-			} else {
-				logger.warn(
-					"[V3 Provider] 找不到 AudioPlayer 模块。时间轴更新可能受到其它插件影响",
+		const require = await getWebpackRequire();
+
+		/**
+		 * 网易云 v3 内部存在两个 OrpheusCommand (legacyNativeCmder) 实例：
+		 * 1. 一个是暴露在全局的 `window.legacyNativeCmder`
+		 * 2. 另一个是未暴露的、供内部核心模块（如 AudioPlayer）使用的私有实例 (名为 Bridge)
+		 *
+		 * 核心 UI 组件（如进度条）的事件监听是注册在内部实例上的。如果我们使用全局实例去注册
+		 * 监听器（特别是 PlayProgress 和 Seek），全局的监听器会覆盖掉 Bridge 中的监听器 (参见
+		 * native.ts 中的实现)，导致进度条静止等怪异问题
+		 *
+		 * 因此，我们在这里：
+		 * - 先通过 Webpack 模块查找获取到内部的 `Bridge` 实例
+		 * - 如果查找失败，再回退到使用全局的 `window.legacyNativeCmder` 作为备用方案 (通常会导致问题)
+		 */
+		const bridgeContainer = findModule<BridgeContainerModule>(
+			require,
+			(exports: unknown): exports is BridgeContainerModule => {
+				if (
+					typeof exports !== "object" ||
+					exports === null ||
+					!("Bridge" in exports)
+				) {
+					return false;
+				}
+				const bridgeCandidate = (exports as { Bridge: unknown }).Bridge;
+				return (
+					typeof bridgeCandidate === "object" &&
+					bridgeCandidate !== null &&
+					"appendRegisterCall" in bridgeCandidate &&
+					"call" in bridgeCandidate
 				);
-			}
-		} catch (error) {
-			logger.error("[Adapter V3] 获取 Webpack require 失败:", error);
+			},
+		);
+
+		const bridgeModule = bridgeContainer?.Bridge;
+
+		let eventBinder: OrpheusCommand;
+		if (bridgeModule) {
+			logger.debug("[Adapter V3] 使用内部 Bridge 实例注册事件");
+			eventBinder = bridgeModule;
+		} else {
+			logger.warn(
+				"[Adapter V3] 未找到内部 Bridge 实例, 回退到全局 legacyNativeCmder",
+			);
+			eventBinder = window.legacyNativeCmder;
 		}
+
+		this.eventAdapter = new NcmEventAdapter(eventBinder);
 
 		const storeResult = await waitForReduxStore();
 		if (storeResult.isErr()) {
@@ -222,9 +233,10 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		this.unsubscribeStore = this.reduxStore.subscribe(() =>
 			this.onStateChanged(),
 		);
+
 		logger.trace("[Adapter V3] 已订阅 Redux store 更新");
 
-		this.registerAudioPlayerEvents();
+		this.registerNcmEvents();
 		this.onStateChanged();
 
 		return ok(undefined);
@@ -235,7 +247,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 			this.unsubscribeStore();
 			this.unsubscribeStore = null;
 		}
-		this.unregisterAudioPlayerEvents();
+		this.unregisterNcmEvents();
 		this.eventAdapter.dispose();
 
 		logger.debug("[Adapter V3] Disposed.");
@@ -626,69 +638,26 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		}
 	}
 
-	private registerAudioPlayerEvents(): void {
+	private registerNcmEvents(): void {
 		this.eventAdapter.addEventListener(
 			"playStateChange",
 			this.onPlayStateChanged,
 		);
-
-		if (this.audioPlayer) {
-			this.onPlayProgressCallback = (info) => {
-				if ("current" in info) {
-					this.musicPlayProgress = info.current * 1000;
-					this.dispatchTimelineThrottled();
-				}
-			};
-			this.audioPlayer.subscribePlayStatus({
-				type: "playprogress",
-				callback: this.onPlayProgressCallback,
-			});
-
-			this.onSeekCallback = (info) => {
-				if ("position" in info) {
-					const positionInMs = Math.floor(info.position * 1000);
-					this.onSeekUpdate({
-						detail: positionInMs,
-					} as CustomEvent<number>);
-				}
-			};
-			this.audioPlayer.subscribePlayStatus({
-				type: "seek",
-				callback: this.onSeekCallback,
-			});
-		} else {
-			this.eventAdapter.addEventListener(
-				"progressUpdate",
-				this.onProgressUpdate,
-			);
-		}
+		this.eventAdapter.addEventListener("progressUpdate", this.onProgressUpdate);
+		this.eventAdapter.addEventListener("seekUpdate", this.onSeekUpdate);
 	}
 
-	private unregisterAudioPlayerEvents(): void {
+	private unregisterNcmEvents(): void {
 		try {
 			this.eventAdapter.removeEventListener(
 				"playStateChange",
 				this.onPlayStateChanged,
 			);
-
-			if (this.audioPlayer) {
-				if (this.onPlayProgressCallback) {
-					this.audioPlayer.unSubscribePlayStatus(this.onPlayProgressCallback);
-					this.onPlayProgressCallback = null;
-				}
-				// 反注册 Seek 事件似乎是无效的，因为 unSubscribePlayStatus
-				// 实际上只会尝试从 PlayState 事件上移除监听器
-				// 猜测这可能和 PlayProgress 和 seek 等事件的怪癖有关
-				if (this.onSeekCallback) {
-					this.audioPlayer.unSubscribePlayStatus(this.onSeekCallback);
-					this.onSeekCallback = null;
-				}
-			} else {
-				this.eventAdapter.removeEventListener(
-					"progressUpdate",
-					this.onProgressUpdate,
-				);
-			}
+			this.eventAdapter.removeEventListener(
+				"progressUpdate",
+				this.onProgressUpdate,
+			);
+			this.eventAdapter.removeEventListener("seekUpdate", this.onSeekUpdate);
 		} catch (e) {
 			logger.error("[Adapter V3] 清理原生事件监听时发生错误:", e);
 		}

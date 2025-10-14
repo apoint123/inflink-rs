@@ -50,6 +50,17 @@ declare global {
 
 		loadFailedErrors: [string, Error][];
 
+		/**
+		 * @warn 在 v3 客户端上请优先使用内部 Bridge 实例
+		 *
+		 * @description
+		 * 这是暴露在全局的 OrpheusCommand 实例
+		 *
+		 * v3 的 UI 组件（如 AudioPlayer）使用的是一个独立的内部实例。
+		 * 直接使用此全局实例会与网易云内部的实例冲突，导致意外的 Bug
+		 *
+		 * 建议通过 Webpack 模块查找内部实例（通常与 AudioPlayer 在同一模块下，名为 `Bridge`）
+		 */
 		legacyNativeCmder: OrpheusCommand;
 
 		webpackJsonp?: unknown[];
