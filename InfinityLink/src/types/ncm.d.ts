@@ -106,6 +106,25 @@ export namespace v3 {
 	}
 
 	export type EventName = keyof EventMap;
+
+	export interface LastPlayingInfo {
+		cacheProgress?: number;
+		current?: number;
+		quality?: number;
+		resourceDuration?: number;
+		resourceId?: string;
+		trackId?: string;
+	}
+
+	export interface NcmStorageModule {
+		lastPlaying: {
+			get: () => Promise<LastPlayingInfo | null>;
+		};
+	}
+
+	export interface NcmStorageContainer {
+		b: NcmStorageModule;
+	}
 }
 
 // --- v2 类型 ---

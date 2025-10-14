@@ -1,3 +1,15 @@
+/**
+ * @fileoverview 封装网易云音乐 v3 客户端内部的 `AudioPlayer` 模块
+ *
+ * 此文件用来为网易云内部的 `AudioPlayer` 模块提供一个易用的接口。
+ * `AudioPlayer` 模块本身提供了一个高级的 `subscribePlayStatus` 方法，
+ * 可以订阅许多种事件，并返回已解析好的参数对象，使用它可以简化逻辑。
+ *
+ * 此文件目前未使用，因为 `AudioPlayer.unSubscribePlayStatus` 有内存泄露的问题 (它只会清除
+ * PlayState 事件的监听器)，并且 Bridge 自己的 appendRegisterCall 和 removeRegisterCall
+ * 也能用来注册和反注册需要的事件，所以此文件基本上只用来备用或者做参考
+ */
+
 export type PlayStatusEventType =
 	| "playstate"
 	| "end"

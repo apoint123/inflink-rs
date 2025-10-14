@@ -143,6 +143,9 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	private reduxStore: v3.NCMStore | null = null;
 	private unsubscribeStore: (() => void) | null = null;
 	private eventAdapter!: NcmEventAdapter;
+	private storageModule: v3.NcmStorageModule | null = null;
+	private hasRestoredInitialState = false;
+	private ignoreNextZeroProgressEvent = false;
 
 	private musicDuration = 0;
 	private musicPlayProgress = 0;
@@ -219,6 +222,42 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		}
 
 		this.eventAdapter = new NcmEventAdapter(eventBinder);
+
+		const storageContainer = findModule<v3.NcmStorageContainer>(
+			require,
+			(exports: unknown): exports is v3.NcmStorageContainer => {
+				if (typeof exports !== "object" || exports === null) {
+					return false;
+				}
+				if (
+					!("b" in exports) ||
+					typeof (exports as { b: unknown }).b !== "object" ||
+					(exports as { b: unknown }).b === null
+				) {
+					return false;
+				}
+
+				const b = (exports as { b: Record<string, unknown> }).b;
+
+				if (
+					!("lastPlaying" in b) ||
+					typeof b.lastPlaying !== "object" ||
+					b.lastPlaying === null
+				) {
+					return false;
+				}
+
+				const lastPlaying = b.lastPlaying as Record<string, unknown>;
+
+				return "get" in lastPlaying && typeof lastPlaying.get === "function";
+			},
+		);
+
+		this.storageModule = storageContainer ? storageContainer.b : null;
+
+		if (!this.storageModule) {
+			logger.warn("[Adapter V3] 未找到内部存储模块");
+		}
 
 		const storeResult = await waitForReduxStore();
 		if (storeResult.isErr()) {
@@ -539,6 +578,11 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 			this.lastTrackId = currentRawTrackId;
 			const songInfo = songInfoResult.value;
 
+			if (!this.hasRestoredInitialState) {
+				this.hasRestoredInitialState = true;
+				this.restoreLastPlaybackState();
+			}
+
 			if (playingInfo?.resourceType === "voice") {
 				const duration = state["page:vinylPage"]?.currentVoice?.duration;
 				if (typeof duration === "number") {
@@ -638,6 +682,37 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		}
 	}
 
+	private async restoreLastPlaybackState(): Promise<void> {
+		if (!this.storageModule) {
+			return;
+		}
+
+		const lastPlayingInfo = await this.storageModule.lastPlaying.get();
+		const currentSongInfo = this.reduxStore?.getState().playing;
+
+		if (
+			!lastPlayingInfo?.trackId ||
+			typeof lastPlayingInfo.current !== "number" ||
+			!currentSongInfo?.resourceTrackId
+		) {
+			return;
+		}
+
+		if (
+			String(lastPlayingInfo.trackId) ===
+			String(currentSongInfo.resourceTrackId)
+		) {
+			const positionMs = lastPlayingInfo.current * 1000;
+
+			if (positionMs > 0) {
+				this.ignoreNextZeroProgressEvent = true;
+			}
+
+			this.musicPlayProgress = positionMs;
+			this._dispatchTimelineUpdateNow();
+		}
+	}
+
 	private registerNcmEvents(): void {
 		this.eventAdapter.addEventListener(
 			"playStateChange",
@@ -666,6 +741,15 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	private readonly onProgressUpdate = (
 		e: ParsedEventMap["progressUpdate"],
 	): void => {
+		if (this.ignoreNextZeroProgressEvent && e.detail === 0) {
+			this.ignoreNextZeroProgressEvent = false;
+			return;
+		}
+
+		if (e.detail > 0) {
+			this.ignoreNextZeroProgressEvent = false;
+		}
+
 		this.musicPlayProgress = e.detail;
 		this.dispatchTimelineThrottled();
 	};

@@ -240,7 +240,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 
 	constructor() {
 		super();
-		this.eventAdapter = new NcmEventAdapter("v2");
+		this.eventAdapter = new NcmEventAdapter();
 		[this.dispatchTimelineThrottled, , this.resetTimelineThrottle] = throttle(
 			() => {
 				this._dispatchTimelineUpdateNow();
