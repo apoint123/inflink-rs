@@ -248,6 +248,8 @@ export interface NCMChannel {
 	/**
 	 * 数据加密函数，根据输入类型使用不同的加密模式
 	 *
+	 * 用来把数据加密保存到浏览器的 localStorage 或者本地文件等
+	 *
 	 * @overload
 	 * @param payload - 需要加密的结构化数据 (JSON 对象)
 	 * @returns 一个十六进制格式的加密字符串
@@ -259,6 +261,9 @@ export interface NCMChannel {
 	enData(payload: Record<string, unknown>): Promise<string>;
 	enData(id: string | number): Promise<string>;
 
+	/**
+	 * enData 的逆操作
+	 */
 	deData: (data: unknown) => Promise<unknown>;
 	oldLocalStorageData: (...args: unknown[]) => Promise<unknown>;
 }
