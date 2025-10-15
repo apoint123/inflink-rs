@@ -1,3 +1,4 @@
+import type { ResolutionSetting } from "../hooks";
 import type { SongInfo } from "../types/smtc";
 import logger from "./logger";
 
@@ -7,6 +8,7 @@ export class CoverManager {
 
 	public getCover(
 		songInfo: SongInfo,
+		resolution: ResolutionSetting,
 		onComplete: (result: {
 			songInfo: SongInfo;
 			dataUri: string | null;
@@ -16,7 +18,7 @@ export class CoverManager {
 		this.fetchGeneration++;
 
 		const generation = this.fetchGeneration;
-		const thumbnailUrl = this.createImageUrl(songInfo.thumbnailUrl);
+		const thumbnailUrl = this.createImageUrl(songInfo.thumbnailUrl, resolution);
 
 		if (!thumbnailUrl) {
 			onComplete({ songInfo, dataUri: null });
@@ -65,7 +67,7 @@ export class CoverManager {
 		})();
 	}
 
-	private createImageUrl(url: string): string {
+	private createImageUrl(url: string, resolution: ResolutionSetting): string {
 		if (!url || !url.startsWith("http")) {
 			return url;
 		}
@@ -76,10 +78,17 @@ export class CoverManager {
 			enlarge: "1",
 			type: "jpeg",
 			quality: "90",
-			thumbnail: "500y500",
 		});
 
+		if (resolution.toLowerCase() === "max") {
+			// 不添加 thumbnail 参数
+		} else if (/^\d+$/.test(resolution)) {
+			const size = parseInt(resolution, 10);
+			imageParams.append("thumbnail", `${size}y${size}`);
+		}
+
 		const processedUrl = `${baseUrl}?imageView&${imageParams.toString()}`;
+		logger.warn(`${processedUrl}`);
 
 		return `orpheus://cache/?${processedUrl}`;
 	}

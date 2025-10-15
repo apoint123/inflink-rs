@@ -1,3 +1,4 @@
+import type { ResolutionSetting } from "./hooks";
 import type {
 	ControlMessage,
 	ProviderEventMap,
@@ -72,6 +73,10 @@ export class SmtcProvider {
 				break;
 			}
 		}
+	}
+
+	public setResolution(resolution: ResolutionSetting): void {
+		this.adapter.setResolution(resolution);
 	}
 
 	public forceDispatchFullState(): void {

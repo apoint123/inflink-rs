@@ -1,5 +1,6 @@
 import type { PaletteMode } from "@mui/material";
 import { useEffect, useState } from "react";
+import { STORE_KEY_RESOLUTION } from "./keys";
 import { SmtcProvider } from "./provider";
 import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
 import type { NcmAdapterError } from "./types/errors";
@@ -281,4 +282,17 @@ export function useNcmTheme(): PaletteMode {
 	}, []);
 
 	return ncmThemeMode;
+}
+
+export type ResolutionSetting = string;
+
+export function useResolutionSetting(): [
+	ResolutionSetting,
+	(value: ResolutionSetting) => void,
+] {
+	const [resolution, setResolution] = useLocalStorage<ResolutionSetting>(
+		STORE_KEY_RESOLUTION,
+		"500",
+	);
+	return [resolution, setResolution];
 }

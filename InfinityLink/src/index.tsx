@@ -8,6 +8,7 @@ import UpgradeIcon from "@mui/icons-material/Upgrade";
 import {
 	Alert,
 	AlertTitle,
+	Autocomplete,
 	Box,
 	Button,
 	CircularProgress,
@@ -18,6 +19,7 @@ import {
 	MenuItem,
 	Select,
 	Switch,
+	TextField,
 	Typography,
 } from "@mui/material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
@@ -28,6 +30,7 @@ import {
 	useLocalStorage,
 	useNcmTheme,
 	useNcmVersion,
+	useResolutionSetting,
 	useSmtcConnection,
 	useVersionCheck,
 } from "./hooks";
@@ -128,8 +131,11 @@ function Main() {
 		"warn",
 	);
 
+	const [resolution, setResolution] = useResolutionSetting();
+
 	const frontendId = useId();
 	const backendId = useId();
+	const predefinedResolutions = ["300", "500", "1024", "max"];
 
 	const newVersionInfo = useVersionCheck(GITHUB_REPO);
 
@@ -156,6 +162,12 @@ function Main() {
 	useEffect(() => {
 		SMTCNativeBackendInstance.setBackendLogLevel(backendLogLevel);
 	}, [backendLogLevel]);
+
+	useEffect(() => {
+		if (provider) {
+			provider.setResolution(resolution);
+		}
+	}, [provider, resolution]);
 
 	useEffect(() => {
 		if (provider) {
@@ -267,7 +279,7 @@ function Main() {
 				/>
 			</FormGroup>
 
-			<Box sx={{ mt: 2, display: "flex", gap: 2 }}>
+			<Box sx={{ mt: 2, display: "flex", gap: 2, flexWrap: "wrap" }}>
 				<FormControl size="small">
 					<InputLabel id={frontendId}>前端日志级别</InputLabel>
 					<Select
@@ -299,6 +311,38 @@ function Main() {
 							</MenuItem>
 						))}
 					</Select>
+				</FormControl>
+				<FormControl size="small" sx={{ minWidth: 150 }}>
+					<Autocomplete
+						freeSolo
+						value={resolution}
+						options={predefinedResolutions}
+						onChange={(_event, newValue) => {
+							if (
+								newValue &&
+								(newValue.toLowerCase() === "max" || /^\d+$/.test(newValue))
+							) {
+								setResolution(newValue);
+							}
+						}}
+						onBlur={(event) => {
+							const newValue = (event.target as HTMLInputElement).value;
+							if (
+								newValue &&
+								(newValue.toLowerCase() === "max" || /^\d+$/.test(newValue))
+							) {
+								setResolution(newValue);
+							}
+						}}
+						renderInput={(params) => (
+							<TextField
+								{...params}
+								label="封面分辨率"
+								size="small"
+								helperText="过大的值可能会影响封面加载速度"
+							/>
+						)}
+					/>
 				</FormControl>
 			</Box>
 		</div>

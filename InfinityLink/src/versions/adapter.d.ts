@@ -42,6 +42,8 @@ export interface INcmAdapter extends EventTarget {
 	setVolume(level: number): void;
 	toggleMute(): void;
 
+	setResolution(resolution: string): void;
+
 	addEventListener<K extends keyof NcmAdapterEventMap>(
 		type: K,
 		listener: (this: INcmAdapter, ev: NcmAdapterEventMap[K]) => unknown,

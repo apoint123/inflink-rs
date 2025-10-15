@@ -1,4 +1,5 @@
 import { err, ok, type Result } from "neverthrow";
+import type { ResolutionSetting } from "../../hooks";
 import {
 	DomElementNotFoundError,
 	InconsistentStateError,
@@ -147,6 +148,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	private hasRestoredInitialState = false;
 	private ignoreNextZeroProgressEvent = false;
 	private readonly coverManager = new CoverManager();
+	private resolutionSetting: ResolutionSetting = "500";
 
 	private musicDuration = 0;
 	private musicPlayProgress = 0;
@@ -258,6 +260,8 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 
 		if (!this.storageModule) {
 			logger.warn("[Adapter V3] 未找到内部存储模块");
+		} else if (import.meta.env.MODE === "development") {
+			window.infStorage = this.storageModule;
 		}
 
 		const storeResult = await waitForReduxStore();
@@ -273,8 +277,6 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		this.unsubscribeStore = this.reduxStore.subscribe(() =>
 			this.onStateChanged(),
 		);
-
-		logger.trace("[Adapter V3] 已订阅 Redux store 更新");
 
 		this.registerNcmEvents();
 		this.onStateChanged();
@@ -542,6 +544,10 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		this.reduxStore?.dispatch({ type: "playing/switchMute" });
 	}
 
+	public setResolution(resolution: ResolutionSetting): void {
+		this.resolutionSetting = resolution;
+	}
+
 	private onStateChanged(): void {
 		if (!this.reduxStore) return;
 		const state = this.reduxStore.getState();
@@ -568,7 +574,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 			this.lastTrackId = currentRawTrackId;
 			const songInfo = songInfoResult.value;
 
-			this.coverManager.getCover(songInfo, (result) => {
+			this.coverManager.getCover(songInfo, this.resolutionSetting, (result) => {
 				this.dispatchEvent(
 					new CustomEvent<SongInfo>("songChange", {
 						detail: { ...result.songInfo, thumbnailUrl: result.dataUri ?? "" },

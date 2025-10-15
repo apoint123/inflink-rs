@@ -71,6 +71,11 @@ declare global {
 		infstore?: Store;
 
 		/**
+		 * 调试用的 v3 内部存储模块
+		 */
+		infStorage?: v3.NcmStorageModule;
+
+		/**
 		 * 可以给其它插件用的接口
 		 */
 		InfLinkApi?: IInfLinkApi;

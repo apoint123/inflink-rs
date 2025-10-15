@@ -1,4 +1,5 @@
 import { err, ok, type Result } from "neverthrow";
+import type { ResolutionSetting } from "../../hooks";
 import {
 	DomElementNotFoundError,
 	type NcmAdapterError,
@@ -221,6 +222,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	private readonly eventAdapter: NcmEventAdapter;
 	private readonly apiClient = new NcmV2ApiClient();
 	private readonly coverManager = new CoverManager();
+	private resolutionSetting: ResolutionSetting = "500";
 
 	private musicDuration = 0;
 	private musicPlayProgress = 0;
@@ -483,6 +485,10 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		this.apiClient.setMuted(!this.isMuted);
 	}
 
+	public setResolution(resolution: string): void {
+		this.resolutionSetting = resolution;
+	}
+
 	private onStateChanged(): void {
 		if (!this.reduxStore) return;
 		const playingState = this.reduxStore.getState()?.playing;
@@ -498,13 +504,20 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		if (currentSongInfo.ncmId !== this.lastDispatchedSongInfo?.ncmId) {
 			this.lastDispatchedSongInfo = currentSongInfo;
 
-			this.coverManager.getCover(currentSongInfo, (result) => {
-				this.dispatchEvent(
-					new CustomEvent<SongInfo>("songChange", {
-						detail: { ...result.songInfo, thumbnailUrl: result.dataUri ?? "" },
-					}),
-				);
-			});
+			this.coverManager.getCover(
+				currentSongInfo,
+				this.resolutionSetting,
+				(result) => {
+					this.dispatchEvent(
+						new CustomEvent<SongInfo>("songChange", {
+							detail: {
+								...result.songInfo,
+								thumbnailUrl: result.dataUri ?? "",
+							},
+						}),
+					);
+				},
+			);
 
 			const trackObject = this.activePlayerApi?.getCurrentTrackObject();
 			const newDuration = trackObject?.data?.duration || 0;
@@ -525,17 +538,24 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 			!this.lastDispatchedSongInfo.thumbnailUrl &&
 			currentSongInfo.thumbnailUrl
 		) {
-			this.coverManager.getCover(currentSongInfo, (result) => {
-				this.dispatchEvent(
-					new CustomEvent<SongInfo>("songChange", {
-						detail: { ...result.songInfo, thumbnailUrl: result.dataUri ?? "" },
-					}),
-				);
-				this.lastDispatchedSongInfo = {
-					...result.songInfo,
-					thumbnailUrl: result.dataUri ?? "",
-				};
-			});
+			this.coverManager.getCover(
+				currentSongInfo,
+				this.resolutionSetting,
+				(result) => {
+					this.dispatchEvent(
+						new CustomEvent<SongInfo>("songChange", {
+							detail: {
+								...result.songInfo,
+								thumbnailUrl: result.dataUri ?? "",
+							},
+						}),
+					);
+					this.lastDispatchedSongInfo = {
+						...result.songInfo,
+						thumbnailUrl: result.dataUri ?? "",
+					};
+				},
+			);
 		}
 
 		const newPlayMode = playingState.playMode;
