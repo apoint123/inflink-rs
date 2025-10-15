@@ -80,7 +80,7 @@
 1. 克隆仓库
 
 ```bash
-git clone https://github.com/apoint123/infLink-rs.git
+git clone --recurse-submodules https://github.com/apoint123/inflink-rs.git
 ```
 
 2. 安装构建目标
