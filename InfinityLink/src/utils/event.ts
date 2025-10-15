@@ -88,11 +88,11 @@ export class NcmEventAdapter {
 					newPlayState = "Paused";
 					break;
 				default:
-					logger.warn(`[InfLink-rs] 未知的播放状态: ${stateKeyword}`);
+					logger.warn(`未知的播放状态: ${stateKeyword}`, "EventAdapter");
 					return;
 			}
 		} else {
-			logger.warn(`[InfLink-rs] 意外的播放状态: ${stateInfo}`);
+			logger.warn(`意外的播放状态: ${stateInfo}`, "EventAdapter");
 			return;
 		}
 
@@ -155,7 +155,8 @@ export class NcmEventAdapter {
 				this.nativeCmder.appendRegisterCall(eventName, namespace, stub);
 			} catch (e) {
 				logger.error(
-					`[InfLink-rs] 注册 NativeCmder 事件 ${eventName} 失败:`,
+					`注册 NativeCmder 事件 ${eventName} 失败:`,
+					"EventAdapter",
 					e,
 				);
 			}

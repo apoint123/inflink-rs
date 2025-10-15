@@ -263,7 +263,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	public async initialize(): Promise<Result<void, NcmAdapterError>> {
 		const storeResult = await findReduxStore("#portal_root");
 		if (storeResult.isErr()) {
-			logger.error("[Adapter V2] 初始化 Redux store 失败:", storeResult.error);
+			logger.error("初始化 Redux store 失败:", "Adapter V2", storeResult.error);
 			return err(storeResult.error);
 		}
 		this.reduxStore = storeResult.value;
@@ -280,7 +280,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 			this.volume = this.apiClient.getVolume();
 			this.isMuted = this.apiClient.isMuted();
 		} catch (e) {
-			logger.warn("[Adapter V2] 初始化获取音量状态失败:", e);
+			logger.warn("初始化获取音量状态失败:", "Adapter V2", e);
 		}
 
 		this.registerNcmEvents();
@@ -297,7 +297,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		this.eventAdapter.dispose();
 		this.unregisterNcmEvents();
 
-		logger.debug("[Adapter V2] Disposed.");
+		logger.debug("Disposed.", "Adapter V2");
 	}
 
 	public getCurrentSongInfo(): Result<SongInfo, NcmAdapterError> {
@@ -585,7 +585,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 			this.apiClient.addVolumeListener(this.onVolumeChanged);
 			this.apiClient.addMuteListener(this.onMuteChanged);
 		} catch (e) {
-			logger.error("[Adapter V2] 注册音量事件监听失败:", e);
+			logger.error("注册音量事件监听失败:", "Adapter V2", e);
 		}
 	}
 
@@ -604,7 +604,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 			this.apiClient.removeVolumeListener(this.onVolumeChanged);
 			this.apiClient.removeMuteListener(this.onMuteChanged);
 		} catch (e) {
-			logger.error("[Adapter V2] 清理原生事件监听时发生错误:", e);
+			logger.error("清理原生事件监听时发生错误:", "Adapter V2", e);
 		}
 	}
 

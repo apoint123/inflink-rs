@@ -37,7 +37,8 @@ export class CoverManager {
 				}
 				const fetchEnd = performance.now();
 				logger.debug(
-					`[InfLink-rs] 封面获取用时: ${Math.round(fetchEnd - fetchStart)}ms`,
+					`封面获取用时: ${Math.round(fetchEnd - fetchStart)}ms`,
+					"CoverManager",
 				);
 
 				if (generation !== this.fetchGeneration) return;
@@ -48,13 +49,17 @@ export class CoverManager {
 				const dataUri = await this.convertBlobToDataUri(blob);
 				const encodeEnd = performance.now();
 				logger.debug(
-					`[InfLink-rs] 封面 Base64 编码用时: ${Math.round(encodeEnd - encodeStart)}ms`,
+					`封面 Base64 编码用时: ${Math.round(encodeEnd - encodeStart)}ms`,
+					"CoverManager",
 				);
 
 				onComplete({ songInfo, dataUri });
 			} catch (e) {
 				if ((e as Error).name !== "AbortError") {
-					logger.warn(`[InfLink-rs] 获取缓存封面失败: ${(e as Error).message}`);
+					logger.warn(
+						`获取缓存封面失败: ${(e as Error).message}`,
+						"CoverManager",
+					);
 					if (generation === this.fetchGeneration) {
 						onComplete({ songInfo, dataUri: songInfo.thumbnailUrl });
 					}
@@ -88,7 +93,6 @@ export class CoverManager {
 		}
 
 		const processedUrl = `${baseUrl}?imageView&${imageParams.toString()}`;
-		logger.warn(`${processedUrl}`);
 
 		return `orpheus://cache/?${processedUrl}`;
 	}

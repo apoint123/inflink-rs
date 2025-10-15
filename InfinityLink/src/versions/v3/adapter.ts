@@ -63,7 +63,7 @@ function findReduxStoreInFiberTree(node: FiberNode | null): v3.NCMStore | null {
 function findStoreFromRootElement(rootEl: HTMLElement): v3.NCMStore | null {
 	const appEl = rootEl.firstElementChild;
 	if (!appEl) {
-		logger.warn("[Adapter V3] #root 元素没有子元素");
+		logger.warn("#root 元素没有子元素", "Adapter V3");
 		return null;
 	}
 
@@ -73,13 +73,13 @@ function findStoreFromRootElement(rootEl: HTMLElement): v3.NCMStore | null {
 			key.startsWith("__reactInternalInstance$"), // < react 17, 网易云使用 react 16.14
 	);
 	if (!fiberKey) {
-		logger.warn("[Adapter V3] 找不到 React Fiber key");
+		logger.warn("找不到 React Fiber key", "Adapter V3");
 		return null;
 	}
 
 	const startNode = (appEl as unknown as Record<string, FiberNode>)[fiberKey];
 	if (!startNode) {
-		logger.warn("[Adapter V3] 找不到起始 Fiber 节点");
+		logger.warn("找不到起始 Fiber 节点", "Adapter V3");
 		return null;
 	}
 
@@ -115,7 +115,7 @@ async function waitForReduxStore(
 				return ok(store);
 			}
 		} catch (e) {
-			logger.info("[Adapter V3] Polling for Redux store failed once:", e);
+			logger.info("Polling for Redux store failed once:", "Adapter V3", e);
 		}
 
 		await delay(interval);
@@ -215,11 +215,12 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 
 		let eventBinder: OrpheusCommand;
 		if (bridgeModule) {
-			logger.debug("[Adapter V3] 使用内部 Bridge 实例注册事件");
+			logger.debug("使用内部 Bridge 实例注册事件", "Adapter V3");
 			eventBinder = bridgeModule;
 		} else {
 			logger.warn(
-				"[Adapter V3] 未找到内部 Bridge 实例, 回退到全局 legacyNativeCmder",
+				"未找到内部 Bridge 实例, 回退到全局 legacyNativeCmder",
+				"Adapter V3",
 			);
 			eventBinder = window.legacyNativeCmder;
 		}
@@ -259,7 +260,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		this.storageModule = storageContainer ? storageContainer.b : null;
 
 		if (!this.storageModule) {
-			logger.warn("[Adapter V3] 未找到内部存储模块");
+			logger.warn("未找到内部存储模块", "Adapter V3");
 		} else if (import.meta.env.MODE === "development") {
 			window.infStorage = this.storageModule;
 		}
@@ -292,7 +293,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		this.unregisterNcmEvents();
 		this.eventAdapter.dispose();
 
-		logger.debug("[Adapter V3] Disposed.");
+		logger.debug("Disposed.", "Adapter V3");
 	}
 
 	public getCurrentSongInfo(): Result<SongInfo, NcmAdapterError> {
@@ -563,7 +564,8 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 				}
 
 				logger.warn(
-					"[Adapter V3] 获取歌曲信息失败，但 trackId 已变更:",
+					"获取歌曲信息失败，但 trackId 已变更:",
+					"Adapter V3",
 					songInfoResult.error,
 				);
 				this.lastTrackId = currentRawTrackId;
@@ -688,7 +690,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 			);
 			this.eventAdapter.removeEventListener("seekUpdate", this.onSeekUpdate);
 		} catch (e) {
-			logger.error("[Adapter V3] 清理原生事件监听时发生错误:", e);
+			logger.error("清理原生事件监听时发生错误:", "Adapter V3", e);
 		}
 	}
 

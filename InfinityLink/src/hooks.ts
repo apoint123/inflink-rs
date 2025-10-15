@@ -61,7 +61,7 @@ export function useNcmVersion(): NcmVersion | null {
 				setVersion("unsupported");
 			}
 		} catch (e) {
-			logger.error("[InfLink-rs] 无法检测网易云音乐版本", e);
+			logger.error("无法检测网易云音乐版本", "useNcmVersion", e);
 			setVersion("unsupported");
 		}
 	}, []);
@@ -119,7 +119,11 @@ export function useInfoProvider(version: NcmVersion | null): ProviderState {
 				}
 
 				if (initResult.isErr()) {
-					logger.error(`[InfLink] Adapter 初始化失败:`, initResult.error);
+					logger.error(
+						`Adapter 初始化失败:`,
+						"useInfoProvider",
+						initResult.error,
+					);
 					setProviderState({
 						provider: null,
 						status: "error",
@@ -243,14 +247,17 @@ export function useVersionCheck(repo: string): NewVersionInfo | null {
 						numeric: true,
 					}) > 0
 				) {
-					logger.info(`[InfLink-rs] 发现新版本: ${latestRelease.tag_name}`);
+					logger.info(
+						`发现新版本: ${latestRelease.tag_name}`,
+						"useVersionCheck",
+					);
 					setNewVersionInfo({
 						version: latestRelease.tag_name,
 						url: latestRelease.html_url,
 					});
 				}
 			} catch (error) {
-				logger.error("[InfLink-rs] 检查更新失败:", error);
+				logger.error("检查更新失败:", "useVersionCheck", error);
 			}
 		};
 

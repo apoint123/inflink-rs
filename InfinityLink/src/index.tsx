@@ -71,14 +71,14 @@ function patchLocalStorage() {
 }
 
 plugin.onLoad((selfPlugin) => {
-	logger.info("[InfLink-rs] 插件正在加载...", selfPlugin);
+	logger.info("插件正在加载...", "onLoad", selfPlugin);
 
 	patchLocalStorage();
 
 	try {
 		createRoot(configElement).render(<App />);
 	} catch (error) {
-		logger.error("[InfLink-rs] React 组件渲染失败:", error);
+		logger.error("React 组件渲染失败:", "onLoad", error);
 	}
 });
 
@@ -146,17 +146,17 @@ function Main() {
 
 	useEffect(() => {
 		if (ncmVersion !== null) {
-			logger.debug(`[InfLink] 兼容的版本: ${ncmVersion}`);
+			logger.debug(`兼容的版本: ${ncmVersion}`, "Main");
 		}
 	}, [ncmVersion]);
 
 	useEffect(() => {
-		logger.debug(`[InfLink] SMTC 支持: ${SMTCEnabled}`);
+		logger.debug(`SMTC 支持: ${SMTCEnabled}`, "Main");
 	}, [SMTCEnabled]);
 
 	useEffect(() => {
 		setLogLevel(frontendLogLevel);
-		logger.debug(`[InfLink] 设置前端日志级别为: ${frontendLogLevel}`);
+		logger.debug(`设置前端日志级别为: ${frontendLogLevel}`, "Main");
 	}, [frontendLogLevel]);
 
 	useEffect(() => {

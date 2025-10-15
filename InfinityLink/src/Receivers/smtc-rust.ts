@@ -52,7 +52,7 @@ class SMTCNativeBackend {
 		const resultJson = this.call<string>("dispatch", [command]);
 
 		if (!resultJson) {
-			logger.error(`[InfLink-Native] 命令 '${type}' 未收到任何返回结果。`);
+			logger.error(`命令 '${type}' 未收到任何返回结果。`, "Native Bridge");
 			return;
 		}
 
@@ -60,13 +60,15 @@ class SMTCNativeBackend {
 			const result: CommandResult = JSON.parse(resultJson);
 			if (result.status === "Error") {
 				logger.error(
-					`[InfLink-Native] 后端执行命令 '${type}' 时发生错误:`,
+					`后端执行命令 '${type}' 时发生错误:`,
+					"Native Bridge",
 					result.message,
 				);
 			}
 		} catch (e) {
 			logger.error(
-				`[InfLink-Native] 解析后端返回结果失败:`,
+				`解析后端返回结果失败:`,
+				"Native Bridge",
 				e,
 				"\n原始结果:",
 				resultJson,
@@ -99,7 +101,7 @@ class SMTCNativeBackend {
 					control_handler(event);
 				}
 			} catch (e) {
-				logger.error("[InfLink-Native] 解析后端事件失败:", e);
+				logger.error("解析后端事件失败:", "Native Bridge", e);
 			}
 		};
 
@@ -110,23 +112,46 @@ class SMTCNativeBackend {
 
 	public setBackendLogLevel(level: LogLevel) {
 		this.call("set_log_level", [level]);
-		logger.info(`[InfLink] 设置后端日志级别为: ${level}`);
+		logger.info(`设置后端日志级别为: ${level}`, "Native Bridge");
 	}
 
 	private registerLogger() {
 		const logCallback = (logJson: string) => {
 			try {
 				const entry: LogEntry = JSON.parse(logJson);
-				const message = `[InfLink-rs backend|${entry.target}] ${entry.message}`;
 				const level = entry.level.toLowerCase();
 
-				if (isLogLevel(level)) {
-					logger[level](message);
-				} else {
-					logger.log(message);
+				if (!isLogLevel(level)) {
+					logger.log(`[InfLink BE|${entry.target}] ${entry.message}`);
+					return;
 				}
+
+				const pluginPart = "InfLink BE";
+				const sourcePart = entry.target;
+
+				const badgePluginCss = [
+					"color: white",
+					"background-color: #946143ff",
+					"padding: 1px 4px",
+					"border-radius: 3px 0 0 3px",
+					"font-weight: bold",
+				].join(";");
+
+				const badgeSourceCss = [
+					"color: white",
+					"background-color: #5a6268",
+					"padding: 1px 4px",
+					"border-radius: 0 3px 3px 0",
+				].join(";");
+
+				console.log(
+					`%c${pluginPart}%c${sourcePart}`,
+					badgePluginCss,
+					badgeSourceCss,
+					entry.message,
+				);
 			} catch (e) {
-				logger.error("[InfLink-Native] 解析后端日志失败:", e);
+				logger.error("解析后端日志失败:", "Native Bridge", e);
 			}
 		};
 		this.call("register_logger", [logCallback]);
@@ -138,7 +163,7 @@ class SMTCNativeBackend {
 
 		this.call("cleanup");
 		this.call("shutdown");
-		logger.info("[InfLink-Native] SMTC 已禁用");
+		logger.info("SMTC 已禁用", "Native Bridge");
 	}
 
 	public update(songInfo: MetadataPayload) {
