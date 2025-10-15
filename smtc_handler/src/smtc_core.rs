@@ -365,7 +365,6 @@ pub fn update_metadata(payload: MetadataPayload) {
         title = %payload.song_name,
         artist = %payload.author_name,
         album = %payload.album_name,
-        thumbnail_url = %payload.thumbnail_url,
         ncm_id = ?payload.ncm_id,
         "正在更新 SMTC 歌曲元数据"
     );
@@ -376,18 +375,25 @@ pub fn update_metadata(payload: MetadataPayload) {
             None
         } else if payload.thumbnail_url.starts_with("data:") {
             debug!("正在从 Data URI 解码封面");
-            if let Some(comma_index) = payload.thumbnail_url.find(',') {
+
+            let start_time = Instant::now();
+            let result = if let Some(comma_index) = payload.thumbnail_url.find(',') {
                 let base64_data = &payload.thumbnail_url[comma_index + 1..];
-                match general_purpose::STANDARD.decode(base64_data) {
-                    Ok(bytes) => Some(bytes),
-                    Err(e) => {
-                        warn!("解码封面 Data URI 失败: {e}");
-                        None
-                    }
-                }
+                general_purpose::STANDARD.decode(base64_data)
             } else {
-                warn!("无效的 Data URI 格式: 找不到逗号");
-                None
+                Err(base64::DecodeError::InvalidByte(0, 0))
+            };
+
+            match result {
+                Ok(bytes) => {
+                    let elapsed = start_time.elapsed();
+                    debug!(duration = ?elapsed, "封面 Data URI 解码完成");
+                    Some(bytes)
+                }
+                Err(e) => {
+                    warn!("解码封面 Data URI 失败: {e}");
+                    None
+                }
             }
         } else {
             debug!("正在从 URL 下载封面: {}", payload.thumbnail_url);
@@ -467,7 +473,21 @@ pub fn update_metadata(payload: MetadataPayload) {
 fn handle_command_inner(command_json: &str) -> Result<()> {
     let command: SmtcCommand = serde_json::from_str(command_json).context("解析命令 JSON 失败")?;
 
-    debug!(?command, "正在处理命令");
+    match &command {
+        SmtcCommand::Metadata(payload) => {
+            debug!(
+                command_type = "Metadata",
+                song_name = %payload.song_name,
+                author_name = %payload.author_name,
+                album_name = %payload.album_name,
+                ncm_id = ?payload.ncm_id,
+                "正在处理命令"
+            );
+        }
+        _ => {
+            debug!(?command, "正在处理命令");
+        }
+    }
 
     match command {
         SmtcCommand::Metadata(payload) => update_metadata(payload),

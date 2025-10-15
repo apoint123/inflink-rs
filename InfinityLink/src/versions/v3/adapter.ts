@@ -17,6 +17,7 @@ import type {
 	VolumeInfo,
 } from "../../types/smtc";
 import {
+	CoverManager,
 	findModule,
 	getWebpackRequire,
 	resizeImageUrl,
@@ -146,6 +147,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	private storageModule: v3.NcmStorageModule | null = null;
 	private hasRestoredInitialState = false;
 	private ignoreNextZeroProgressEvent = false;
+	private readonly coverManager = new CoverManager();
 
 	private musicDuration = 0;
 	private musicPlayProgress = 0;
@@ -543,15 +545,6 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		this.reduxStore?.dispatch({ type: "playing/switchMute" });
 	}
 
-	private async convertBlobToDataUri(blob: Blob): Promise<string> {
-		return new Promise((resolve, reject) => {
-			const reader = new FileReader();
-			reader.onload = () => resolve(reader.result as string);
-			reader.onerror = (error) => reject(error);
-			reader.readAsDataURL(blob);
-		});
-	}
-
 	private onStateChanged(): void {
 		if (!this.reduxStore) return;
 		const state = this.reduxStore.getState();
@@ -578,6 +571,14 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 			this.lastTrackId = currentRawTrackId;
 			const songInfo = songInfoResult.value;
 
+			this.coverManager.getCover(songInfo, (result) => {
+				this.dispatchEvent(
+					new CustomEvent<SongInfo>("songChange", {
+						detail: { ...result.songInfo, thumbnailUrl: result.dataUri ?? "" },
+					}),
+				);
+			});
+
 			if (!this.hasRestoredInitialState) {
 				this.hasRestoredInitialState = true;
 				this.restoreLastPlaybackState();
@@ -592,56 +593,6 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 				if (playingInfo?.curTrack?.duration) {
 					this.musicDuration = playingInfo.curTrack.duration;
 				}
-			}
-
-			if (songInfo.thumbnailUrl?.startsWith("orpheus://")) {
-				// 尝试在 50ms 内获取封面以避免闪烁
-				(async () => {
-					const timeout = new Promise((resolve) =>
-						setTimeout(() => resolve("timeout"), 50),
-					);
-					const fetchCoverPromise = (async () => {
-						try {
-							const response = await fetch(songInfo.thumbnailUrl as string);
-							if (!response.ok) return null;
-							const blob = await response.blob();
-							return await this.convertBlobToDataUri(blob);
-						} catch (e) {
-							logger.warn("[Adapter V3] 获取 orpheus 封面失败:", e);
-							return null;
-						}
-					})();
-
-					const winner = await Promise.race([fetchCoverPromise, timeout]);
-
-					if (winner === "timeout") {
-						this.dispatchEvent(
-							new CustomEvent<SongInfo>("songChange", {
-								detail: { ...songInfo, thumbnailUrl: "" },
-							}),
-						);
-						const dataUri = await fetchCoverPromise;
-						if (dataUri) {
-							this.dispatchEvent(
-								new CustomEvent<SongInfo>("songChange", {
-									detail: { ...songInfo, thumbnailUrl: dataUri },
-								}),
-							);
-						}
-					} else {
-						this.dispatchEvent(
-							new CustomEvent<SongInfo>("songChange", {
-								detail: { ...songInfo, thumbnailUrl: (winner as string) || "" },
-							}),
-						);
-					}
-				})();
-			} else {
-				this.dispatchEvent(
-					new CustomEvent<SongInfo>("songChange", {
-						detail: songInfo,
-					}),
-				);
 			}
 		}
 

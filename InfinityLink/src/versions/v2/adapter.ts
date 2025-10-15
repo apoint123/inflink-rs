@@ -14,7 +14,12 @@ import type {
 	TimelineInfo,
 	VolumeInfo,
 } from "../../types/smtc";
-import { resizeImageUrl, throttle, waitForElement } from "../../utils";
+import {
+	CoverManager,
+	resizeImageUrl,
+	throttle,
+	waitForElement,
+} from "../../utils";
 import { NcmEventAdapter, type ParsedEventMap } from "../../utils/event";
 import logger from "../../utils/logger";
 import type { INcmAdapter, NcmAdapterEventMap, PlayModeInfo } from "../adapter";
@@ -220,6 +225,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	private unsubscribeStore: (() => void) | null = null;
 	private readonly eventAdapter: NcmEventAdapter;
 	private readonly apiClient = new NcmV2ApiClient();
+	private readonly coverManager = new CoverManager();
 
 	private musicDuration = 0;
 	private musicPlayProgress = 0;
@@ -497,13 +503,15 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		const currentSongInfo = songInfoResult.value;
 
 		if (currentSongInfo.ncmId !== this.lastDispatchedSongInfo?.ncmId) {
-			this.dispatchEvent(
-				new CustomEvent<SongInfo>("songChange", {
-					detail: currentSongInfo,
-				}),
-			);
-
 			this.lastDispatchedSongInfo = currentSongInfo;
+
+			this.coverManager.getCover(currentSongInfo, (result) => {
+				this.dispatchEvent(
+					new CustomEvent<SongInfo>("songChange", {
+						detail: { ...result.songInfo, thumbnailUrl: result.dataUri ?? "" },
+					}),
+				);
+			});
 
 			const trackObject = this.activePlayerApi?.getCurrentTrackObject();
 			const newDuration = trackObject?.data?.duration || 0;
@@ -524,12 +532,17 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 			!this.lastDispatchedSongInfo.thumbnailUrl &&
 			currentSongInfo.thumbnailUrl
 		) {
-			this.dispatchEvent(
-				new CustomEvent<SongInfo>("songChange", {
-					detail: currentSongInfo,
-				}),
-			);
-			this.lastDispatchedSongInfo = currentSongInfo;
+			this.coverManager.getCover(currentSongInfo, (result) => {
+				this.dispatchEvent(
+					new CustomEvent<SongInfo>("songChange", {
+						detail: { ...result.songInfo, thumbnailUrl: result.dataUri ?? "" },
+					}),
+				);
+				this.lastDispatchedSongInfo = {
+					...result.songInfo,
+					thumbnailUrl: result.dataUri ?? "",
+				};
+			});
 		}
 
 		const newPlayMode = playingState.playMode;
