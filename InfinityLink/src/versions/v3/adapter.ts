@@ -20,7 +20,6 @@ import {
 	CoverManager,
 	findModule,
 	getWebpackRequire,
-	resizeImageUrl,
 	throttle,
 	waitForElement,
 } from "../../utils";
@@ -324,7 +323,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 					currentVoice.track?.artists?.map((v) => v.name).join(" / ") ||
 					"未知主播",
 				albumName: currentVoice.radio?.name || "未知播单",
-				thumbnailUrl: resizeImageUrl(currentVoice.coverUrl),
+				thumbnailUrl: currentVoice.coverUrl,
 				ncmId: voiceId,
 			});
 		}
@@ -367,9 +366,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		}
 
 		const coverUrl = playingInfo.resourceCoverUrl || "";
-		const thumbnailUrl = coverUrl.startsWith("orpheus://")
-			? coverUrl
-			: resizeImageUrl(coverUrl);
+		const thumbnailUrl = coverUrl;
 
 		return ok({
 			songName: playingInfo.resourceName || "未知歌名",

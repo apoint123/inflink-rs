@@ -14,12 +14,7 @@ import type {
 	TimelineInfo,
 	VolumeInfo,
 } from "../../types/smtc";
-import {
-	CoverManager,
-	resizeImageUrl,
-	throttle,
-	waitForElement,
-} from "../../utils";
+import { CoverManager, throttle, waitForElement } from "../../utils";
 import { NcmEventAdapter, type ParsedEventMap } from "../../utils/event";
 import logger from "../../utils/logger";
 import type { INcmAdapter, NcmAdapterEventMap, PlayModeInfo } from "../adapter";
@@ -321,7 +316,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 				authorName:
 					songData.artists?.map((v) => v.name).join(" / ") || "未知作者",
 				albumName: songData.album?.name || "未知专辑",
-				thumbnailUrl: resizeImageUrl(songData.album.picUrl),
+				thumbnailUrl: songData.album.picUrl,
 				ncmId: ncmId,
 			});
 		}
@@ -336,7 +331,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 					songName: programCache.name || "未知播客",
 					authorName: programCache.dj?.nickname || "未知主播",
 					albumName: programCache.radio?.name || "未知播单",
-					thumbnailUrl: resizeImageUrl(programCache.coverUrl),
+					thumbnailUrl: programCache.coverUrl,
 					ncmId: programCache.id,
 				});
 			}
@@ -346,9 +341,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 				authorName:
 					songData.artists?.map((v) => v.name).join(" / ") || "未知主播",
 				albumName: songData.radio?.name || "未知播单",
-				thumbnailUrl: resizeImageUrl(
-					songData.radio?.picUrl ?? songData.album?.picUrl,
-				),
+				thumbnailUrl: songData.radio?.picUrl ?? songData.album?.picUrl,
 				ncmId: songData.programId,
 			});
 		}
@@ -358,7 +351,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 			authorName:
 				songData.artists?.map((v) => v.name).join(" / ") || "未知艺术家",
 			albumName: songData.album?.name || "未知专辑",
-			thumbnailUrl: resizeImageUrl(songData.album?.picUrl),
+			thumbnailUrl: songData.album?.picUrl,
 			ncmId: songData.id,
 		});
 	}
