@@ -1,5 +1,22 @@
 # Changelog
 
+## 3.2.0
+
+### Minor Changes
+
+- e1de576: refactor(v3): 使用另一个模块来订阅进度更新以避免和其它插件冲突
+- fd16ef6: feat: 添加设置音量的功能
+- d9eaff5: feat: 暴露一些公共接口
+
+### Patch Changes
+
+- 3aa8fbb: feat: 停止播放功能
+- 6de55fc: feat: 新增调整封面分辨率功能
+- 3a9a849: feat(v3): 启动应用时自动恢复上次的播放进度
+- 8c7f675: feat: 使用客户端缓存来加速封面获取
+- b250440: refactor: 改进播客的数据获取
+- 3e82695: refactor: 优化日志显示
+
 ## 3.1.2
 
 ### Patch Changes

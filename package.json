@@ -1,7 +1,7 @@
 {
 	"name": "inflink-rs-workspace",
 	"private": true,
-	"version": "3.1.2",
+	"version": "3.2.0",
 	"packageManager": "pnpm@10.18.3",
 	"engines": {
 		"node": ">=20.0.0",
