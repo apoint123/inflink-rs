@@ -96,9 +96,7 @@ export class NcmEventAdapter {
 			return;
 		}
 
-		if (newPlayState) {
-			this.dispatch("playStateChange", newPlayState);
-		}
+		this.dispatch("playStateChange", newPlayState);
 	};
 
 	private readonly _onRawPlayProgress = (
