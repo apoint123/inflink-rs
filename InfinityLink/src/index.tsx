@@ -208,6 +208,7 @@ function Main() {
 				delete window.InfLinkApi;
 			};
 		}
+		return;
 	}, [provider]);
 
 	if (ncmVersion === null || status === "loading") {
@@ -334,14 +335,26 @@ function Main() {
 								setResolution(newValue);
 							}
 						}}
-						renderInput={(params) => (
-							<TextField
-								{...params}
-								label="封面分辨率"
-								size="small"
-								helperText="过大的值可能会影响封面加载速度"
-							/>
-						)}
+						renderInput={(params) => {
+							const { InputLabelProps, ...rest } = params;
+							const { className, style, ...restInputLabelProps } =
+								InputLabelProps;
+							return (
+								<TextField
+									{...rest}
+									slotProps={{
+										inputLabel: {
+											...restInputLabelProps,
+											...(className && { className }),
+											...(style && { style }),
+										},
+									}}
+									label="封面分辨率"
+									size="small"
+									helperText="过大的值可能会影响封面加载速度"
+								/>
+							);
+						}}
 					/>
 				</FormControl>
 			</Box>

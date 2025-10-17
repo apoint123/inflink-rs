@@ -3,17 +3,19 @@
 	"compilerOptions": {
 		"baseUrl": "./",
 		"strict": true,
-		"strictNullChecks": true,
 		"noUnusedLocals": true,
 		"noUnusedParameters": true,
 		"noImplicitOverride": true,
+		"noImplicitReturns": true,
 		"noFallthroughCasesInSwitch": true,
 		"forceConsistentCasingInFileNames": true,
+		"exactOptionalPropertyTypes": true,
 
 		"module": "ESNext",
 		"moduleResolution": "bundler",
 		"resolveJsonModule": true,
 		"allowImportingTsExtensions": true,
+		"isolatedModules": true,
 		"noEmit": true,
 
 		"target": "ESNext",
@@ -21,8 +23,6 @@
 		"jsx": "react-jsx",
 
 		"esModuleInterop": true,
-		"allowSyntheticDefaultImports": true,
-
 		"skipLibCheck": true
 	}
 }

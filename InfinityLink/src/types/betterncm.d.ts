@@ -432,7 +432,7 @@ declare module "plugin-manager/components/warning" {
 
 declare module "plugin-manager/index" {
 	export function initPluginManager(): Promise<void>;
-	export let onPluginLoaded: (_: typeof loadedPlugins) => void;
+	export let onPluginLoaded: (_: Window["loadedPlugins"]) => void;
 }
 
 declare module "loader" {

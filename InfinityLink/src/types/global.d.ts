@@ -1,5 +1,7 @@
 import type { NCMInjectPlugin, NCMPlugin } from "plugin";
 import type { Store } from "redux";
+import type { IInfLinkApi } from "./api";
+import type { v3 } from "./ncm";
 
 declare global {
 	interface Window {
@@ -9,12 +11,23 @@ declare global {
 		BETTERNCM_FILES_PATH: string;
 		BETTERNCM_API_PORT: number;
 
-		/** 与原生代码交互的IPC通道 */
+		/**
+		 * @description
+		 * 与原生代码交互的IPC通道
+		 *
+		 * **仅**在Windows上可用
+		 *
+		 * 强烈不推荐使用此接口，因为它实际上就是 legacyNativeCmder 的底层实现，
+		 * 非常低级，并且其 `registerCall` 实现会覆盖掉所有之前的监听器，
+		 * 通常会导致其它问题
+		 *
+		 * @see 请优先使用 {@link legacyNativeCmder}
+		 */
 		channel: NCMChannel;
 
 		h: typeof import("react").createElement;
 		f: typeof import("react").Fragment;
-		dom: typeof import("betterncm-api/utils").dom;
+		dom: typeof import("betterncm-api/utils").utils.dom;
 		React: typeof import("react");
 		ReactDOM: typeof import("react-dom");
 
@@ -51,15 +64,16 @@ declare global {
 		loadFailedErrors: [string, Error][];
 
 		/**
-		 * @warn 在 v3 客户端上请优先使用内部 Bridge 实例
-		 *
 		 * @description
-		 * 这是暴露在全局的 OrpheusCommand 实例
+		 * 暴露在全局的 `OrpheusCommand` 实例，为各个不同平台的客户端
+		 * 与原生代码交互提供了一个统一的 API 封装层。
+		 *
+		 * @warn 在 v3 客户端上请优先使用内部 Bridge 实例
 		 *
 		 * v3 的 UI 组件（如 AudioPlayer）使用的是一个独立的内部实例。
 		 * 直接使用此全局实例会与网易云内部的实例冲突，导致意外的 Bug
 		 *
-		 * 建议通过 Webpack 模块查找内部实例（通常与 AudioPlayer 在同一模块下，名为 `Bridge`）
+		 * 建议通过 Webpack 模块查找内部实例（目前观察到其与 AudioPlayer 在同一模块下，名为 `Bridge`）
 		 */
 		legacyNativeCmder: OrpheusCommand;
 
@@ -85,17 +99,24 @@ declare global {
 	const BETTERNCM_API_PATH: Window["BETTERNCM_API_PATH"];
 	const BETTERNCM_FILES_PATH: Window["BETTERNCM_FILES_PATH"];
 	const BETTERNCM_API_PORT: Window["BETTERNCM_API_PORT"];
+
+	/**
+	 * @see {@link window.channel}
+	 */
 	const channel: Window["channel"];
+
+	/**
+	 * @see {@link window.legacyNativeCmder}
+	 */
+	const legacyNativeCmder: OrpheusCommand;
+
 	const h: Window["h"];
 	const f: Window["f"];
 	const dom: Window["dom"];
-	const React: Window["React"];
-	const ReactDOM: Window["ReactDOM"];
 	const APP_CONF: Window["APP_CONF"];
 	const betterncm: Window["betterncm"];
 	const betterncm_native: Window["betterncm_native"];
 	const plugin: Window["plugin"];
-	const legacyNativeCmder: OrpheusCommand;
 
 	const __APP_VERSION__: string;
 	const DEBUG: boolean;
@@ -113,24 +134,34 @@ export interface OrpheusCommand {
 	 * 调用一个原生命令
 	 * @param command 命令名 (e.g., "app.getVersion")
 	 * @param args 传递给命令的参数
-	 * @returns  命令执行结果的 Promise
+	 * @returns 命令执行结果的 Promise。
+	 *
+	 * @description
+	 * Promise resolve 的值基于原生回调的参数：
+	 * - 如果回调无参数，resolve `undefined`。
+	 * - 如果回调有单个参数，resolve 该参数值。
+	 * - 如果回调有多个参数，resolve 一个包含所有参数的数组。
 	 */
 	call<T = unknown>(command: string, ...args: unknown[]): Promise<T>;
 
-	createPromiseFromOrpheusEvent<T = unknown>(
+	createPromiseFromOrpheusEvent<T extends unknown[] = unknown[]>(
 		eventName: `${string}.on${string}`,
 		options?: {
 			timeout?: number;
 			filter_result?: (ctx: unknown, results: T) => boolean;
+			filter_context?: unknown;
 		},
 	): Promise<T>;
 
 	/**
-	 * 直接调用原生方法，并返回 Promise
+	 * 直接调用底层 channel 上的方法，或在 WKWebView 上模拟此行为。
+	 * 这是一个底层方法，返回值依赖于具体环境和方法。
+	 *
 	 * @param method 函数名 (e.g., "serialKey")
 	 * @param args 传递给函数的参数
+	 * @returns 一个 Promise，其结果依赖于底层实现 (可能是字符串、null 或其他类型)
 	 */
-	do(method: keyof NcmChannel, ...args: unknown[]): Promise<unknown>;
+	do(method: keyof NCMChannel, ...args: unknown[]): Promise<unknown>;
 
 	/**
 	 * 覆盖注册一个事件监听器
@@ -187,16 +218,15 @@ export interface OrpheusCommand {
 	 *
 	 * @warn 注意, 该方法并不可靠
 	 */
-	createPromiseFromNativeRegisterCall<T = unknown>(
+	createPromiseFromNativeRegisterCall<T extends unknown[] = unknown[]>(
 		/** @description registerCall <ns> 命名空间下的 cmd */
 		name: string,
 		/** @description registerCall <ns> 命名空间 */
 		ns: string,
-		{
-			timeout = 60000,
-			filter_result,
-			filter_context = null,
-		}: {
+		/**
+		 * @description 一个包含可选参数的对象
+		 */
+		options?: {
 			/** @description 超时时间 ms 值, 默认 60s, 若该值 <= 0, 则表示永不超时 */
 			timeout?: number;
 			/**
@@ -206,17 +236,48 @@ export interface OrpheusCommand {
 			filter_result?: (ctx: unknown, results: T) => boolean;
 			/** @description filter_result 执行时的 ctx 值, 默认为 null */
 			filter_context?: unknown;
-		} = {},
+		},
 	): Promise<T>;
 }
 
+/**
+ * @description
+ * Windows (CEF) 环境下，WebView 与原生端进行双向通信的机制
+ *
+ * @warning
+ * 不推荐直接使用。
+ * 这是一个平台相关的底层 API。直接使用它会使你的代码与 Windows 平台绑定
+ * (虽然 betterncm 只有 Windows 版本)，并且需要手动处理回调函数，容易出错。
+ *
+ * @see {OrpheusCommand} - 推荐使用的替代品。
+ */
 export interface NCMChannel {
 	/**
-	 * 从 JS 端向原生端发起一个异步调用，请求执行指定的方法
+	 * 从 JS 端向原生端发起一个异步调用，请求执行指定的方法。
+	 *
+	 * 这是一个底层的、基于回调的函数。
+	 *
+	 * @param method 要调用的方法名
+	 * @param callback 调用完成后执行的回调函数
+	 * @param params 传递给原生方法的参数数组
+	 *
+	 * @warn
+	 * 建议使用 `legacyNativeCmder.call`，它提供了更现代的 Promise 封装。
 	 */
-	call: <T = void>(method: string, ...args: unknown[]) => Promise<T>;
+	call(
+		method: string,
+		// biome-ignore lint/suspicious/noExplicitAny: 回调参数不确定
+		callback: (...args: any[]) => void,
+		// biome-ignore lint/suspicious/noExplicitAny: 参数不确定
+		params: any[],
+	): void;
+
 	/**
 	 * 在 JS 端注册一个回调函数，用于响应从原生端发起的调用
+	 *
+	 * @warn
+	 * 请使用 `legacyNativeCmder.appendRegisterCall`, registerCall会覆盖所有已有的监听器,
+	 * 且会与 legacyNativeCmder 自己维护的回调函数组冲突，通常会导致 UI 或其它组件的问题
 	 */
 	registerCall(method: string, handler: (...args: unknown[]) => void): void;
 	viewCall: (name: unknown) => unknown;

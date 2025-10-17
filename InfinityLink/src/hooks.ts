@@ -129,6 +129,7 @@ export function useInfoProvider(version: NcmVersion | null): ProviderState {
 						status: "error",
 						error: initResult.error,
 					});
+					return;
 				} else {
 					const newProvider = new SmtcProvider(adapter);
 					setProviderState({
@@ -145,6 +146,7 @@ export function useInfoProvider(version: NcmVersion | null): ProviderState {
 				if (!didUnmount) {
 					setProviderState(INITIAL_PROVIDER_STATE);
 				}
+				return;
 			}
 		};
 
