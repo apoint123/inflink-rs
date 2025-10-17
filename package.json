@@ -22,11 +22,11 @@
 		"cs:version": "pnpm changeset version && node ./scripts/sync-versions.js"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.2.5",
+		"@biomejs/biome": "^2.2.6",
 		"@changesets/cli": "^2.29.7",
 		"@commitlint/cli": "^20.1.0",
 		"@commitlint/config-conventional": "^20.0.0",
-		"@types/node": "^24.7.0",
+		"@types/node": "^24.8.0",
 		"husky": "^9.1.7",
 		"typescript": "^5.9.3"
 	}
