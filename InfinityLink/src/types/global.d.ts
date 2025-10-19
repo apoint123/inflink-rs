@@ -126,8 +126,13 @@ declare global {
  * 和网易云音乐原生代码交互的命令
  */
 export interface OrpheusCommand {
-	// biome-ignore lint/suspicious/noExplicitAny: 内部实现，类型复杂
-	_envAdapter: any;
+	/**
+	 * legacyNativeCmder 的核心逻辑，用来适配 Windows 的 CEF 和 Macos 的 WKWebView,
+	 * 同时还负责实现 registerCall、removeRegisterCall 等核心逻辑
+	 *
+	 * 通常不应该直接使用它，应该使用上层的 OrpheusCommand
+	 */
+	_envAdapter: unknown;
 	_isProduction: boolean;
 
 	/**
@@ -169,8 +174,7 @@ export interface OrpheusCommand {
 	overwriteRegisterCall(
 		name: string,
 		prefix: string,
-		// biome-ignore lint/suspicious/noExplicitAny: 参数类型因事件而异
-		callback?: (...args: any[]) => void,
+		callback?: (...args: unknown[]) => void,
 	): boolean;
 
 	/**
@@ -179,8 +183,7 @@ export interface OrpheusCommand {
 	appendRegisterCall(
 		name: string,
 		prefix: string,
-		// biome-ignore lint/suspicious/noExplicitAny: 参数类型因事件而异
-		callback?: (...args: any[]) => void,
+		callback?: (...args: unknown[]) => void,
 	): boolean;
 
 	/**
@@ -189,8 +192,7 @@ export interface OrpheusCommand {
 	fillRegisterCallIfEmpty(
 		name: string,
 		prefix: string,
-		// biome-ignore lint/suspicious/noExplicitAny: 参数类型因事件而异
-		callback?: (...args: any[]) => void,
+		callback?: (...args: unknown[]) => void,
 	): boolean;
 
 	/**
@@ -199,8 +201,7 @@ export interface OrpheusCommand {
 	removeRegisterCall(
 		name: string,
 		prefix: string,
-		// biome-ignore lint/suspicious/noExplicitAny: 参数类型因事件而异
-		cb: (...args: any[]) => void,
+		cb: (...args: unknown[]) => void,
 	): void;
 
 	/**
@@ -266,10 +267,8 @@ export interface NCMChannel {
 	 */
 	call(
 		method: string,
-		// biome-ignore lint/suspicious/noExplicitAny: 回调参数不确定
-		callback: (...args: any[]) => void,
-		// biome-ignore lint/suspicious/noExplicitAny: 参数不确定
-		params: any[],
+		callback: (...args: unknown[]) => void,
+		params: unknown[],
 	): void;
 
 	/**

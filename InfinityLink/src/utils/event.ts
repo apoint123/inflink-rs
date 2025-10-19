@@ -15,7 +15,7 @@ export class NcmEventAdapter {
 
 	private readonly registeredLegacyEvents = new Map<
 		string,
-		Set<v3.EventMap[v3.EventName]>
+		Set<(...args: unknown[]) => void>
 	>();
 	private readonly legacyCallbacks = new Map<
 		string,
@@ -138,8 +138,10 @@ export class NcmEventAdapter {
 		}
 		callbackSet.add(callback);
 
+		// 其实对于 legacyNativeCmder, 没有必要维护这个复杂的事件多路复用系统
+		// 留在这里只是为了以备未来需要直接使用底层的 channel 注册事件
 		if (!this.registeredLegacyEvents.has(fullName)) {
-			const legacyCallbackSet = new Set<v3.EventMap[v3.EventName]>();
+			const legacyCallbackSet = new Set<(...args: unknown[]) => void>();
 			this.registeredLegacyEvents.set(fullName, legacyCallbackSet);
 
 			const stub = (...args: unknown[]) => {
