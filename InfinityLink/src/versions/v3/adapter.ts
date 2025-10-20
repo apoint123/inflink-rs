@@ -419,11 +419,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	}
 
 	public getPlaybackStatus(): PlaybackStatus {
-		const playingInfo = this.reduxStore?.getState().playing;
-		if (typeof playingInfo?.playingState === "number") {
-			return playingInfo.playingState === 2 ? "Playing" : "Paused";
-		}
-		return "Paused";
+		return this.playState;
 	}
 
 	public getTimelineInfo(): Result<TimelineInfo, NcmAdapterError> {
@@ -461,17 +457,16 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	}
 
 	public pause(): void {
-		// 网易云点击暂停后会有一两秒的淡出效果，此时还没有暂停
-		// 要立刻认为已暂停并更新，不然会有延迟感
-		this.reduxStore?.dispatch({ type: "playing/pause" });
 		if (this.playState !== "Paused") {
 			this.playState = "Paused";
+			this.lastIsPlaying = false;
 			this.dispatchEvent(
 				new CustomEvent<PlaybackStatus>("playStateChange", {
-					detail: this.playState,
+					detail: "Paused",
 				}),
 			);
 		}
+		this.reduxStore?.dispatch({ type: "playing/pause" });
 	}
 
 	public stop(): void {
@@ -616,12 +611,13 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 			}
 		}
 
-		const isPlaying = this.getPlaybackStatus() === "Playing";
-		if (isPlaying !== this.lastIsPlaying) {
+		if (this.lastIsPlaying === null) {
+			const isPlaying = playingInfo.playingState === 2;
 			this.lastIsPlaying = isPlaying;
+			this.playState = isPlaying ? "Playing" : "Paused";
 			this.dispatchEvent(
 				new CustomEvent<PlaybackStatus>("playStateChange", {
-					detail: isPlaying ? "Playing" : "Paused",
+					detail: this.playState,
 				}),
 			);
 		}
@@ -736,10 +732,14 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	): void => {
 		const newPlayState = e.detail;
 		if (this.playState !== newPlayState) {
-			// v3 的播放状态由 redux store 更新
-			// 在这里也同步的话，乐观暂停时这里也会尝试同步状态
-			// 导致暂停按钮闪烁
-			// this.playState = newPlayState;
+			this.playState = newPlayState;
+			this.lastIsPlaying = newPlayState === "Playing";
+
+			this.dispatchEvent(
+				new CustomEvent<PlaybackStatus>("playStateChange", {
+					detail: this.playState,
+				}),
+			);
 		}
 	};
 
