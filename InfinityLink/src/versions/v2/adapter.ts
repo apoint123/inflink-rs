@@ -10,6 +10,7 @@ import {
 import type { v2 } from "../../types/ncm";
 import type {
 	PlaybackStatus,
+	PlayMode,
 	RepeatMode,
 	SongInfo,
 	TimelineInfo,
@@ -18,13 +19,13 @@ import type {
 import { CoverManager, throttle, waitForElement } from "../../utils";
 import { NcmEventAdapter, type ParsedEventMap } from "../../utils/event";
 import logger from "../../utils/logger";
-import type { INcmAdapter, NcmAdapterEventMap, PlayModeInfo } from "../adapter";
+import type { INcmAdapter, NcmAdapterEventMap } from "../adapter";
 import { PlayModeController } from "../playModeController";
 
 const Controller = typeof ctl !== "undefined" ? ctl : null;
 const DataController = typeof dc !== "undefined" ? dc : null;
 
-const NCM_PLAY_MODES = {
+const V2_PLAY_MODES = {
 	LIST_LOOP: "playorder",
 	SINGLE_LOOP: "playcycle",
 	RANDOM: "playrandom",
@@ -32,23 +33,48 @@ const NCM_PLAY_MODES = {
 	AI: "playai",
 } as const;
 
-const V2_MODE_CONSTANTS = {
-	SHUFFLE: NCM_PLAY_MODES.RANDOM,
-	LOOP: NCM_PLAY_MODES.LIST_LOOP,
-	ONE_LOOP: NCM_PLAY_MODES.SINGLE_LOOP,
-	ORDER: NCM_PLAY_MODES.ORDER,
-	AI: NCM_PLAY_MODES.AI,
-};
-
-type NcmPlayMode = (typeof NCM_PLAY_MODES)[keyof typeof NCM_PLAY_MODES];
+type NcmV2PlayMode = (typeof V2_PLAY_MODES)[keyof typeof V2_PLAY_MODES];
 
 function isValidNcmPlayMode(
 	mode: string | undefined,
-): mode is NcmPlayMode | undefined {
+): mode is NcmV2PlayMode | undefined {
 	if (mode === undefined) {
 		return true;
 	}
-	return (Object.values(NCM_PLAY_MODES) as string[]).includes(mode);
+	return (Object.values(V2_PLAY_MODES) as string[]).includes(mode);
+}
+
+function toCanonicalPlayMode(ncmMode: NcmV2PlayMode): PlayMode {
+	switch (ncmMode) {
+		case V2_PLAY_MODES.RANDOM:
+			return { isShuffling: true, repeatMode: "List" };
+		case V2_PLAY_MODES.LIST_LOOP:
+			return { isShuffling: false, repeatMode: "List" };
+		case V2_PLAY_MODES.SINGLE_LOOP:
+			return { isShuffling: false, repeatMode: "Track" };
+		case V2_PLAY_MODES.ORDER:
+			return { isShuffling: false, repeatMode: "None" };
+		case V2_PLAY_MODES.AI:
+			return { isShuffling: false, repeatMode: "AI" };
+		default:
+			return { isShuffling: false, repeatMode: "None" };
+	}
+}
+
+function fromCanonicalPlayMode(playMode: PlayMode): NcmV2PlayMode {
+	if (playMode.isShuffling) {
+		return V2_PLAY_MODES.RANDOM;
+	}
+	switch (playMode.repeatMode) {
+		case "List":
+			return V2_PLAY_MODES.LIST_LOOP;
+		case "Track":
+			return V2_PLAY_MODES.SINGLE_LOOP;
+		case "AI":
+			return V2_PLAY_MODES.AI;
+		default:
+			return V2_PLAY_MODES.ORDER;
+	}
 }
 
 /**
@@ -88,7 +114,7 @@ class NcmV2PlayerApi {
 		this.playerInstance.Qn(progressRatio);
 	}
 
-	public switchMode(mode: NcmPlayMode): void {
+	public switchMode(mode: NcmV2PlayMode): void {
 		this.playerInstance.KJ(`mode_${mode}`);
 	}
 
@@ -227,16 +253,14 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	private musicDuration = 0;
 	private musicPlayProgress = 0;
 	private playStatus: PlaybackStatus = "Paused";
-	private lastPlayMode: NcmPlayMode | undefined = undefined;
+	private lastPlayMode: NcmV2PlayMode | undefined = undefined;
 
 	private lastDispatchedSongInfo: SongInfo | null = null;
 
 	private volume = 1.0;
 	private isMuted = false;
 
-	private readonly playModeController = new PlayModeController(
-		V2_MODE_CONSTANTS,
-	);
+	private readonly playModeController = new PlayModeController();
 
 	private readonly dispatchTimelineThrottled: () => void;
 	private readonly resetTimelineThrottle: () => void;
@@ -375,33 +399,12 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		return err(new TimelineNotAvailableError());
 	}
 
-	public getPlayMode(): PlayModeInfo {
+	public getPlayMode(): PlayMode {
 		const currentNcmMode = this.reduxStore?.getState().playing?.playMode;
-		let isShuffling = false;
-		let repeatMode: RepeatMode = "None";
-
-		if (isValidNcmPlayMode(currentNcmMode)) {
-			switch (currentNcmMode) {
-				case NCM_PLAY_MODES.RANDOM:
-					isShuffling = true;
-					repeatMode = "List";
-					break;
-				case NCM_PLAY_MODES.LIST_LOOP:
-					isShuffling = false;
-					repeatMode = "List";
-					break;
-				case NCM_PLAY_MODES.SINGLE_LOOP:
-					isShuffling = false;
-					repeatMode = "Track";
-					break;
-				case NCM_PLAY_MODES.ORDER:
-					isShuffling = false;
-					repeatMode = "None";
-					break;
-			}
+		if (isValidNcmPlayMode(currentNcmMode) && currentNcmMode) {
+			return toCanonicalPlayMode(currentNcmMode);
 		}
-
-		return { isShuffling, repeatMode };
+		return { isShuffling: false, repeatMode: "None" };
 	}
 
 	public getVolumeInfo(): VolumeInfo {
@@ -454,27 +457,24 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	}
 
 	public toggleShuffle(): void {
-		const currentMode = this.reduxStore?.getState()?.playing?.playMode;
-		if (!isValidNcmPlayMode(currentMode) || !currentMode) return;
-
-		const targetMode = this.playModeController.getNextShuffleMode(currentMode);
-		this.activePlayerApi?.switchMode(targetMode as NcmPlayMode);
+		const currentMode = this.getPlayMode();
+		const nextMode = this.playModeController.getNextShuffleMode(currentMode);
+		const targetNcmMode = fromCanonicalPlayMode(nextMode);
+		this.activePlayerApi?.switchMode(targetNcmMode);
 	}
 
 	public toggleRepeat(): void {
-		const currentMode = this.reduxStore?.getState()?.playing?.playMode;
-		if (!isValidNcmPlayMode(currentMode) || !currentMode) return;
-
-		const targetMode = this.playModeController.getNextRepeatMode(currentMode);
-		this.activePlayerApi?.switchMode(targetMode as NcmPlayMode);
+		const currentMode = this.getPlayMode();
+		const nextMode = this.playModeController.getNextRepeatMode(currentMode);
+		const targetNcmMode = fromCanonicalPlayMode(nextMode);
+		this.activePlayerApi?.switchMode(targetNcmMode);
 	}
 
 	public setRepeatMode(mode: RepeatMode): void {
-		const currentMode = this.reduxStore?.getState()?.playing?.playMode;
-		if (!isValidNcmPlayMode(currentMode) || !currentMode) return;
-
-		const targetMode = this.playModeController.getRepeatMode(mode, currentMode);
-		this.activePlayerApi?.switchMode(targetMode as NcmPlayMode);
+		const currentMode = this.getPlayMode();
+		const nextMode = this.playModeController.getRepeatMode(mode, currentMode);
+		const targetNcmMode = fromCanonicalPlayMode(nextMode);
+		this.activePlayerApi?.switchMode(targetNcmMode);
 	}
 
 	public setVolume(level: number): void {
@@ -566,7 +566,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		) {
 			this.lastPlayMode = newPlayMode;
 			this.dispatchEvent(
-				new CustomEvent<PlayModeInfo>("playModeChange", {
+				new CustomEvent<PlayMode>("playModeChange", {
 					detail: this.getPlayMode(),
 				}),
 			);

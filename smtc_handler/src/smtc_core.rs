@@ -352,7 +352,7 @@ pub fn update_play_mode(is_shuffling: bool, repeat_mode: &RepeatMode) -> Result<
         let repeat_mode_win = match repeat_mode {
             RepeatMode::Track => MediaPlaybackAutoRepeatMode::Track,
             RepeatMode::List => MediaPlaybackAutoRepeatMode::List,
-            RepeatMode::None => MediaPlaybackAutoRepeatMode::None,
+            RepeatMode::None | RepeatMode::AI => MediaPlaybackAutoRepeatMode::None,
         };
         smtc.SetAutoRepeatMode(repeat_mode_win)?;
         debug!("SMTC 播放模式更新成功");

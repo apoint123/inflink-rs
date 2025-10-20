@@ -30,6 +30,7 @@ pub enum RepeatMode {
     None,
     Track,
     List,
+    AI,
 }
 
 #[derive(Deserialize, Debug)]
@@ -38,10 +39,9 @@ pub struct PlayStatePayload {
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct TimelinePayload {
-    #[serde(rename = "currentTime")]
     pub current_time: f64,
-    #[serde(rename = "totalTime")]
     pub total_time: f64,
 }
 

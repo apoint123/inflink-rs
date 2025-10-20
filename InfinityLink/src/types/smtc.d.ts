@@ -61,12 +61,16 @@ export interface TimelinePayload {
 	currentTime: number;
 	totalTime: number;
 }
-export interface PlayModePayload {
+
+export type RepeatMode = "None" | "Track" | "List" | "AI";
+
+export interface PlayMode {
 	isShuffling: boolean;
 	repeatMode: RepeatMode;
 }
+
+export interface PlayModePayload extends PlayMode {}
 export interface VolumePayload extends VolumeInfo {}
-export type RepeatMode = "None" | "Track" | "List" | "AI";
 
 export type SmtcCommandPayloads = {
 	Metadata: MetadataPayload;

@@ -2,6 +2,7 @@ import type { Result } from "neverthrow";
 import type { NcmAdapterError } from "../types/errors";
 import type {
 	PlaybackStatus,
+	PlayMode,
 	RepeatMode,
 	SongInfo,
 	TimelineInfo,
@@ -11,15 +12,10 @@ import type {
 export type NcmAdapterEventMap = {
 	songChange: CustomEvent<SongInfo>;
 	playStateChange: CustomEvent<PlaybackStatus>;
-	playModeChange: CustomEvent<PlayModeInfo>;
+	playModeChange: CustomEvent<PlayMode>;
 	timelineUpdate: CustomEvent<TimelineInfo>;
 	volumeChange: CustomEvent<VolumeInfo>;
 };
-
-export interface PlayModeInfo {
-	isShuffling: boolean;
-	repeatMode: RepeatMode;
-}
 
 export interface INcmAdapter extends EventTarget {
 	initialize(): Promise<Result<void, NcmAdapterError>>;
@@ -27,7 +23,7 @@ export interface INcmAdapter extends EventTarget {
 	getCurrentSongInfo(): Result<SongInfo, NcmAdapterError>;
 	getPlaybackStatus(): PlaybackStatus;
 	getTimelineInfo(): Result<TimelineInfo, NcmAdapterError>;
-	getPlayMode(): PlayModeInfo;
+	getPlayMode(): PlayMode;
 	getVolumeInfo(): VolumeInfo;
 
 	play(): void;

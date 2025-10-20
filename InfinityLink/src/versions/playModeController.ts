@@ -1,16 +1,4 @@
-import type { RepeatMode } from "../types/smtc";
-import {
-	calculateNextRepeatMode,
-	calculateNextShuffleMode,
-} from "../utils/playModeLogic";
-
-export interface NcmPlayModeConstants {
-	SHUFFLE: string;
-	LOOP: string;
-	ONE_LOOP: string;
-	ORDER: string;
-	AI: string;
-}
+import type { PlayMode, RepeatMode } from "../types/smtc";
 
 /**
  * 负责管理和计算播放模式切换逻辑
@@ -18,52 +6,73 @@ export interface NcmPlayModeConstants {
  * 用来避免在两个适配器中都重复实现相同的逻辑
  */
 export class PlayModeController {
-	private lastModeBeforeShuffle: string | null = null;
-	private readonly constants: NcmPlayModeConstants;
+	private lastModeBeforeShuffle: PlayMode | null = null;
 
-	constructor(constants: NcmPlayModeConstants) {
-		this.constants = constants;
-	}
-
-	public getNextShuffleMode(currentMode: string): string {
-		const { targetMode, nextLastModeBeforeShuffle } = calculateNextShuffleMode(
-			currentMode,
-			this.lastModeBeforeShuffle,
-			this.constants,
-		);
+	public getNextShuffleMode(currentMode: PlayMode): PlayMode {
+		const { targetMode, nextLastModeBeforeShuffle } =
+			this.calculateNextShuffleMode(currentMode);
 		this.lastModeBeforeShuffle = nextLastModeBeforeShuffle;
 		return targetMode;
 	}
 
-	public getNextRepeatMode(currentMode: string): string {
-		const targetMode = calculateNextRepeatMode(currentMode, this.constants);
+	public getNextRepeatMode(currentMode: PlayMode): PlayMode {
+		const targetMode = this.calculateNextRepeatMode(currentMode);
 
-		if (currentMode === this.constants.SHUFFLE) {
+		if (currentMode.isShuffling) {
+			this.lastModeBeforeShuffle = null;
+		}
+
+		return targetMode;
+	}
+
+	public getRepeatMode(mode: RepeatMode, currentMode: PlayMode): PlayMode {
+		// 切换重复模式时强制关闭随机播放，与网易云音乐行为一致
+		const targetMode: PlayMode = {
+			isShuffling: false,
+			repeatMode: mode,
+		};
+
+		if (currentMode.isShuffling) {
 			this.lastModeBeforeShuffle = null;
 		}
 		return targetMode;
 	}
 
-	public getRepeatMode(mode: RepeatMode, currentMode: string): string {
-		let targetMode: string;
-		switch (mode) {
-			case "List":
-				targetMode = this.constants.LOOP;
-				break;
-			case "Track":
-				targetMode = this.constants.ONE_LOOP;
-				break;
-			case "AI":
-				targetMode = this.constants.AI;
-				break;
-			default:
-				targetMode = this.constants.ORDER;
-				break;
+	private calculateNextShuffleMode(currentMode: PlayMode): {
+		targetMode: PlayMode;
+		nextLastModeBeforeShuffle: PlayMode | null;
+	} {
+		const isShuffleOn = currentMode.isShuffling;
+		// 切换随机播放时，总是进入列表循环状态
+		const targetMode: PlayMode = isShuffleOn
+			? (this.lastModeBeforeShuffle ?? {
+					isShuffling: false,
+					repeatMode: "List",
+				})
+			: { isShuffling: true, repeatMode: "List" };
+
+		const nextLastModeBeforeShuffle = isShuffleOn ? null : currentMode;
+
+		return { targetMode, nextLastModeBeforeShuffle };
+	}
+
+	private calculateNextRepeatMode(currentMode: PlayMode): PlayMode {
+		// 如果当前是随机模式，按键行为是退出随机并进入顺序播放
+		if (currentMode.isShuffling) {
+			return { isShuffling: false, repeatMode: "None" };
 		}
 
-		if (currentMode === this.constants.SHUFFLE) {
-			this.lastModeBeforeShuffle = null;
+		// 否则，在 顺序 -> 列表循环 -> 单曲循环 之间切换
+		switch (currentMode.repeatMode) {
+			case "None":
+				return { isShuffling: false, repeatMode: "List" };
+			case "List":
+				return { isShuffling: false, repeatMode: "Track" };
+			case "Track":
+				return { isShuffling: false, repeatMode: "None" };
+			// AI 模式下点击循环按钮，切换到列表循环
+			default:
+				return { isShuffling: false, repeatMode: "List" };
 		}
-		return targetMode;
 	}
 }
