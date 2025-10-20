@@ -36,22 +36,15 @@ export type ControlMessage =
 	| { type: "SetVolume"; level: number }
 	| { type: "ToggleMute" };
 
-export type SmtcSimpleEvent = {
-	type:
-		| "Play"
-		| "Pause"
-		| "NextSong"
-		| "PreviousSong"
-		| "ToggleShuffle"
-		| "ToggleRepeat";
-};
-
-export type SmtcSeekEvent = {
-	type: "Seek";
-	position_ms: number;
-};
-
-export type SmtcEvent = SmtcSimpleEvent | SmtcSeekEvent;
+export type SmtcEvent =
+	| { type: "Play" }
+	| { type: "Pause" }
+	| { type: "Stop" }
+	| { type: "NextSong" }
+	| { type: "PreviousSong" }
+	| { type: "ToggleShuffle" }
+	| { type: "ToggleRepeat" }
+	| { type: "Seek"; position_ms: number };
 
 export interface MetadataPayload extends SongInfo {}
 export interface PlayStatePayload {
