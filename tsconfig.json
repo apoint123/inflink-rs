@@ -23,6 +23,7 @@
 		"jsx": "react-jsx",
 
 		"esModuleInterop": true,
-		"skipLibCheck": true
+		"skipLibCheck": true,
+		"incremental": true
 	}
 }
