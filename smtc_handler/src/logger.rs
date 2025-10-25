@@ -54,7 +54,6 @@ pub fn register_callback(v8_func_ptr: *mut cef_safe::cef_sys::_cef_v8value_t) {
     match callback_result {
         Ok(callback) => {
             *guard = Some(callback);
-            trace!("JS 日志回调注册成功。");
         }
         Err(e) => {
             eprintln!("JS 日志回调注册失败: {e}");

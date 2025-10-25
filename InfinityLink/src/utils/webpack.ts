@@ -2,7 +2,7 @@ interface WebpackModule {
 	exports?: unknown;
 }
 
-type WebpackRequire = {
+export type WebpackRequire = {
 	(id: number | string): unknown;
 	c?: Record<string, WebpackModule>; // 模块缓存
 };

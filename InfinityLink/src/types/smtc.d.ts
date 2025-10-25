@@ -71,6 +71,8 @@ export type SmtcCommandPayloads = {
 	Timeline: TimelinePayload;
 	PlayMode: PlayModePayload;
 	Volume: VolumePayload;
+	EnableSmtc: undefined;
+	DisableSmtc: undefined;
 };
 
 export type CommandResult = {

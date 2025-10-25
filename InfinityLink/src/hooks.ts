@@ -1,5 +1,5 @@
 import type { PaletteMode } from "@mui/material";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { STORE_KEY_RESOLUTION } from "./keys";
 import { SmtcProvider } from "./provider";
 import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
@@ -173,6 +173,7 @@ export function useSmtcConnection(
 	isEnabled: boolean,
 ) {
 	const { provider, status } = providerState;
+	const hasSentInitialMetadata = useRef(false);
 
 	useEffect(() => {
 		if (status !== "ready" || !provider) {
@@ -186,8 +187,13 @@ export function useSmtcConnection(
 			return;
 		}
 
-		const onUpdateSongInfo = (e: ProviderEventMap["updateSongInfo"]) =>
+		const onUpdateSongInfo = (e: ProviderEventMap["updateSongInfo"]) => {
 			smtcImplObj.update(e.detail);
+			if (isEnabled && !hasSentInitialMetadata.current) {
+				hasSentInitialMetadata.current = true;
+				smtcImplObj.enableSmtcSession();
+			}
+		};
 		const onUpdatePlayState = (e: ProviderEventMap["updatePlayState"]) =>
 			smtcImplObj.updatePlayState(e.detail);
 		const onUpdateTimeline = (e: ProviderEventMap["updateTimeline"]) =>
@@ -217,6 +223,7 @@ export function useSmtcConnection(
 			provider.removeEventListener("updateTimeline", onUpdateTimeline);
 			provider.removeEventListener("updatePlayMode", onUpdatePlayMode);
 			smtcImplObj.disable();
+			hasSentInitialMetadata.current = false;
 		};
 	}, [provider, status, isEnabled]);
 }

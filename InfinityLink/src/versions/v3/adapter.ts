@@ -22,13 +22,16 @@ import {
 	CoverManager,
 	findModule,
 	getWebpackRequire,
+	NcmEventAdapter,
+	type ParsedEventMap,
 	throttle,
+	type WebpackRequire,
 	waitForElement,
 } from "../../utils";
-import { NcmEventAdapter, type ParsedEventMap } from "../../utils/event";
 import logger from "../../utils/logger";
 import type { INcmAdapter, NcmAdapterEventMap } from "../adapter";
 import { PlayModeController } from "../playModeController";
+import { type AudioPlayer, AudioPlayerWrapper } from "./audioPlayerWrapper";
 
 const V3_PLAY_MODES = {
 	SHUFFLE: "playRandom",
@@ -181,6 +184,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	private unsubscribeStore: (() => void) | null = null;
 	private eventAdapter!: NcmEventAdapter;
 	private storageModule: v3.NcmStorageModule | null = null;
+	private audioPlayerWrapper: AudioPlayerWrapper | null = null;
 	private hasRestoredInitialState = false;
 	private ignoreNextZeroProgressEvent = false;
 	private readonly coverManager = new CoverManager();
@@ -204,29 +208,91 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	constructor() {
 		super();
 		[this.dispatchTimelineThrottled, , this.resetTimelineThrottle] = throttle(
-			() => this._dispatchTimelineUpdateNow(),
+			() => this.dispatchTimelineUpdateNow(),
 			CONSTANTS.TIMELINE_THROTTLE_INTERVAL_MS,
 		);
 	}
 
 	public async initialize(): Promise<Result<void, NcmAdapterError>> {
-		type BridgeContainerModule = { Bridge: OrpheusCommand };
-
 		const require = await getWebpackRequire();
 
-		/**
-		 * 网易云 v3 内部存在两个 OrpheusCommand (legacyNativeCmder) 实例：
-		 * 1. 一个是暴露在全局的 `window.legacyNativeCmder`
-		 * 2. 另一个是未暴露的、供内部核心模块（如 AudioPlayer）使用的私有实例 (名为 Bridge)
-		 *
-		 * 核心 UI 组件（如进度条）的事件监听是注册在内部实例上的。如果我们使用全局实例去注册
-		 * 监听器（特别是 PlayProgress 和 Seek），全局的监听器会覆盖掉 Bridge 中的监听器 (参见
-		 * native.ts 中的实现)，导致进度条静止等怪异问题
-		 *
-		 * 因此，我们在这里：
-		 * - 先通过 Webpack 模块查找获取到内部的 `Bridge` 实例
-		 * - 如果查找失败，再回退到使用全局的 `window.legacyNativeCmder` 作为备用方案 (通常会导致问题)
-		 */
+		this.initializeAudioPlayer(require);
+		this.initializeEventAdapter(require);
+		this.initializeStorage(require);
+
+		const storeResult = await waitForReduxStore();
+		if (storeResult.isErr()) {
+			return err(storeResult.error);
+		}
+		this.reduxStore = storeResult.value;
+
+		if (import.meta.env.MODE === "development") {
+			window.infstore = this.reduxStore;
+		}
+
+		this.unsubscribeStore = this.reduxStore.subscribe(() =>
+			this.onStateChanged(),
+		);
+
+		this.registerNcmEvents();
+		this.onStateChanged();
+
+		return ok(undefined);
+	}
+
+	private initializeAudioPlayer(require: WebpackRequire): void {
+		try {
+			type AudioPlayerModule = { AudioPlayer: AudioPlayer };
+
+			const audioPlayerModule = findModule<AudioPlayerModule>(
+				require,
+				(exports: unknown): exports is AudioPlayerModule => {
+					if (typeof exports !== "object" || exports === null) {
+						return false;
+					}
+					if (!("AudioPlayer" in exports)) {
+						return false;
+					}
+					const audioPlayerProp = (exports as { AudioPlayer: unknown })
+						.AudioPlayer;
+					if (typeof audioPlayerProp !== "object" || audioPlayerProp === null) {
+						return false;
+					}
+					return (
+						"subscribePlayStatus" in audioPlayerProp &&
+						typeof (audioPlayerProp as { subscribePlayStatus: unknown })
+							.subscribePlayStatus === "function"
+					);
+				},
+			);
+			if (audioPlayerModule) {
+				this.audioPlayerWrapper = new AudioPlayerWrapper(
+					audioPlayerModule.AudioPlayer,
+				);
+			} else {
+				logger.warn("找不到 AudioPlayer 模块", "Adapter V3");
+			}
+		} catch (error) {
+			logger.error("获取 AudioPlayer 模块失败:", "Adapter V3", error);
+		}
+	}
+
+	/**
+	 * 网易云 v3 内部存在两个 OrpheusCommand (legacyNativeCmder) 实例：
+	 * 1. 一个是暴露在全局的 `window.legacyNativeCmder`
+	 * 2. 另一个是未暴露的、供内部核心模块（如 AudioPlayer）使用的私有实例 (名为 Bridge)
+	 *
+	 * 核心 UI 组件（如进度条）的事件监听是注册在内部实例上的。如果我们使用全局实例去注册
+	 * 监听器（特别是 PlayProgress 和 Seek），全局的监听器会覆盖掉 Bridge 中的监听器 (参见
+	 * native.ts 中的实现)，导致进度条静止等怪异问题
+	 *
+	 * 因此，我们需要：
+	 * - 先通过 Webpack 模块查找获取到内部的 `Bridge` 实例
+	 * - 如果查找失败，再回退到使用全局的 `window.legacyNativeCmder` 作为备用方案 (通常会导致问题)
+	 */
+	private initializeEventAdapter(require: WebpackRequire): void {
+		type BridgeContainerModule = { Bridge: OrpheusCommand };
+
 		const bridgeContainer = findModule<BridgeContainerModule>(
 			require,
 			(exports: unknown): exports is BridgeContainerModule => {
@@ -262,7 +328,9 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		}
 
 		this.eventAdapter = new NcmEventAdapter(eventBinder);
+	}
 
+	private initializeStorage(require: WebpackRequire): void {
 		const storageContainer = findModule<v3.NcmStorageContainer>(
 			require,
 			(exports: unknown): exports is v3.NcmStorageContainer => {
@@ -300,25 +368,6 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		} else if (import.meta.env.MODE === "development") {
 			window.infStorage = this.storageModule;
 		}
-
-		const storeResult = await waitForReduxStore();
-		if (storeResult.isErr()) {
-			return err(storeResult.error);
-		}
-		this.reduxStore = storeResult.value;
-
-		if (import.meta.env.MODE === "development") {
-			window.infstore = this.reduxStore;
-		}
-
-		this.unsubscribeStore = this.reduxStore.subscribe(() =>
-			this.onStateChanged(),
-		);
-
-		this.registerNcmEvents();
-		this.onStateChanged();
-
-		return ok(undefined);
 	}
 
 	public dispose(): void {
@@ -328,8 +377,18 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		}
 		this.unregisterNcmEvents();
 		this.eventAdapter.dispose();
+		this.audioPlayerWrapper?.dispose();
 
 		logger.debug("Disposed.", "Adapter V3");
+	}
+
+	public hasNativeSmtcSupport(): boolean {
+		return this.audioPlayerWrapper?.hasSmtcSupport() ?? false;
+	}
+
+	public setNativeSmtc(enabled: boolean): void {
+		this.audioPlayerWrapper?.setSmtcEnabled(enabled);
+		logger.info(`已${enabled ? "启用" : "禁用"}内置的 SMTC 功能`, "Adapter V3");
 	}
 
 	public getCurrentSongInfo(): Result<SongInfo, NcmAdapterError> {
@@ -676,7 +735,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 			}
 
 			this.musicPlayProgress = positionMs;
-			this._dispatchTimelineUpdateNow();
+			this.dispatchTimelineUpdateNow();
 		}
 	}
 
@@ -724,7 +783,8 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	private readonly onSeekUpdate = (e: ParsedEventMap["seekUpdate"]): void => {
 		this.musicPlayProgress = e.detail;
 		this.resetTimelineThrottle();
-		this._dispatchTimelineUpdateNow();
+		// 跳转同时也会触发progress事件，所以在这里就不派发更新了
+		// this.dispatchTimelineUpdateNow();
 	};
 
 	private readonly onPlayStateChanged = (
@@ -743,7 +803,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		}
 	};
 
-	private _dispatchTimelineUpdateNow(): void {
+	private dispatchTimelineUpdateNow(): void {
 		this.dispatchEvent(
 			new CustomEvent<TimelineInfo>("timelineUpdate", {
 				detail: {

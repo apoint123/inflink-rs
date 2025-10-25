@@ -16,6 +16,7 @@ import {
 	FormControlLabel,
 	FormGroup,
 	InputLabel,
+	Link,
 	MenuItem,
 	Select,
 	Switch,
@@ -23,7 +24,7 @@ import {
 	Typography,
 } from "@mui/material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
-import { useEffect, useId, useMemo } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
 	useInfoProvider,
@@ -37,6 +38,7 @@ import {
 import {
 	STORE_KEY_BACKEND_LOG_LEVEL,
 	STORE_KEY_FRONTEND_LOG_LEVEL,
+	STORE_KEY_NATIVE_SMTC_CONFLICT_RESOLVED,
 	STORE_KEY_SMTC_ENABLED,
 } from "./keys";
 import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
@@ -130,6 +132,13 @@ function Main() {
 		STORE_KEY_BACKEND_LOG_LEVEL,
 		"warn",
 	);
+	const [nativeSmtcResolved, setNativeSmtcResolved] = useLocalStorage(
+		STORE_KEY_NATIVE_SMTC_CONFLICT_RESOLVED,
+		false,
+	);
+	const [conflictState, setConflictState] = useState<
+		"checking" | "conflict" | "no_conflict"
+	>("checking");
 
 	const [resolution, setResolution] = useResolutionSetting();
 
@@ -142,7 +151,32 @@ function Main() {
 	const providerState = useInfoProvider(ncmVersion);
 	const { provider, status, error } = providerState;
 
-	useSmtcConnection(providerState, SMTCEnabled);
+	const isSmtcReadyToEnable =
+		SMTCEnabled && (conflictState === "no_conflict" || nativeSmtcResolved);
+
+	useSmtcConnection(providerState, isSmtcReadyToEnable);
+
+	useEffect(() => {
+		if (status === "ready" && provider) {
+			const hasSupport = provider.adapter.hasNativeSmtcSupport();
+			if (hasSupport) {
+				logger.info("检测到内置的 SMTC 功能", "Main");
+				setConflictState("conflict");
+			} else {
+				setConflictState("no_conflict");
+			}
+		}
+	}, [status, provider]);
+
+	useEffect(() => {
+		if (status !== "ready" || !provider || conflictState !== "conflict") {
+			return;
+		}
+
+		if (nativeSmtcResolved) {
+			provider.adapter.setNativeSmtc(false);
+		}
+	}, [status, provider, conflictState, nativeSmtcResolved]);
 
 	useEffect(() => {
 		if (ncmVersion !== null) {
@@ -242,6 +276,32 @@ function Main() {
 
 	return (
 		<div>
+			{conflictState === "conflict" && !nativeSmtcResolved && (
+				<Alert severity="error" sx={{ mb: 2 }}>
+					<AlertTitle>检测到网易云内置的 SMTC 功能</AlertTitle>
+					<Box>
+						<Typography variant="body2" component="div">
+							这会与 InfLink-rs 插件产生冲突，因此已禁用本插件的 SMTC 功能
+						</Typography>
+						<Typography variant="body2" component="div" sx={{ mt: 1 }}>
+							建议禁用内置的 SMTC 功能以获得最佳体验
+						</Typography>
+					</Box>
+					<Button
+						variant="contained"
+						size="medium"
+						onClick={() => {
+							provider?.adapter.setNativeSmtc(false);
+							setNativeSmtcResolved(true);
+							setSMTCEnabled(true);
+						}}
+						sx={{ mt: 1.5 }}
+					>
+						帮我禁用
+					</Button>
+				</Alert>
+			)}
+
 			{newVersionInfo && (
 				<Alert severity="info" sx={{ mb: 2 }}>
 					<AlertTitle>发现新版本: {newVersionInfo.version} !</AlertTitle>
@@ -277,7 +337,25 @@ function Main() {
 						/>
 					}
 					label="启用 SMTC 支持"
+					disabled={conflictState === "conflict" && !nativeSmtcResolved}
 				/>
+				{conflictState === "conflict" && nativeSmtcResolved && (
+					<Typography variant="body2" color="textSecondary">
+						已禁用网易云内置的 SMTC 功能
+						<Link
+							component="button"
+							variant="body2"
+							onClick={() => {
+								provider?.adapter.setNativeSmtc(true);
+								setNativeSmtcResolved(false);
+								setSMTCEnabled(false);
+							}}
+							sx={{ ml: 1, mt: -0.5 }}
+						>
+							点我恢复
+						</Link>
+					</Typography>
+				)}
 			</FormGroup>
 
 			<Box sx={{ mt: 2, display: "flex", gap: 2, flexWrap: "wrap" }}>

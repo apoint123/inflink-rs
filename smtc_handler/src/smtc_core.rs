@@ -3,7 +3,6 @@ use base64::Engine;
 use base64::engine::general_purpose;
 use cef_safe::{CefResult, CefV8Context, CefV8Value, renderer_post_task_in_v8_ctx};
 use serde::Serialize;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{LazyLock, Mutex};
 use std::time::Instant;
 use tracing::{debug, error, info, instrument, trace, warn};
@@ -24,8 +23,6 @@ use windows::{
 use crate::model::{
     CommandResult, CommandStatus, MetadataPayload, PlaybackStatus, RepeatMode, SmtcCommand,
 };
-
-static SMTC_ACTIVATED: LazyLock<AtomicBool> = LazyLock::new(|| AtomicBool::new(false));
 
 const HNS_PER_MILLISECOND: f64 = 10_000.0;
 
@@ -196,7 +193,6 @@ where
 #[instrument]
 pub fn initialize() -> Result<()> {
     info!("正在初始化 SMTC...");
-    SMTC_ACTIVATED.store(false, Ordering::SeqCst);
 
     let tokens = with_smtc("初始化", |smtc| {
         if HANDLER_TOKENS
@@ -302,7 +298,6 @@ pub fn shutdown() -> Result<()> {
         Ok(())
     })?;
     clear_callback();
-    SMTC_ACTIVATED.store(false, Ordering::SeqCst);
     debug!("SMTC 已关闭");
     Ok(())
 }
@@ -420,13 +415,6 @@ pub fn update_metadata(payload: MetadataPayload) {
         };
 
         let result = with_smtc("更新元数据", |smtc| {
-            if SMTC_ACTIVATED
-                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-                .is_ok()
-            {
-                smtc.SetIsEnabled(true)?;
-            }
-
             let updater = smtc.DisplayUpdater()?;
             updater.SetType(MediaPlaybackType::Music)?;
 
@@ -500,6 +488,14 @@ fn handle_command_inner(command_json: &str) -> Result<()> {
         SmtcCommand::PlayMode(payload) => {
             update_play_mode(payload.is_shuffling, &payload.repeat_mode)
                 .context("更新播放模式失败")?;
+        }
+        SmtcCommand::EnableSmtc => {
+            with_smtc("启用 SMTC", |smtc| Ok(smtc.SetIsEnabled(true)?))
+                .context("启用 SMTC 失败")?;
+        }
+        SmtcCommand::DisableSmtc => {
+            with_smtc("禁用 SMTC", |smtc| Ok(smtc.SetIsEnabled(false)?))
+                .context("禁用 SMTC 失败")?;
         }
     }
 

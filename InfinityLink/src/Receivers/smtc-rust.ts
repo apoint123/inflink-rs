@@ -166,6 +166,18 @@ class SMTCNativeBackend {
 		logger.info("SMTC 已禁用", "Native Bridge");
 	}
 
+	public enableSmtcSession() {
+		if (!this.isActive) return;
+		this.dispatch("EnableSmtc", undefined);
+		logger.info("启用 SMTC 会话", "Native Bridge");
+	}
+
+	public disableSmtcSession() {
+		if (!this.isActive) return;
+		this.dispatch("DisableSmtc", undefined);
+		logger.info("禁用 SMTC 会话", "Native Bridge");
+	}
+
 	public update(songInfo: MetadataPayload) {
 		this.dispatch("Metadata", songInfo);
 	}

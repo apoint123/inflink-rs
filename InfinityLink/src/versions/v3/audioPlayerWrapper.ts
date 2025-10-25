@@ -4,10 +4,6 @@
  * 此文件用来为网易云内部的 `AudioPlayer` 模块提供一个易用的接口。
  * `AudioPlayer` 模块本身提供了一个高级的 `subscribePlayStatus` 方法，
  * 可以订阅许多种事件，并返回已解析好的参数对象，使用它可以简化逻辑。
- *
- * 此文件目前未使用，因为 `AudioPlayer.unSubscribePlayStatus` 有内存泄露的问题 (它只会清除
- * PlayState 事件的监听器)，并且 Bridge 自己的 appendRegisterCall 和 removeRegisterCall
- * 也能用来注册和反注册需要的事件，所以此文件基本上只用来备用或者做参考
  */
 
 export type PlayStatusEventType =
@@ -73,6 +69,13 @@ export interface AudioPlayer {
 	 * @warn 网易云内部实现只处理 "PlayState" 事件的取消订阅
 	 */
 	unSubscribePlayStatus(callback: (info: PlayStatusEventPayload) => void): void;
+
+	/**
+	 * 设置网易云内置的 SMTC 是否启用
+	 *
+	 * 只有 3.1.21 及以上的网易云客户端才有 SMTC 支持
+	 */
+	setSMTCEnable?(enabled: boolean): void;
 }
 
 type AudioPlayerCallback = (info: PlayStatusEventPayload) => void;
@@ -87,6 +90,24 @@ export class AudioPlayerWrapper {
 
 	constructor(audioPlayer: AudioPlayer) {
 		this.audioPlayer = audioPlayer;
+	}
+
+	/**
+	 * 设置网易云内置的 SMTC 是否启用
+	 *
+	 * @param enabled 是否启用
+	 */
+	public setSmtcEnabled(enabled: boolean): void {
+		this.audioPlayer.setSMTCEnable?.(enabled);
+	}
+
+	/**
+	 * 检查是否支持控制 SMTC
+	 *
+	 * @returns 如果客户端支持 SMTC 则返回 true
+	 */
+	public hasSmtcSupport(): boolean {
+		return typeof this.audioPlayer.setSMTCEnable === "function";
 	}
 
 	/**

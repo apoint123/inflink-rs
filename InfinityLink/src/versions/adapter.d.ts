@@ -26,6 +26,9 @@ export interface INcmAdapter extends EventTarget {
 	getPlayMode(): PlayMode;
 	getVolumeInfo(): VolumeInfo;
 
+	hasNativeSmtcSupport(): boolean;
+	setNativeSmtc(enabled: boolean): void;
+
 	play(): void;
 	pause(): void;
 	stop(): void;

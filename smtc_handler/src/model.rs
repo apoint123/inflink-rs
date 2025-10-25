@@ -7,6 +7,8 @@ pub enum SmtcCommand {
     PlayState(PlayStatePayload),
     Timeline(TimelinePayload),
     PlayMode(PlayModePayload),
+    EnableSmtc,
+    DisableSmtc,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

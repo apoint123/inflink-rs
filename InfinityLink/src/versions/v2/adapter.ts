@@ -16,8 +16,13 @@ import type {
 	TimelineInfo,
 	VolumeInfo,
 } from "../../types/smtc";
-import { CoverManager, throttle, waitForElement } from "../../utils";
-import { NcmEventAdapter, type ParsedEventMap } from "../../utils/event";
+import {
+	CoverManager,
+	NcmEventAdapter,
+	type ParsedEventMap,
+	throttle,
+	waitForElement,
+} from "../../utils";
 import logger from "../../utils/logger";
 import type { INcmAdapter, NcmAdapterEventMap } from "../adapter";
 import { PlayModeController } from "../playModeController";
@@ -311,6 +316,14 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		this.onStateChanged();
 
 		return ok(undefined);
+	}
+
+	public hasNativeSmtcSupport(): boolean {
+		return false;
+	}
+
+	public setNativeSmtc(_enabled: boolean): void {
+		// V2 没有 SMTC
 	}
 
 	public dispose(): void {
