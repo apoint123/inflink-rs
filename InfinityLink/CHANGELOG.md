@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.2.1
+
+### Patch Changes
+
+- d1fdbff: feat: 适配网易云音乐 v3.1.21
+
 ## 3.2.0
 
 ### Minor Changes
