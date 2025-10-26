@@ -27,7 +27,7 @@ import {
 	Typography,
 } from "@mui/material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
-import { useEffect, useId, useMemo, useState } from "react";
+import { StrictMode, useEffect, useId, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
 	useGlobalApi,
@@ -52,18 +52,27 @@ const configElement = document.createElement("div");
 
 const GITHUB_REPO = "apoint123/InfLink-rs";
 
+type PatchedSetItem = {
+	(key: string, value: string): void;
+	__isPatchedByInfLink?: boolean;
+};
+
 /**
  * 猴子补丁 localStorage.setItem 以便在当前页面也能监听到变化
  *
  * 用来实时同步当前的主题
  */
 function patchLocalStorage() {
+	if ((localStorage.setItem as PatchedSetItem).__isPatchedByInfLink) {
+		return;
+	}
+
 	const originalSetItem = localStorage.setItem;
 
-	localStorage.setItem = function (key: string, value: string) {
+	localStorage.setItem = (key: string, value: string) => {
 		const oldValue = localStorage.getItem(key);
 
-		originalSetItem.call(this, key, value);
+		originalSetItem.call(localStorage, key, value);
 
 		const event = new StorageEvent("storage", {
 			key,
@@ -73,6 +82,8 @@ function patchLocalStorage() {
 		});
 		window.dispatchEvent(event);
 	};
+
+	(localStorage.setItem as PatchedSetItem).__isPatchedByInfLink = true;
 }
 
 plugin.onLoad((selfPlugin) => {
@@ -81,7 +92,11 @@ plugin.onLoad((selfPlugin) => {
 	patchLocalStorage();
 
 	try {
-		createRoot(configElement).render(<App />);
+		createRoot(configElement).render(
+			<StrictMode>
+				<App />
+			</StrictMode>,
+		);
 	} catch (error) {
 		logger.error("React 组件渲染失败:", "onLoad", error);
 	}
@@ -401,8 +416,6 @@ function Main() {
 
 	useGlobalApi(provider);
 
-	useGlobalApi(provider);
-
 	useEffect(() => {
 		if (status === "ready" && provider) {
 			const hasSupport = provider.adapter.hasNativeSmtcSupport();
@@ -411,12 +424,6 @@ function Main() {
 			}
 		}
 	}, [status, provider]);
-
-	useEffect(() => {
-		if (provider) {
-			provider.adapter.setInternalLogging(internalLogging);
-		}
-	}, [provider, internalLogging]);
 
 	useEffect(() => {
 		if (provider) {
