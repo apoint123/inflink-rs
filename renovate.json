@@ -5,12 +5,6 @@
 	"schedule": ["* 3 * * *"],
 	"packageRules": [
 		{
-			"matchUpdateTypes": ["minor", "patch"],
-			"groupName": "all non-major dependencies",
-			"groupSlug": "all-minor-patch",
-			"matchPackageNames": ["*"]
-		},
-		{
 			"matchManagers": ["pnpm"],
 			"matchDepTypes": ["devDependencies"],
 			"groupName": "pnpm development dependencies",
