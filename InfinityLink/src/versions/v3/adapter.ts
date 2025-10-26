@@ -531,11 +531,6 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		return this.audioPlayerWrapper?.hasSmtcSupport() ?? false;
 	}
 
-	public setNativeSmtc(enabled: boolean): void {
-		this.audioPlayerWrapper?.setSmtcEnabled(enabled);
-		logger.info(`已${enabled ? "启用" : "禁用"}内置的 SMTC 功能`, "Adapter V3");
-	}
-
 	public setInternalLogging(enabled: boolean): void {
 		this.isInternalLoggingEnabled = enabled;
 	}

@@ -74,6 +74,9 @@ export interface AudioPlayer {
 	 * 设置网易云内置的 SMTC 是否启用
 	 *
 	 * 只有 3.1.21 及以上的网易云客户端才有 SMTC 支持
+	 *
+	 * 如果在网易云启动的时候启用smtc，禁用后也可以再次启用，
+	 * 但如果在网易云启动的时候没有启用smtc，之后就无法再次启用了
 	 */
 	setSMTCEnable?(enabled: boolean): void;
 }

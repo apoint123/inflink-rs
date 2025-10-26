@@ -322,10 +322,6 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		return false;
 	}
 
-	public setNativeSmtc(_enabled: boolean): void {
-		// V2 没有 SMTC
-	}
-
 	public setInternalLogging(enabled: boolean): void {
 		if (window.APP_CONF) {
 			window.APP_CONF.console = enabled;
