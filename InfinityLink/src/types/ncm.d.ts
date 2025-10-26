@@ -1,4 +1,4 @@
-import type { Store } from "redux";
+import type { Dispatch, Store } from "redux";
 
 // --- 通用类型 ---
 export interface Artist {
@@ -19,8 +19,14 @@ export namespace v3 {
 		| "playFm"
 		| "playAi";
 
-	/** 播放状态的数字表示。1: 已暂停, 2: 播放中 */
-	export type PlayState = 1 | 2;
+	/**
+	 * 播放状态的数字表示。
+	 * - -1: End
+	 * - 0: Stop
+	 * - 1: Pause
+	 * - 2: Playing
+	 */
+	export type PlayState = -1 | 0 | 1 | 2;
 
 	export interface TrackAlbum {
 		id?: string;
@@ -74,7 +80,83 @@ export namespace v3 {
 		"page:vinylPage"?: VinylPageInfo;
 	}
 
-	export type NCMStore = Store<ReduxState>;
+	/**
+	 * triggerScene 应该是用来做数据分析和实现条件逻辑的
+	 * 建议派发 actions 时提供一个 triggerScene
+	 */
+	export type TriggerScene =
+		| "track"
+		| "trashTrack"
+		| "voice"
+		| "audio"
+		| "playlist"
+		| "algPlaylist"
+		| "historyList"
+		| "localTrack"
+		| "localTrackPage"
+		| "localMusicGroup"
+		| "localFeeTrackPage"
+		| "downloadedTrack"
+		| "downloadedVoice"
+		| "downloading"
+		| "downloadedTrackPage"
+		| "downloadedVoicePage"
+		| "cloudTrack"
+		| "uploadedTrackPage"
+		| "uploadingCloudTrack"
+		| "album"
+		| "video"
+		| "mv"
+		| "user"
+		| "artist"
+		| "comment"
+		| "event"
+		| "draftEvent"
+		| "input"
+		| "desktopLyric"
+		| "show"
+		| "topic"
+		| "trackList"
+		| "voiceList"
+		| "fmTrack"
+		| "dailyRecommend"
+		| "styleDailyRecommend"
+		| "listenRank"
+		| "notice"
+		| "private"
+		| "message"
+		| "tray"
+		| "hostPlayRankPlaylist"
+		| "lyrics"
+		| "unknown"
+		| "miniMode"
+		| "sidebar";
+
+	export type NcmV3Action =
+		| { type: "playing/resume"; payload: { triggerScene: TriggerScene } }
+		| { type: "playing/pause" }
+		| {
+				type: "playingList/jump2Track";
+				payload: { flag: 1 | -1; type: "call"; triggerScene: TriggerScene };
+		  }
+		| { type: "playing/setPlayingPosition"; payload: { duration: number } }
+		| {
+				type: "playing/switchPlayingMode";
+				payload: { playingMode: PlayMode; triggerScene: TriggerScene };
+		  }
+		| { type: "playing/setVolume"; payload: { volume: number } }
+		| { type: "playing/switchMute" };
+
+	export type NCMStore = Store<ReduxState, NcmV3Action>;
+
+	export interface DvaTool {
+		getStore(): ReduxState;
+		getDispatch(): Dispatch<NcmV3Action>;
+	}
+
+	export interface DvaToolModule {
+		a: DvaTool;
+	}
 
 	export interface ReactRootElement extends HTMLElement {
 		_reactRootContainer?: {
@@ -202,7 +284,10 @@ export namespace v2 {
 	/**
 	 * UI相关的接口
 	 *
-	 * 用它不如用x6.data
+	 * 建议用 `x6.data`, 或者 `MF.U()`
+	 *
+	 * 因为这个接口的 `artistName` 是扁平的,
+	 * 不好应对多个艺术家的情况
 	 */
 	export interface UiOptions {
 		albumId: string;

@@ -4,8 +4,12 @@
  * 一般情况下只需要从这个入口点进行开发即可满足绝大部分需求
  */
 
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import UpgradeIcon from "@mui/icons-material/Upgrade";
 import {
+	Accordion,
+	AccordionDetails,
+	AccordionSummary,
 	Alert,
 	AlertTitle,
 	Autocomplete,
@@ -27,6 +31,8 @@ import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { useEffect, useId, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
+	type ProviderState,
+	useGlobalApi,
 	useInfoProvider,
 	useLocalStorage,
 	useNcmTheme,
@@ -42,7 +48,6 @@ import {
 	STORE_KEY_SMTC_ENABLED,
 } from "./keys";
 import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
-import type { IInfLinkApi } from "./types/api";
 import logger, { type LogLevel, setLogLevel } from "./utils/logger";
 
 const configElement = document.createElement("div");
@@ -117,6 +122,321 @@ function App() {
 	);
 }
 
+function LoadingIndicator() {
+	return (
+		<Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+			<CircularProgress size={24} />
+			<Typography variant="body2">正在初始化...</Typography>
+		</Box>
+	);
+}
+
+function UnsupportedVersionAlert() {
+	return (
+		<Alert severity="error">
+			<AlertTitle>不兼容的网易云音乐版本</AlertTitle>
+			InfLink-rs 不支持当前版本的网易云音乐, 请使用原版 InfLink 作为代替
+		</Alert>
+	);
+}
+
+function InitializationErrorAlert({ error }: { error: Error | null }) {
+	return (
+		<Alert severity="error">
+			<AlertTitle>插件初始化失败</AlertTitle>
+			部分组件未能初始化, 请尝试重启网易云音乐, 或者打开控制台查看详细信息
+			<br />
+			错误信息: {error?.message || "未知错误"}
+		</Alert>
+	);
+}
+
+interface NewVersionAlertProps {
+	newVersionInfo: { version: string; url: string };
+}
+
+function NewVersionAlert({ newVersionInfo }: NewVersionAlertProps) {
+	return (
+		<Alert severity="info" sx={{ mb: 2 }}>
+			<AlertTitle>发现新版本: {newVersionInfo.version} !</AlertTitle>
+			<Box>
+				<Typography variant="body2" component="div">
+					下载新版本以获得最新功能和修复
+				</Typography>
+				<Typography variant="body2" component="div">
+					在左侧插件商店进行更新，或者点击下方按钮手动下载插件进行更新
+				</Typography>
+			</Box>
+			<Button
+				variant="contained"
+				size="medium"
+				startIcon={<UpgradeIcon />}
+				onClick={() => betterncm.ncm.openUrl(newVersionInfo.url)}
+				sx={{ mt: 1.5 }}
+			>
+				前往下载
+			</Button>
+		</Alert>
+	);
+}
+
+interface ConflictAlertProps {
+	provider: ProviderState["provider"];
+	onResolve: () => void;
+}
+
+function ConflictAlert({ provider, onResolve }: ConflictAlertProps) {
+	const handleResolve = () => {
+		provider?.adapter.setNativeSmtc(false);
+		onResolve();
+	};
+
+	return (
+		<Alert severity="error" sx={{ mb: 2 }}>
+			<AlertTitle>检测到网易云内置的 SMTC 功能</AlertTitle>
+			<Box>
+				<Typography variant="body2" component="div">
+					这会与 InfLink-rs 插件产生冲突，因此已禁用本插件的 SMTC 功能
+				</Typography>
+				<Typography variant="body2" component="div" sx={{ mt: 1 }}>
+					建议禁用内置的 SMTC 功能以获得最佳体验
+				</Typography>
+			</Box>
+			<Button
+				variant="contained"
+				size="medium"
+				onClick={handleResolve}
+				sx={{ mt: 1.5 }}
+			>
+				帮我禁用
+			</Button>
+		</Alert>
+	);
+}
+
+interface SmtcSettingsProps {
+	provider: ProviderState["provider"];
+	smtcEnabled: boolean;
+	onSmtcEnabledChange: (enabled: boolean) => void;
+	conflictState: "checking" | "conflict" | "no_conflict";
+	nativeSmtcResolved: boolean;
+	onRevertConflict: () => void;
+}
+
+function SmtcSettings({
+	provider,
+	smtcEnabled,
+	onSmtcEnabledChange,
+	conflictState,
+	nativeSmtcResolved,
+	onRevertConflict,
+}: SmtcSettingsProps) {
+	const handleRevert = () => {
+		provider?.adapter.setNativeSmtc(true);
+		onRevertConflict();
+	};
+
+	return (
+		<>
+			<Typography variant="h6" gutterBottom sx={{ mt: 2, fontSize: "1rem" }}>
+				SMTC 设置
+			</Typography>
+			<FormGroup>
+				<FormControlLabel
+					control={
+						<Switch
+							checked={smtcEnabled}
+							onChange={(_e, checked) => onSmtcEnabledChange(checked)}
+						/>
+					}
+					label="启用 SMTC 支持"
+					disabled={conflictState === "conflict" && !nativeSmtcResolved}
+				/>
+				{conflictState === "conflict" && nativeSmtcResolved && (
+					<Typography variant="body2" color="textSecondary">
+						已禁用网易云内置的 SMTC 功能
+						<Link
+							component="button"
+							variant="body2"
+							onClick={handleRevert}
+							sx={{ ml: 1, mt: -0.5 }}
+						>
+							点我恢复
+						</Link>
+					</Typography>
+				)}
+			</FormGroup>
+		</>
+	);
+}
+
+interface ResolutionSettingsProps {
+	resolution: string;
+	onResolutionChange: (resolution: string) => void;
+}
+
+function ResolutionSettings({
+	resolution,
+	onResolutionChange,
+}: ResolutionSettingsProps) {
+	const predefinedResolutions = ["300", "500", "1024", "max"];
+
+	const handleChange = (_event: unknown, newValue: string | null) => {
+		if (
+			newValue &&
+			(newValue.toLowerCase() === "max" || /^\d+$/.test(newValue))
+		) {
+			onResolutionChange(newValue);
+		}
+	};
+
+	const handleBlur = (event: React.FocusEvent<HTMLInputElement>) => {
+		const newValue = (event.target as HTMLInputElement).value;
+		if (
+			newValue &&
+			(newValue.toLowerCase() === "max" || /^\d+$/.test(newValue))
+		) {
+			onResolutionChange(newValue);
+		}
+	};
+
+	return (
+		<Box sx={{ mt: 3 }}>
+			<FormControl size="small" sx={{ minWidth: 150 }}>
+				<Autocomplete
+					freeSolo
+					value={resolution}
+					options={predefinedResolutions}
+					onChange={handleChange}
+					onBlur={handleBlur}
+					renderInput={(params) => {
+						const { InputLabelProps, ...rest } = params;
+						const { className, style, ...restInputLabelProps } =
+							InputLabelProps;
+						return (
+							<TextField
+								{...rest}
+								slotProps={{
+									inputLabel: {
+										...restInputLabelProps,
+										...(className && { className }),
+										...(style && { style }),
+									},
+								}}
+								label="封面分辨率"
+								size="small"
+								helperText="过大的值可能会影响封面加载速度"
+							/>
+						);
+					}}
+				/>
+			</FormControl>
+		</Box>
+	);
+}
+
+interface AdvancedSettingsProps {
+	frontendLogLevel: LogLevel;
+	backendLogLevel: LogLevel;
+	internalLogging: boolean;
+	onFrontendLogLevelChange: (level: LogLevel) => void;
+	onBackendLogLevelChange: (level: LogLevel) => void;
+	onInternalLoggingChange: (enabled: boolean) => void;
+}
+
+function AdvancedSettings({
+	frontendLogLevel,
+	backendLogLevel,
+	internalLogging,
+	onFrontendLogLevelChange,
+	onBackendLogLevelChange,
+	onInternalLoggingChange,
+}: AdvancedSettingsProps) {
+	const [isAdvancedExpanded, setIsAdvancedExpanded] = useState(false);
+	const frontendId = useId();
+	const backendId = useId();
+
+	return (
+		<Accordion
+			expanded={isAdvancedExpanded}
+			onChange={() => setIsAdvancedExpanded(!isAdvancedExpanded)}
+			elevation={0}
+			disableGutters
+			sx={{
+				backgroundColor: "transparent",
+				"&::before": {
+					display: "none",
+				},
+				mt: 2,
+			}}
+		>
+			<AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ padding: 0 }}>
+				<Typography variant="h6" gutterBottom sx={{ fontSize: "1rem" }}>
+					高级设置
+				</Typography>
+			</AccordionSummary>
+			<AccordionDetails sx={{ padding: 0, pt: 2 }}>
+				<Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+					<FormControl size="small">
+						<InputLabel id={frontendId}>前端日志级别</InputLabel>
+						<Select
+							labelId={frontendId}
+							value={frontendLogLevel}
+							label="前端日志级别"
+							onChange={(e) =>
+								onFrontendLogLevelChange(e.target.value as LogLevel)
+							}
+							sx={{ minWidth: 120 }}
+						>
+							{logLevels.map((level) => (
+								<MenuItem key={level} value={level}>
+									{level}
+								</MenuItem>
+							))}
+						</Select>
+					</FormControl>
+					<FormControl size="small">
+						<InputLabel id={backendId}>后端日志级别</InputLabel>
+						<Select
+							labelId={backendId}
+							value={backendLogLevel}
+							label="后端日志级别"
+							onChange={(e) =>
+								onBackendLogLevelChange(e.target.value as LogLevel)
+							}
+							sx={{ minWidth: 120 }}
+						>
+							{logLevels.map((level) => (
+								<MenuItem key={level} value={level}>
+									{level}
+								</MenuItem>
+							))}
+						</Select>
+					</FormControl>
+				</Box>
+				<FormGroup sx={{ mt: 2 }}>
+					<FormControlLabel
+						control={
+							<Switch
+								checked={internalLogging}
+								onChange={(_e, checked) => onInternalLoggingChange(checked)}
+							/>
+						}
+						label="转发网易云内部的日志到控制台"
+					/>
+					<Typography
+						variant="body2"
+						color="text.secondary"
+						sx={{ mt: -0.5, mb: 1, ml: 6 }}
+					>
+						仅用于调试
+					</Typography>
+				</FormGroup>
+			</AccordionDetails>
+		</Accordion>
+	);
+}
+
 function Main() {
 	const ncmVersion = useNcmVersion();
 
@@ -136,18 +456,17 @@ function Main() {
 		STORE_KEY_NATIVE_SMTC_CONFLICT_RESOLVED,
 		false,
 	);
+	const [internalLogging, setInternalLogging] = useLocalStorage(
+		"internal_logging_enabled",
+		false,
+	);
 	const [conflictState, setConflictState] = useState<
 		"checking" | "conflict" | "no_conflict"
 	>("checking");
 
 	const [resolution, setResolution] = useResolutionSetting();
 
-	const frontendId = useId();
-	const backendId = useId();
-	const predefinedResolutions = ["300", "500", "1024", "max"];
-
 	const newVersionInfo = useVersionCheck(GITHUB_REPO);
-
 	const providerState = useInfoProvider(ncmVersion);
 	const { provider, status, error } = providerState;
 
@@ -155,6 +474,8 @@ function Main() {
 		SMTCEnabled && (conflictState === "no_conflict" || nativeSmtcResolved);
 
 	useSmtcConnection(providerState, isSmtcReadyToEnable);
+
+	useGlobalApi(provider);
 
 	useEffect(() => {
 		if (status === "ready" && provider) {
@@ -177,6 +498,12 @@ function Main() {
 			provider.adapter.setNativeSmtc(false);
 		}
 	}, [status, provider, conflictState, nativeSmtcResolved]);
+
+	useEffect(() => {
+		if (provider) {
+			provider.adapter.setInternalLogging(internalLogging);
+		}
+	}, [provider, internalLogging]);
 
 	useEffect(() => {
 		if (ncmVersion !== null) {
@@ -203,239 +530,61 @@ function Main() {
 		}
 	}, [provider, resolution]);
 
-	useEffect(() => {
-		if (provider) {
-			const api: IInfLinkApi = {
-				getCurrentSong: () => provider.getCurrentSongInfo().unwrapOr(null),
-				getPlaybackStatus: () => provider.getPlaybackStatus(),
-				getTimeline: () => provider.getTimelineInfo().unwrapOr(null),
-				getPlayMode: () => provider.getPlayMode(),
-				getVolume: () => provider.getVolume(),
-
-				play: () => provider.handleControlCommand({ type: "Play" }),
-				pause: () => provider.handleControlCommand({ type: "Pause" }),
-				stop: () => provider.handleControlCommand({ type: "Stop" }),
-				next: () => provider.handleControlCommand({ type: "NextSong" }),
-				previous: () => provider.handleControlCommand({ type: "PreviousSong" }),
-				seekTo: (pos) =>
-					provider.handleControlCommand({ type: "Seek", position: pos }),
-
-				toggleShuffle: () =>
-					provider.handleControlCommand({ type: "ToggleShuffle" }),
-				toggleRepeat: () =>
-					provider.handleControlCommand({ type: "ToggleRepeat" }),
-				setRepeatMode: (mode) =>
-					provider.handleControlCommand({ type: "SetRepeat", mode }),
-				setVolume: (level) =>
-					provider.handleControlCommand({ type: "SetVolume", level }),
-				toggleMute: () => provider.handleControlCommand({ type: "ToggleMute" }),
-
-				addEventListener: (type, listener) =>
-					provider.addEventListener(type, listener),
-				removeEventListener: (type, listener) =>
-					provider.removeEventListener(type, listener),
-			};
-
-			window.InfLinkApi = api;
-
-			return () => {
-				delete window.InfLinkApi;
-			};
-		}
-		return;
-	}, [provider]);
-
 	if (ncmVersion === null || status === "loading") {
-		return (
-			<Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-				<CircularProgress size={24} />
-				<Typography variant="body2">正在初始化...</Typography>
-			</Box>
-		);
+		return <LoadingIndicator />;
 	}
 
 	if (ncmVersion === "unsupported") {
-		return (
-			<Alert severity="error">
-				<AlertTitle>不兼容的网易云音乐版本</AlertTitle>
-				InfLink-rs 不支持当前版本的网易云音乐, 请使用原版 InfLink 作为代替
-			</Alert>
-		);
+		return <UnsupportedVersionAlert />;
 	}
 
 	if (status === "error") {
-		return (
-			<Alert severity="error">
-				<AlertTitle>插件初始化失败</AlertTitle>
-				部分组件未能初始化, 请尝试重启网易云音乐, 或者打开控制台查看详细信息
-				<br />
-				错误信息: {error?.message || "未知错误"}
-			</Alert>
-		);
+		return <InitializationErrorAlert error={error} />;
 	}
 
 	return (
 		<div>
 			{conflictState === "conflict" && !nativeSmtcResolved && (
-				<Alert severity="error" sx={{ mb: 2 }}>
-					<AlertTitle>检测到网易云内置的 SMTC 功能</AlertTitle>
-					<Box>
-						<Typography variant="body2" component="div">
-							这会与 InfLink-rs 插件产生冲突，因此已禁用本插件的 SMTC 功能
-						</Typography>
-						<Typography variant="body2" component="div" sx={{ mt: 1 }}>
-							建议禁用内置的 SMTC 功能以获得最佳体验
-						</Typography>
-					</Box>
-					<Button
-						variant="contained"
-						size="medium"
-						onClick={() => {
-							provider?.adapter.setNativeSmtc(false);
-							setNativeSmtcResolved(true);
-							setSMTCEnabled(true);
-						}}
-						sx={{ mt: 1.5 }}
-					>
-						帮我禁用
-					</Button>
-				</Alert>
+				<ConflictAlert
+					provider={provider}
+					onResolve={() => {
+						setNativeSmtcResolved(true);
+						setSMTCEnabled(true);
+					}}
+				/>
 			)}
 
-			{newVersionInfo && (
-				<Alert severity="info" sx={{ mb: 2 }}>
-					<AlertTitle>发现新版本: {newVersionInfo.version} !</AlertTitle>
-					<Box>
-						<Typography variant="body2" component="div">
-							下载新版本以获得最新功能和修复
-						</Typography>
-						<Typography variant="body2" component="div">
-							在左侧插件商店进行更新，或者点击下方按钮手动下载插件进行更新
-						</Typography>
-					</Box>
-					<Button
-						variant="contained"
-						size="medium"
-						startIcon={<UpgradeIcon />}
-						onClick={() => betterncm.ncm.openUrl(newVersionInfo.url)}
-						sx={{ mt: 1.5 }}
-					>
-						前往下载
-					</Button>
-				</Alert>
-			)}
+			{newVersionInfo && <NewVersionAlert newVersionInfo={newVersionInfo} />}
 
 			<Typography variant="h6" gutterBottom>
 				InfLink-rs 设置
 			</Typography>
-			<FormGroup>
-				<FormControlLabel
-					control={
-						<Switch
-							checked={SMTCEnabled}
-							onChange={(_e, checked) => setSMTCEnabled(checked)}
-						/>
-					}
-					label="启用 SMTC 支持"
-					disabled={conflictState === "conflict" && !nativeSmtcResolved}
-				/>
-				{conflictState === "conflict" && nativeSmtcResolved && (
-					<Typography variant="body2" color="textSecondary">
-						已禁用网易云内置的 SMTC 功能
-						<Link
-							component="button"
-							variant="body2"
-							onClick={() => {
-								provider?.adapter.setNativeSmtc(true);
-								setNativeSmtcResolved(false);
-								setSMTCEnabled(false);
-							}}
-							sx={{ ml: 1, mt: -0.5 }}
-						>
-							点我恢复
-						</Link>
-					</Typography>
-				)}
-			</FormGroup>
 
-			<Box sx={{ mt: 2, display: "flex", gap: 2, flexWrap: "wrap" }}>
-				<FormControl size="small">
-					<InputLabel id={frontendId}>前端日志级别</InputLabel>
-					<Select
-						labelId={frontendId}
-						value={frontendLogLevel}
-						label="前端日志级别"
-						onChange={(e) => setFrontendLogLevel(e.target.value as LogLevel)}
-						sx={{ minWidth: 120 }}
-					>
-						{logLevels.map((level) => (
-							<MenuItem key={level} value={level}>
-								{level}
-							</MenuItem>
-						))}
-					</Select>
-				</FormControl>
-				<FormControl size="small">
-					<InputLabel id={backendId}>后端日志级别</InputLabel>
-					<Select
-						labelId={backendId}
-						value={backendLogLevel}
-						label="后端日志级别"
-						onChange={(e) => setBackendLogLevel(e.target.value as LogLevel)}
-						sx={{ minWidth: 120 }}
-					>
-						{logLevels.map((level) => (
-							<MenuItem key={level} value={level}>
-								{level}
-							</MenuItem>
-						))}
-					</Select>
-				</FormControl>
-				<FormControl size="small" sx={{ minWidth: 150 }}>
-					<Autocomplete
-						freeSolo
-						value={resolution}
-						options={predefinedResolutions}
-						onChange={(_event, newValue) => {
-							if (
-								newValue &&
-								(newValue.toLowerCase() === "max" || /^\d+$/.test(newValue))
-							) {
-								setResolution(newValue);
-							}
-						}}
-						onBlur={(event) => {
-							const newValue = (event.target as HTMLInputElement).value;
-							if (
-								newValue &&
-								(newValue.toLowerCase() === "max" || /^\d+$/.test(newValue))
-							) {
-								setResolution(newValue);
-							}
-						}}
-						renderInput={(params) => {
-							const { InputLabelProps, ...rest } = params;
-							const { className, style, ...restInputLabelProps } =
-								InputLabelProps;
-							return (
-								<TextField
-									{...rest}
-									slotProps={{
-										inputLabel: {
-											...restInputLabelProps,
-											...(className && { className }),
-											...(style && { style }),
-										},
-									}}
-									label="封面分辨率"
-									size="small"
-									helperText="过大的值可能会影响封面加载速度"
-								/>
-							);
-						}}
-					/>
-				</FormControl>
-			</Box>
+			<SmtcSettings
+				provider={provider}
+				smtcEnabled={SMTCEnabled}
+				onSmtcEnabledChange={setSMTCEnabled}
+				conflictState={conflictState}
+				nativeSmtcResolved={nativeSmtcResolved}
+				onRevertConflict={() => {
+					setNativeSmtcResolved(false);
+					setSMTCEnabled(false);
+				}}
+			/>
+
+			<ResolutionSettings
+				resolution={resolution}
+				onResolutionChange={setResolution}
+			/>
+
+			<AdvancedSettings
+				frontendLogLevel={frontendLogLevel}
+				backendLogLevel={backendLogLevel}
+				internalLogging={internalLogging}
+				onFrontendLogLevelChange={setFrontendLogLevel}
+				onBackendLogLevelChange={setBackendLogLevel}
+				onInternalLoggingChange={setInternalLogging}
+			/>
 		</div>
 	);
 }

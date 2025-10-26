@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { STORE_KEY_RESOLUTION } from "./keys";
 import { SmtcProvider } from "./provider";
 import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
+import type { IInfLinkApi } from "./types/api";
 import type { NcmAdapterError } from "./types/errors";
 import type { ControlMessage, ProviderEventMap } from "./types/smtc";
 import logger from "./utils/logger";
@@ -311,4 +312,48 @@ export function useResolutionSetting(): [
 		"500",
 	);
 	return [resolution, setResolution];
+}
+
+export function useGlobalApi(provider: SmtcProvider | null) {
+	useEffect(() => {
+		if (provider) {
+			const api: IInfLinkApi = {
+				getCurrentSong: () => provider.getCurrentSongInfo().unwrapOr(null),
+				getPlaybackStatus: () => provider.getPlaybackStatus(),
+				getTimeline: () => provider.getTimelineInfo().unwrapOr(null),
+				getPlayMode: () => provider.getPlayMode(),
+				getVolume: () => provider.getVolume(),
+
+				play: () => provider.handleControlCommand({ type: "Play" }),
+				pause: () => provider.handleControlCommand({ type: "Pause" }),
+				stop: () => provider.handleControlCommand({ type: "Stop" }),
+				next: () => provider.handleControlCommand({ type: "NextSong" }),
+				previous: () => provider.handleControlCommand({ type: "PreviousSong" }),
+				seekTo: (pos) =>
+					provider.handleControlCommand({ type: "Seek", position: pos }),
+
+				toggleShuffle: () =>
+					provider.handleControlCommand({ type: "ToggleShuffle" }),
+				toggleRepeat: () =>
+					provider.handleControlCommand({ type: "ToggleRepeat" }),
+				setRepeatMode: (mode) =>
+					provider.handleControlCommand({ type: "SetRepeat", mode }),
+				setVolume: (level) =>
+					provider.handleControlCommand({ type: "SetVolume", level }),
+				toggleMute: () => provider.handleControlCommand({ type: "ToggleMute" }),
+
+				addEventListener: (type, listener) =>
+					provider.addEventListener(type, listener),
+				removeEventListener: (type, listener) =>
+					provider.removeEventListener(type, listener),
+			};
+
+			window.InfLinkApi = api;
+
+			return () => {
+				delete window.InfLinkApi;
+			};
+		}
+		return;
+	}, [provider]);
 }

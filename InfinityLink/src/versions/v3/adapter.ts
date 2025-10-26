@@ -185,6 +185,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	private eventAdapter!: NcmEventAdapter;
 	private storageModule: v3.NcmStorageModule | null = null;
 	private audioPlayerWrapper: AudioPlayerWrapper | null = null;
+	private isInternalLoggingEnabled = false;
 	private hasRestoredInitialState = false;
 	private ignoreNextZeroProgressEvent = false;
 	private readonly coverManager = new CoverManager();
@@ -216,15 +217,24 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	public async initialize(): Promise<Result<void, NcmAdapterError>> {
 		const require = await getWebpackRequire();
 
+		this.initializeAndPatchLogger(require);
 		this.initializeAudioPlayer(require);
 		this.initializeEventAdapter(require);
 		this.initializeStorage(require);
 
-		const storeResult = await waitForReduxStore();
-		if (storeResult.isErr()) {
-			return err(storeResult.error);
+		const store = this.findReduxStoreFromDva(require);
+
+		if (store) {
+			this.reduxStore = store;
+			logger.debug("通过 dva-tool 获取到 Redux Store", "Adapter V3");
+		} else {
+			logger.warn("回退到 Fiber Tree 遍历方案来寻找 Redux Store", "Adapter V3");
+			const storeResult = await waitForReduxStore();
+			if (storeResult.isErr()) {
+				return err(storeResult.error);
+			}
+			this.reduxStore = storeResult.value;
 		}
-		this.reduxStore = storeResult.value;
 
 		if (import.meta.env.MODE === "development") {
 			window.infstore = this.reduxStore;
@@ -238,6 +248,141 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		this.onStateChanged();
 
 		return ok(undefined);
+	}
+
+	private initializeAndPatchLogger(require: WebpackRequire): void {
+		try {
+			type LoggerMethod = (...args: unknown[]) => void;
+			type PatchedLoggerMethod = LoggerMethod & { __isPatched?: boolean };
+			type LoggerModule = {
+				[level in
+					| "debug"
+					| "log"
+					| "info"
+					| "warn"
+					| "error"
+					| "crash"]: LoggerMethod;
+			};
+			type LoggerContainer = { b: LoggerModule };
+
+			type PatchableConsoleLevel = "debug" | "log" | "info" | "warn" | "error";
+
+			const loggerContainer = findModule<LoggerContainer>(
+				require,
+				(exports: unknown): exports is LoggerContainer =>
+					!!exports &&
+					typeof exports === "object" &&
+					"b" in exports &&
+					!!(exports as { b: unknown }).b &&
+					typeof (exports as { b: object }).b === "object" &&
+					"info" in (exports as { b: object }).b &&
+					typeof (exports as { b: { info: unknown } }).b.info === "function",
+			);
+
+			if (!loggerContainer) {
+				logger.warn("未找到内部日志模块，跳过补丁", "Adapter V3");
+				return;
+			}
+
+			const loggerModule = loggerContainer.b;
+			const levelsToPatch: PatchableConsoleLevel[] = [
+				"debug",
+				"log",
+				"info",
+				"warn",
+				"error",
+			];
+
+			for (const level of levelsToPatch) {
+				const originalMethod = loggerModule[level] as PatchedLoggerMethod;
+
+				if (originalMethod.__isPatched) {
+					continue;
+				}
+
+				const newMethod: PatchedLoggerMethod = (...args: unknown[]) => {
+					if (this.isInternalLoggingEnabled) {
+						const [modName, ...restArgs] = args;
+
+						const pluginPart = "NCM Internal";
+						const sourcePart = String(modName);
+						const badgePluginCss = [
+							"color: white",
+							"background-color: #ff3f41",
+							"padding: 1px 4px",
+							"border-radius: 3px 0 0 3px",
+							"font-weight: bold",
+						].join(";");
+						const badgeSourceCss = [
+							"color: white",
+							"background-color: #5a6268",
+							"padding: 1px 4px",
+							"border-radius: 0 3px 3px 0",
+						].join(";");
+
+						console[level](
+							`%c${pluginPart}%c${sourcePart}`,
+							badgePluginCss,
+							badgeSourceCss,
+							...restArgs,
+						);
+					}
+					return originalMethod.apply(loggerModule, args);
+				};
+				newMethod.__isPatched = true;
+
+				loggerModule[level] = newMethod;
+			}
+		} catch (e) {
+			logger.error("给内部日志模块打补丁时发生错误:", "Adapter V3", e);
+		}
+	}
+
+	/**
+	 * 用网易云自己的 dva-tool 模块获取 Redux Store
+	 */
+	private findReduxStoreFromDva(require: WebpackRequire): v3.NCMStore | null {
+		try {
+			type DvaApp = {
+				_store: v3.NCMStore;
+			};
+			type DvaToolModule = {
+				a: {
+					inited: boolean;
+					app: DvaApp | null;
+					getStore(): v3.ReduxState;
+					getDispatch(): v3.NCMStore["dispatch"];
+				};
+			};
+
+			const dvaModule = findModule<DvaToolModule>(
+				require,
+				(exports: unknown): exports is DvaToolModule => {
+					return (
+						!!exports &&
+						typeof exports === "object" &&
+						"a" in exports &&
+						!!(exports as { a: unknown }).a &&
+						typeof (exports as { a: object }).a === "object" &&
+						"getStore" in (exports as { a: object }).a &&
+						typeof (exports as { a: { getStore: unknown } }).a.getStore ===
+							"function"
+					);
+				},
+			);
+
+			if (
+				dvaModule?.a.inited &&
+				dvaModule.a.app?._store &&
+				typeof dvaModule.a.app._store.subscribe === "function"
+			) {
+				return dvaModule.a.app._store;
+			}
+		} catch (e) {
+			logger.error("通过 dva-tool 寻找 Store 时发生错误:", "Adapter V3", e);
+		}
+
+		return null;
 	}
 
 	private initializeAudioPlayer(require: WebpackRequire): void {
@@ -391,6 +536,10 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		logger.info(`已${enabled ? "启用" : "禁用"}内置的 SMTC 功能`, "Adapter V3");
 	}
 
+	public setInternalLogging(enabled: boolean): void {
+		this.isInternalLoggingEnabled = enabled;
+	}
+
 	public getCurrentSongInfo(): Result<SongInfo, NcmAdapterError> {
 		const state = this.reduxStore?.getState();
 		const playingInfo = state?.playing;
@@ -507,8 +656,6 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	}
 
 	public play(): void {
-		// triggerScene 应该是用来做数据分析的，大概有 45 种
-		// 这里如果刚启动时不提供这个，就会因为 undefined 而报错
 		this.reduxStore?.dispatch({
 			type: "playing/resume",
 			payload: { triggerScene: "track" },

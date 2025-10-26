@@ -28,6 +28,7 @@ export interface INcmAdapter extends EventTarget {
 
 	hasNativeSmtcSupport(): boolean;
 	setNativeSmtc(enabled: boolean): void;
+	setInternalLogging(enabled: boolean): void;
 
 	play(): void;
 	pause(): void;
