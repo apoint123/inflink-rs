@@ -135,8 +135,7 @@ pub unsafe extern "C" fn inflink_register_event_callback(args: *mut *mut c_void)
 ///
 /// 如果 betterncm 未来更新了他们的代码，
 /// 又尝试保留之前的指针，这里需要修正
-static RETURN_BUFFER: LazyLock<Mutex<CString>> =
-    LazyLock::new(|| Mutex::new(CString::new("").unwrap()));
+static RETURN_BUFFER: LazyLock<Mutex<CString>> = LazyLock::new(|| Mutex::new(CString::default()));
 
 #[instrument(skip(args))]
 #[unsafe(no_mangle)]
@@ -170,7 +169,7 @@ pub unsafe extern "C" fn inflink_dispatch(args: *mut *mut c_void) -> *mut c_char
             Ok(s) => s,
             Err(e) => {
                 error!("无法创建返回的 CString: {e}");
-                CString::new("").unwrap()
+                CString::default()
             }
         };
         buffer_guard.as_ptr().cast_mut()
