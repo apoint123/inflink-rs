@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import react from "@vitejs/plugin-react-swc";
@@ -6,6 +7,29 @@ import { defineConfig, type Plugin } from "vite";
 const packageJson = JSON.parse(
 	fs.readFileSync(path.resolve(__dirname, "package.json"), "utf-8"),
 );
+
+const buildBackendPlugin = (mode: string): Plugin => {
+	return {
+		name: "vite-plugin-build-backend",
+		buildStart: () => {
+			if (mode === "development") {
+				const projectRoot = path.resolve(__dirname, "..");
+				try {
+					execSync("cargo build --target i686-pc-windows-msvc", {
+						cwd: projectRoot,
+						stdio: "inherit",
+					});
+					execSync("cargo build --target x86_64-pc-windows-msvc", {
+						cwd: projectRoot,
+						stdio: "inherit",
+					});
+				} catch (e) {
+					console.error("[Vite] 后端构建失败:", e);
+				}
+			}
+		},
+	};
+};
 
 const copyAssetsPlugin = (mode: string): Plugin => {
 	const copyFile = (src: string, dest: string) => {
@@ -36,15 +60,16 @@ const copyAssetsPlugin = (mode: string): Plugin => {
 	return {
 		name: "vite-plugin-copy-assets",
 		closeBundle: () => {
+			const buildProfile = mode === "production" ? "release" : "debug";
 			const projectRoot = path.resolve(__dirname, "..");
 			const outputDir = path.resolve(__dirname, "dist");
 			const dllSrcX86 = path.resolve(
 				projectRoot,
-				"target/i686-pc-windows-msvc/release/smtc_handler.dll",
+				`target/i686-pc-windows-msvc/${buildProfile}/smtc_handler.dll`,
 			);
 			const dllSrcX64 = path.resolve(
 				projectRoot,
-				"target/x86_64-pc-windows-msvc/release/smtc_handler.dll",
+				`target/x86_64-pc-windows-msvc/${buildProfile}/smtc_handler.dll`,
 			);
 			const manifestSrc = path.resolve(__dirname, "manifest.json");
 			const previewSrc = path.resolve(projectRoot, "preview.png");
@@ -84,7 +109,7 @@ const copyAssetsPlugin = (mode: string): Plugin => {
 export default defineConfig(({ mode }) => {
 	const isProduction = mode === "production";
 	return {
-		plugins: [react(), copyAssetsPlugin(mode)],
+		plugins: [buildBackendPlugin(mode), react(), copyAssetsPlugin(mode)],
 		define: {
 			process: JSON.stringify({
 				env: {
@@ -97,7 +122,7 @@ export default defineConfig(({ mode }) => {
 		build: {
 			outDir: "dist",
 			target: "chrome91",
-			sourcemap: !isProduction,
+			sourcemap: isProduction ? false : "inline",
 			lib: {
 				entry: "src/index.tsx",
 				name: "InfinityLink",
