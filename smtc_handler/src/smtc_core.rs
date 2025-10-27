@@ -5,6 +5,7 @@ use cef_safe::{CefResult, CefV8Context, CefV8Value, renderer_post_task_in_v8_ctx
 use serde::Serialize;
 use std::sync::{LazyLock, Mutex};
 use std::time::Instant;
+use tokio::task::JoinHandle;
 use tracing::{debug, error, info, instrument, trace, warn};
 use windows::{
     Foundation::{TimeSpan, TypedEventHandler},
@@ -30,6 +31,9 @@ use tokio::runtime::Runtime;
 
 static TOKIO_RUNTIME: LazyLock<Runtime> =
     LazyLock::new(|| Runtime::new().expect("创建 Tokio 运行时失败"));
+
+static COVER_UPDATE_TASK_HANDLE: LazyLock<Mutex<Option<JoinHandle<()>>>> =
+    LazyLock::new(|| Mutex::new(None));
 
 struct SmtcCallback {
     v8_context: CefV8Context,
@@ -292,6 +296,13 @@ pub fn initialize() -> Result<()> {
 
 #[instrument]
 pub fn shutdown() -> Result<()> {
+    if let Ok(mut handle_guard) = COVER_UPDATE_TASK_HANDLE.lock() {
+        if let Some(handle) = handle_guard.take() {
+            handle.abort();
+        }
+    } else {
+        error!("COVER_UPDATE_TASK_HANDLE 在关闭时锁中毒");
+    }
     with_smtc("关闭", |smtc| {
         cleanup_smtc_handlers(smtc).context("清理 SMTC 处理器失败")?;
         smtc.SetIsEnabled(false)?;
@@ -363,8 +374,17 @@ pub fn update_metadata(payload: MetadataPayload) {
         ncm_id = ?payload.ncm_id,
         "正在更新 SMTC 歌曲元数据"
     );
-
-    TOKIO_RUNTIME.spawn(async move {
+    let mut handle_guard = match COVER_UPDATE_TASK_HANDLE.lock() {
+        Ok(guard) => guard,
+        Err(e) => {
+            error!("COVER_UPDATE_TASK_HANDLE 锁中毒: {e}");
+            return;
+        }
+    };
+    if let Some(old_handle) = handle_guard.take() {
+        old_handle.abort();
+    }
+    let new_handle = TOKIO_RUNTIME.spawn(async move {
         let maybe_bytes = if payload.thumbnail_url.is_empty() {
             warn!("未提供封面URL, 将清空现有封面");
             None
@@ -456,6 +476,7 @@ pub fn update_metadata(payload: MetadataPayload) {
             error!("更新SMTC元数据失败: {e:?}");
         }
     });
+    *handle_guard = Some(new_handle);
 }
 
 fn handle_command_inner(command_json: &str) -> Result<()> {
