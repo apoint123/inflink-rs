@@ -653,7 +653,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	public play(): void {
 		this.reduxStore?.dispatch({
 			type: "playing/resume",
-			payload: { triggerScene: "track" },
+			payload: { triggerScene: "desktopLyric" },
 		});
 	}
 
@@ -667,7 +667,10 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 				}),
 			);
 		}
-		this.reduxStore?.dispatch({ type: "playing/pause" });
+		this.reduxStore?.dispatch({
+			type: "playing/pause",
+			payload: { triggerScene: "desktopLyric" },
+		});
 	}
 
 	public stop(): void {
@@ -678,14 +681,14 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	public nextSong(): void {
 		this.reduxStore?.dispatch({
 			type: "playingList/jump2Track",
-			payload: { flag: 1, type: "call", triggerScene: "track" },
+			payload: { flag: 1, type: "call", triggerScene: "hotKey" },
 		});
 	}
 
 	public previousSong(): void {
 		this.reduxStore?.dispatch({
 			type: "playingList/jump2Track",
-			payload: { flag: -1, type: "call", triggerScene: "track" },
+			payload: { flag: -1, type: "call", triggerScene: "hotKey" },
 		});
 	}
 
@@ -714,7 +717,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 
 		this.reduxStore.dispatch({
 			type: "playing/switchPlayingMode",
-			payload: { playingMode: targetNcmMode, triggerScene: "track" },
+			payload: { playingMode: targetNcmMode, triggerScene: "sysTray" },
 		});
 	}
 
@@ -728,7 +731,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 			type: "playing/switchPlayingMode",
 			// 这里的 triggerScene 用来确保在所有模式切换中都能工作
 			// 尤其是心动模式 (虽然我们当前不会切换到心动模式)
-			payload: { playingMode: targetNcmMode, triggerScene: "track" },
+			payload: { playingMode: targetNcmMode, triggerScene: "sysTray" },
 		});
 	}
 
@@ -740,7 +743,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 
 		this.reduxStore.dispatch({
 			type: "playing/switchPlayingMode",
-			payload: { playingMode: targetNcmMode, triggerScene: "track" },
+			payload: { playingMode: targetNcmMode, triggerScene: "sysTray" },
 		});
 	}
 
