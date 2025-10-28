@@ -19,7 +19,7 @@
 		"typecheck": "tsc --noEmit",
 		"prepare": "husky",
 		"cs:add": "pnpm changeset add",
-		"cs:version": "pnpm changeset version && node ./scripts/sync-versions.js"
+		"cs:version": "pnpm changeset version && node ./scripts/sync-versions.mjs"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.3.0",
