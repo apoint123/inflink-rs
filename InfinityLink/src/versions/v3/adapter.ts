@@ -693,15 +693,6 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	}
 
 	public seekTo(positionMs: number): void {
-		this.musicPlayProgress = positionMs;
-		this.dispatchEvent(
-			new CustomEvent<TimelineInfo>("timelineUpdate", {
-				detail: {
-					currentTime: this.musicPlayProgress,
-					totalTime: this.musicDuration,
-				},
-			}),
-		);
 		this.reduxStore?.dispatch({
 			type: "playing/setPlayingPosition",
 			// 一个有误导性的名称，实际上是跳转位置

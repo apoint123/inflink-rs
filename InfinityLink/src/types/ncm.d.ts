@@ -6,6 +6,30 @@ export interface Artist {
 	name: string;
 }
 
+export interface AudioLoadInfo {
+	duration: number;
+}
+
+export interface EventMap {
+	Load: (audioId: string, info: AudioLoadInfo) => void;
+	End: (audioId: string) => void;
+	PlayProgress: (
+		playId: string,
+		current: number,
+		cacheProgress: number,
+		force?: boolean,
+	) => void;
+	PlayState: (playId: string, resumeOrPauseId: string, state: number) => void;
+	Seek: (
+		playId: string,
+		seekId: string,
+		code: number,
+		position: number,
+	) => void;
+}
+
+export type EventName = keyof EventMap;
+
 // --- v3 类型 ---
 export namespace v3 {
 	/**
@@ -198,21 +222,6 @@ export namespace v3 {
 		};
 	}
 
-	export interface AudioLoadInfo {
-		/** 音频总时长，单位：秒 */
-		duration: number;
-	}
-
-	export interface EventMap {
-		Load: (audioId: string, info: AudioLoadInfo) => void;
-		End: (audioId: string) => void;
-		PlayProgress: (audioId: string, progress: number) => void;
-		PlayState: (audioId: string, state: string) => void;
-		Seek: (payload: unknown[]) => void;
-	}
-
-	export type EventName = keyof EventMap;
-
 	export interface LastPlayingInfo {
 		cacheProgress?: number;
 		current?: number;
@@ -244,6 +253,15 @@ export namespace v2 {
 		playMode: string;
 		resourceTrackId: number;
 		resourceType?: "song" | "local" | "voice";
+		/**
+		 * 播放状态
+		 *
+		 * - -1: End
+		 * - 0: Stop
+		 * - 1: Pause
+		 * - 2: Playing
+		 */
+		playingState: -1 | 0 | 1 | 2;
 	}
 
 	export interface ReduxState {

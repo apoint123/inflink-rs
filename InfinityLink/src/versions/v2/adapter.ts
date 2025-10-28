@@ -30,6 +30,13 @@ import { PlayModeController } from "../playModeController";
 const Controller = typeof ctl !== "undefined" ? ctl : null;
 const DataController = typeof dc !== "undefined" ? dc : null;
 
+const V2_REDUX_PLAY_STATE = {
+	END: -1,
+	STOP: 0,
+	PAUSE: 1,
+	PLAYING: 2,
+} as const;
+
 const V2_PLAY_MODES = {
 	LIST_LOOP: "playorder",
 	SINGLE_LOOP: "playcycle",
@@ -128,14 +135,7 @@ class NcmV2PlayerApi {
 	}
 
 	public getDuration(): number {
-		return this.playerInstance?.tQ ?? 0;
-	}
-
-	public isPlaying(): boolean {
-		// OT() 在网易云刚启动，还未开始播放时不可用
-		return (
-			typeof this.playerInstance.OT === "function" && this.playerInstance.OT()
-		);
+		return (this.playerInstance?.tQ ?? 0) * 1000;
 	}
 
 	public getCurrentTrackObject(): v2.PlayerTrack | null {
@@ -275,7 +275,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		this.eventAdapter = new NcmEventAdapter();
 		[this.dispatchTimelineThrottled, , this.resetTimelineThrottle] = throttle(
 			() => {
-				this._dispatchTimelineUpdateNow();
+				this.dispatchTimelineUpdateNow();
 			},
 			1000,
 		);
@@ -404,9 +404,6 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	}
 
 	public getPlaybackStatus(): PlaybackStatus {
-		if (this.activePlayerApi) {
-			return this.activePlayerApi.isPlaying() ? "Playing" : "Paused";
-		}
 		return this.playStatus;
 	}
 
@@ -438,12 +435,6 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 
 	public pause(): void {
 		this.activePlayerApi?.pause();
-		this.playStatus = "Paused";
-		this.dispatchEvent(
-			new CustomEvent<PlaybackStatus>("playStateChange", {
-				detail: "Paused",
-			}),
-		);
 	}
 
 	public stop(): void {
@@ -462,17 +453,6 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	public seekTo(positionMs: number): void {
 		if (this.musicDuration > 0) {
 			const progressRatio = positionMs / this.musicDuration;
-			this.musicPlayProgress = positionMs;
-
-			this.dispatchEvent(
-				new CustomEvent<TimelineInfo>("timelineUpdate", {
-					detail: {
-						currentTime: this.musicPlayProgress,
-						totalTime: this.musicDuration,
-					},
-				}),
-			);
-
 			this.activePlayerApi?.seek(progressRatio);
 		}
 	}
@@ -592,13 +572,30 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 				}),
 			);
 		}
+
+		const newReduxState = playingState.playingState;
+		let newPlayStatus: PlaybackStatus;
+
+		switch (newReduxState) {
+			case V2_REDUX_PLAY_STATE.PLAYING:
+				newPlayStatus = "Playing";
+				break;
+			default:
+				newPlayStatus = "Paused";
+				break;
+		}
+
+		if (this.playStatus !== newPlayStatus) {
+			this.playStatus = newPlayStatus;
+			this.dispatchEvent(
+				new CustomEvent<PlaybackStatus>("playStateChange", {
+					detail: this.playStatus,
+				}),
+			);
+		}
 	}
 
 	private registerNcmEvents(): void {
-		this.eventAdapter.addEventListener(
-			"playStateChange",
-			this.onPlayStateChanged,
-		);
 		this.eventAdapter.addEventListener("progressUpdate", this.onProgressUpdate);
 		this.eventAdapter.addEventListener("seekUpdate", this.onSeekUpdate);
 
@@ -611,10 +608,6 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	}
 
 	private unregisterNcmEvents(): void {
-		this.eventAdapter.removeEventListener(
-			"playStateChange",
-			this.onPlayStateChanged,
-		);
 		this.eventAdapter.removeEventListener(
 			"progressUpdate",
 			this.onProgressUpdate,
@@ -639,10 +632,9 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	private readonly onSeekUpdate = (e: ParsedEventMap["seekUpdate"]): void => {
 		this.musicPlayProgress = e.detail;
 		this.resetTimelineThrottle();
-		this._dispatchTimelineUpdateNow();
 	};
 
-	private _dispatchTimelineUpdateNow(): void {
+	private dispatchTimelineUpdateNow(): void {
 		this.dispatchEvent(
 			new CustomEvent<TimelineInfo>("timelineUpdate", {
 				detail: {
@@ -681,20 +673,6 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 			}),
 		);
 	}
-
-	private readonly onPlayStateChanged = (
-		e: ParsedEventMap["playStateChange"],
-	): void => {
-		const newPlayState = e.detail;
-		if (this.playStatus !== newPlayState) {
-			this.playStatus = newPlayState;
-			this.dispatchEvent(
-				new CustomEvent<PlaybackStatus>("playStateChange", {
-					detail: this.playStatus,
-				}),
-			);
-		}
-	};
 
 	public override dispatchEvent<K extends keyof NcmAdapterEventMap>(
 		event: NcmAdapterEventMap[K],

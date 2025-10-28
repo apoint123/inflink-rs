@@ -1,5 +1,5 @@
 import type { OrpheusCommand } from "../types/global";
-import type { v3 } from "../types/ncm";
+import type { EventMap, EventName } from "../types/ncm";
 import type { PlaybackStatus } from "../types/smtc";
 import logger from "./logger";
 
@@ -8,6 +8,14 @@ export interface ParsedEventMap {
 	progressUpdate: CustomEvent<number>;
 	seekUpdate: CustomEvent<number>;
 }
+
+const NcmPlayState = {
+	NULL: 0,
+	PLAYING: 1,
+	PAUSED: 2,
+	ERROR: 3,
+	END: 4,
+} as const;
 
 export class NcmEventAdapter {
 	private readonly dispatcher = new EventTarget();
@@ -19,7 +27,7 @@ export class NcmEventAdapter {
 	>();
 	private readonly legacyCallbacks = new Map<
 		string,
-		Set<v3.EventMap[v3.EventName]>
+		Set<EventMap[EventName]>
 	>();
 
 	constructor(cmder?: OrpheusCommand) {
@@ -28,7 +36,7 @@ export class NcmEventAdapter {
 	}
 
 	public dispose(): void {
-		this._unregisterNativeEvents();
+		this.unregisterNativeEvents();
 	}
 
 	public addEventListener<K extends keyof ParsedEventMap>(
@@ -53,57 +61,80 @@ export class NcmEventAdapter {
 	}
 
 	private _registerNativeEvents(): void {
-		this._subscribe("PlayState", this._onRawPlayStateChanged);
-		this._subscribe("PlayProgress", this._onRawPlayProgress);
-		this._subscribe("Seek", this._onRawSeek);
+		this.subscribe("PlayState", this.onRawPlayStateChanged);
+		this.subscribe("PlayProgress", this.onRawPlayProgress);
+		this.subscribe("Seek", this.onRawSeek);
 	}
 
-	private _unregisterNativeEvents(): void {
-		this._unsubscribe("PlayState", this._onRawPlayStateChanged);
-		this._unsubscribe("PlayProgress", this._onRawPlayProgress);
-		this._unsubscribe("Seek", this._onRawSeek);
+	private unregisterNativeEvents(): void {
+		this.unsubscribe("PlayState", this.onRawPlayStateChanged);
+		this.unsubscribe("PlayProgress", this.onRawPlayProgress);
+		this.unsubscribe("Seek", this.onRawSeek);
 	}
 
 	// 格式:
-	// {
-	//     audioId: "1991033005_1_7665697221-bitrate-320-M236zd",
-	//     stateInfo: "1991033005_1_7665697221-bitrate-320-M236zd|pause|rJ0D8z",
-	//     timestamp: "1:26:47 AM"
-	// }
-	private readonly _onRawPlayStateChanged = (
-		_audioId: string,
-		stateInfo: string,
+	// [
+	//    "436016471_9RTXWS",
+	//    "436016471|pause|IKXYMJ",
+	//    2
+	// ]
+	private readonly onRawPlayStateChanged = (
+		playId: string,
+		resumeOrPauseId: string,
+		state: number,
 	): void => {
-		const parts = stateInfo.split("|");
+		logger.debug(
+			`onRawPlayStateChanged playId=${playId}, resumeOrPauseId=${resumeOrPauseId}, state=${state}`,
+			"EventAdapter",
+		);
+
 		let newPlayState: PlaybackStatus | undefined;
 
-		if (parts.length >= 2) {
-			const stateKeyword = parts[1];
-			switch (stateKeyword) {
-				case "resume":
-				case "play":
-					newPlayState = "Playing";
-					break;
-				case "pause":
-					newPlayState = "Paused";
-					break;
-				default:
-					logger.warn(`未知的播放状态: ${stateKeyword}`, "EventAdapter");
-					return;
-			}
-		} else {
-			logger.warn(`意外的播放状态: ${stateInfo}`, "EventAdapter");
-			return;
+		switch (state) {
+			case NcmPlayState.PLAYING:
+				newPlayState = "Playing";
+				break;
+			case NcmPlayState.PAUSED:
+				newPlayState = "Paused";
+				break;
+			case NcmPlayState.NULL:
+			case NcmPlayState.END:
+				newPlayState = "Paused";
+				break;
+			case NcmPlayState.ERROR:
+				logger.warn(
+					`播放状态错误: ${state} (playId: ${playId})`,
+					"EventAdapter",
+				);
+				return;
+			default:
+				logger.warn(
+					`未知的播放状态: ${state} (playId: ${playId}, idStr: ${resumeOrPauseId})`,
+					"EventAdapter",
+				);
+				return;
 		}
 
 		this.dispatch("playStateChange", newPlayState);
 	};
 
-	private readonly _onRawPlayProgress = (
-		_audioId: string,
-		progressInSeconds: number,
+	private readonly onRawPlayProgress = (
+		_playId: string,
+		currentInSeconds: number,
+		/**
+		 * 歌曲缓冲进度百分比
+		 */
+		_cacheProgress: number,
+		/**
+		 * 未知作用，猜测可能在“一起听”场景下会出现
+		 */
+		_force?: boolean,
 	): void => {
-		const progressInMs = Math.floor(progressInSeconds * 1000);
+		// logger.trace(
+		// 	`onRawPlayProgress playId=${_playId}, currentInSeconds=${currentInSeconds}, cacheProgress=${_cacheProgress}, force=${_force}`,
+		// 	"EventAdapter",
+		// );
+		const progressInMs = Math.floor(currentInSeconds * 1000);
 		this.dispatch("progressUpdate", progressInMs);
 	};
 
@@ -114,19 +145,26 @@ export class NcmEventAdapter {
 	//    0,
 	//    32.59870967741935 // 跳转位置
 	// ]
-	private readonly _onRawSeek = (...payload: unknown[]): void => {
-		if (Array.isArray(payload) && payload.length > 0) {
-			const positionInSeconds = payload[payload.length - 1];
-			if (typeof positionInSeconds === "number") {
-				const positionInMs = Math.floor(positionInSeconds * 1000);
-				this.dispatch("seekUpdate", positionInMs);
-			}
+	private readonly onRawSeek = (
+		playId: string,
+		seekId: string,
+		code: number,
+		position: number,
+	): void => {
+		logger.debug(
+			`onRawSeek playId=${playId}, seekId=${seekId}, code=${code}, position=${position}`,
+			"EventAdapter",
+		);
+
+		if (typeof position === "number") {
+			const positionInMs = Math.floor(position * 1000);
+			this.dispatch("seekUpdate", positionInMs);
 		}
 	};
 
-	private _subscribe<E extends v3.EventName>(
+	private subscribe<E extends EventName>(
 		eventName: E,
-		callback: v3.EventMap[E],
+		callback: EventMap[E],
 	): void {
 		const namespace = "audioplayer";
 		const fullName = `${namespace}.on${eventName}`;
@@ -163,9 +201,9 @@ export class NcmEventAdapter {
 		}
 	}
 
-	private _unsubscribe<E extends v3.EventName>(
+	private unsubscribe<E extends EventName>(
 		eventName: E,
-		callback: v3.EventMap[E],
+		callback: EventMap[E],
 	): void {
 		const namespace = "audioplayer";
 		const fullName = `${namespace}.on${eventName}`;
