@@ -5,22 +5,13 @@
 	"schedule": ["* 3 * * *"],
 	"packageRules": [
 		{
-			"matchManagers": ["pnpm"],
+			"matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+			"automerge": true
+		},
+		{
 			"matchDepTypes": ["devDependencies"],
-			"groupName": "pnpm development dependencies",
-			"groupSlug": "pnpm-dev",
-			"automerge": true,
-			"automergeType": "pr"
-		},
-		{
-			"matchManagers": ["cargo"],
-			"groupName": "rust crates",
-			"groupSlug": "rust-crates"
-		},
-		{
-			"groupName": "Material UI packages",
-			"groupSlug": "mui",
-			"matchPackageNames": ["/^@mui//"]
+			"automerge": true
 		}
-	]
+	],
+	"platformAutomerge": true
 }
