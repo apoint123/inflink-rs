@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.2.2
+
+### Patch Changes
+
+- 52ec511: feat: 添加内部日志功能，优化设置界面
+- 2621ade: refactor: 简化对内置 SMTC 的处理
+
 ## 3.2.1
 
 ### Patch Changes
