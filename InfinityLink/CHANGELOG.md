@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.2.3
+
+### Patch Changes
+
+- 09551d7: fix: 优化劫持内置 SMTC 函数的方法，同时适配 3.1.22
+
 ## 3.2.2
 
 ### Patch Changes
