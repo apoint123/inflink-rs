@@ -10,11 +10,21 @@ export interface SongInfo {
 	authorName: string;
 	cover: CoverSource | null;
 	/**
+	 * 原始封面 URL
+	 *
+	 * 用于 Discord RPC 等场景
+	 */
+	originalCoverUrl?: string | undefined;
+	/**
 	 * 歌曲ID，可用于精确匹配歌曲
 	 *
 	 * 后端会把 ID 拼接为 `NCM-{ID}` 并上传到 SMTC 的流派字段
 	 */
 	ncmId: number;
+	/**
+	 * 单位毫秒
+	 */
+	duration?: number | undefined;
 }
 
 export interface TimelineInfo {
@@ -77,6 +87,9 @@ export type SmtcCommandPayloads = {
 	Volume: VolumePayload;
 	EnableSmtc: undefined;
 	DisableSmtc: undefined;
+
+	EnableDiscordRpc: undefined;
+	DisableDiscordRpc: undefined;
 };
 
 export type CommandResult = {

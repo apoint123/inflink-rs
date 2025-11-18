@@ -354,6 +354,13 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 			return err(new SongNotFoundError("找不到 trackObject.data"));
 		}
 
+		const getDuration = () => {
+			if (typeof songData.duration === "number" && songData.duration > 0) {
+				return songData.duration;
+			}
+			return undefined;
+		};
+
 		if (typeof songData.id === "string") {
 			const lrcid = trackObject?.from?.lrcid;
 			const ncmId = typeof lrcid === "number" && lrcid > 0 ? lrcid : 0;
@@ -366,7 +373,9 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 				cover: songData.album.picUrl
 					? { type: "Url", value: songData.album.picUrl }
 					: null,
+				originalCoverUrl: songData.album.picUrl || undefined,
 				ncmId: ncmId,
+				duration: getDuration(),
 			});
 		}
 
@@ -383,7 +392,9 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 					cover: programCache.coverUrl
 						? { type: "Url", value: programCache.coverUrl }
 						: null,
+					originalCoverUrl: programCache.coverUrl || undefined,
 					ncmId: programCache.id,
+					duration: getDuration(),
 				});
 			}
 
@@ -394,7 +405,9 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 					songData.artists?.map((v) => v.name).join(" / ") || "未知主播",
 				albumName: songData.radio?.name || "未知播单",
 				cover: radioPic ? { type: "Url", value: radioPic } : null,
+				originalCoverUrl: radioPic || undefined,
 				ncmId: songData.programId,
+				duration: getDuration(),
 			});
 		}
 
@@ -406,7 +419,9 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 			cover: songData.album?.picUrl
 				? { type: "Url", value: songData.album.picUrl }
 				: null,
+			originalCoverUrl: songData.album?.picUrl || undefined,
 			ncmId: songData.id,
+			duration: getDuration(),
 		});
 	}
 

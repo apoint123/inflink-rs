@@ -1,3 +1,4 @@
+mod discord;
 mod ffi;
 mod logger;
 mod model;

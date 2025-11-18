@@ -21,6 +21,7 @@ use windows::{
     core::{HSTRING, Ref},
 };
 
+use crate::discord;
 use crate::model::{
     CommandResult, CommandStatus, CoverSource, MetadataPayload, PlaybackStatus, RepeatMode,
     SmtcCommand,
@@ -199,6 +200,8 @@ where
 pub fn initialize() -> Result<()> {
     info!("正在初始化 SMTC...");
 
+    discord::init();
+
     let tokens = with_smtc("初始化", |smtc| {
         if HANDLER_TOKENS
             .lock()
@@ -315,7 +318,7 @@ pub fn shutdown() -> Result<()> {
 }
 
 #[instrument]
-pub fn update_play_state(status: &PlaybackStatus) -> Result<()> {
+pub fn update_play_state(status: PlaybackStatus) -> Result<()> {
     let win_status = match status {
         PlaybackStatus::Playing => MediaPlaybackStatus::Playing,
         PlaybackStatus::Paused => MediaPlaybackStatus::Paused,
@@ -331,7 +334,7 @@ pub fn update_play_state(status: &PlaybackStatus) -> Result<()> {
 
 #[instrument]
 pub fn update_timeline(current_ms: f64, total_ms: f64) -> Result<()> {
-    debug!(current_ms, total_ms, "正在更新 SMTC 时间线");
+    trace!(current_ms, total_ms, "正在更新 SMTC 时间线");
 
     let props = SystemMediaTransportControlsTimelineProperties::new()?;
     props.SetStartTime(TimeSpan { Duration: 0 })?;
@@ -479,28 +482,19 @@ pub fn update_metadata(payload: MetadataPayload) {
 fn handle_command_inner(command_json: &str) -> Result<()> {
     let command: SmtcCommand = serde_json::from_str(command_json).context("解析命令 JSON 失败")?;
 
-    match &command {
-        SmtcCommand::Metadata(payload) => {
-            debug!(
-                command_type = "Metadata",
-                song_name = %payload.song_name,
-                author_name = %payload.author_name,
-                album_name = %payload.album_name,
-                ncm_id = ?payload.ncm_id,
-                "正在处理命令"
-            );
-        }
-        _ => {
-            debug!(?command, "正在处理命令");
-        }
-    }
+    debug!(?command, "正在处理命令");
 
     match command {
-        SmtcCommand::Metadata(payload) => update_metadata(payload),
+        SmtcCommand::Metadata(payload) => {
+            discord::update_metadata(payload.clone());
+            update_metadata(payload);
+        }
         SmtcCommand::PlayState(payload) => {
-            update_play_state(&payload.status).context("更新播放状态失败")?;
+            discord::update_play_state(payload.clone());
+            update_play_state(payload.status).context("更新播放状态失败")?;
         }
         SmtcCommand::Timeline(payload) => {
+            discord::update_timeline(payload.clone());
             update_timeline(payload.current_time, payload.total_time).context("更新时间线失败")?;
         }
         SmtcCommand::PlayMode(payload) => {
@@ -514,6 +508,12 @@ fn handle_command_inner(command_json: &str) -> Result<()> {
         SmtcCommand::DisableSmtc => {
             with_smtc("禁用 SMTC", |smtc| Ok(smtc.SetIsEnabled(false)?))
                 .context("禁用 SMTC 失败")?;
+        }
+        SmtcCommand::EnableDiscordRpc => {
+            discord::enable();
+        }
+        SmtcCommand::DisableDiscordRpc => {
+            discord::disable();
         }
     }
 

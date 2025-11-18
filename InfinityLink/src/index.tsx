@@ -41,6 +41,7 @@ import {
 } from "./hooks";
 import {
 	STORE_KEY_BACKEND_LOG_LEVEL,
+	STORE_KEY_DISCORD_ENABLED,
 	STORE_KEY_FRONTEND_LOG_LEVEL,
 	STORE_KEY_INTERNAL_LOGGING_ENABLED,
 	STORE_KEY_SMTC_ENABLED,
@@ -196,13 +197,20 @@ function NewVersionAlert({ newVersionInfo }: NewVersionAlertProps) {
 interface SmtcSettingsProps {
 	smtcEnabled: boolean;
 	onSmtcEnabledChange: (enabled: boolean) => void;
+	discordEnabled: boolean;
+	onDiscordEnabledChange: (enabled: boolean) => void;
 }
 
-function SmtcSettings({ smtcEnabled, onSmtcEnabledChange }: SmtcSettingsProps) {
+function SmtcSettings({
+	smtcEnabled,
+	onSmtcEnabledChange,
+	discordEnabled,
+	onDiscordEnabledChange,
+}: SmtcSettingsProps) {
 	return (
 		<>
 			<Typography variant="h6" gutterBottom sx={{ mt: 2, fontSize: "1rem" }}>
-				SMTC 设置
+				功能设置
 			</Typography>
 			<FormGroup>
 				<FormControlLabel
@@ -212,7 +220,16 @@ function SmtcSettings({ smtcEnabled, onSmtcEnabledChange }: SmtcSettingsProps) {
 							onChange={(_e, checked) => onSmtcEnabledChange(checked)}
 						/>
 					}
-					label="启用 SMTC 支持"
+					label="启用 SMTC"
+				/>
+				<FormControlLabel
+					control={
+						<Switch
+							checked={discordEnabled}
+							onChange={(_e, checked) => onDiscordEnabledChange(checked)}
+						/>
+					}
+					label="启用 Discord RPC"
 				/>
 			</FormGroup>
 		</>
@@ -393,6 +410,10 @@ function Main() {
 		STORE_KEY_SMTC_ENABLED,
 		true,
 	);
+	const [discordEnabled, setDiscordEnabled] = useLocalStorage(
+		STORE_KEY_DISCORD_ENABLED,
+		false,
+	);
 	const [frontendLogLevel, setFrontendLogLevel] = useLocalStorage<LogLevel>(
 		STORE_KEY_FRONTEND_LOG_LEVEL,
 		"warn",
@@ -456,6 +477,31 @@ function Main() {
 		}
 	}, [provider, resolution]);
 
+	useEffect(() => {
+		if (providerState.status === "ready") {
+			if (discordEnabled) {
+				SMTCNativeBackendInstance.enableDiscordRpc();
+				if (provider) {
+					const infoResult = provider.getCurrentSongInfo();
+					if (infoResult.isOk()) {
+						SMTCNativeBackendInstance.update(infoResult.value);
+					}
+
+					// 必须发送，否则后端默认状态为 Paused，会导致 Discord 不显示会话
+					const status = provider.getPlaybackStatus();
+					SMTCNativeBackendInstance.updatePlayState(status);
+
+					const timelineResult = provider.getTimelineInfo();
+					if (timelineResult.isOk()) {
+						SMTCNativeBackendInstance.updateTimeline(timelineResult.value);
+					}
+				}
+			} else {
+				SMTCNativeBackendInstance.disableDiscordRpc();
+			}
+		}
+	}, [discordEnabled, providerState.status, provider]);
+
 	if (ncmVersion === null || status === "loading") {
 		return <LoadingIndicator />;
 	}
@@ -479,6 +525,8 @@ function Main() {
 			<SmtcSettings
 				smtcEnabled={SMTCEnabled}
 				onSmtcEnabledChange={setSMTCEnabled}
+				discordEnabled={discordEnabled}
+				onDiscordEnabledChange={setDiscordEnabled}
 			/>
 
 			<ResolutionSettings

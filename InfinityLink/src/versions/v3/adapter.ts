@@ -559,6 +559,11 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 				return err(new SongNotFoundError("当前播客 voiceId 无效"));
 			}
 
+			let duration = 0;
+			if (typeof currentVoice.duration === "number") {
+				duration = currentVoice.duration;
+			}
+
 			return ok({
 				songName: currentVoice.name || "未知播客",
 				authorName:
@@ -568,7 +573,9 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 				cover: currentVoice.coverUrl
 					? { type: "Url", value: currentVoice.coverUrl }
 					: null,
+				originalCoverUrl: currentVoice.coverUrl || undefined,
 				ncmId: voiceId,
+				duration: duration > 0 ? duration : undefined,
 			});
 		}
 
@@ -611,6 +618,11 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 
 		const coverUrl = playingInfo.resourceCoverUrl || "";
 
+		let duration = 0;
+		if (playingInfo.curTrack?.duration) {
+			duration = playingInfo.curTrack.duration;
+		}
+
 		return ok({
 			songName: playingInfo.resourceName || "未知歌名",
 			authorName:
@@ -618,7 +630,9 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 				"未知艺术家",
 			albumName: albumName,
 			cover: coverUrl ? { type: "Url", value: coverUrl } : null,
+			originalCoverUrl: coverUrl || undefined,
 			ncmId: currentTrackId,
+			duration: duration > 0 ? duration : undefined,
 		});
 	}
 

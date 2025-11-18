@@ -1,3 +1,5 @@
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Debug)]
@@ -9,26 +11,40 @@ pub enum SmtcCommand {
     PlayMode(PlayModePayload),
     EnableSmtc,
     DisableSmtc,
+
+    EnableDiscordRpc,
+    DisableDiscordRpc,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(tag = "type", content = "value")]
 pub enum CoverSource {
     Url(String),
     Base64(String),
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+impl fmt::Debug for CoverSource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Url(url) => f.debug_tuple("Url").field(url).finish(),
+            Self::Base64(_) => f.debug_tuple("Base64").field(&"<...omitted...>").finish(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct MetadataPayload {
     pub song_name: String,
     pub author_name: String,
     pub album_name: String,
     pub cover: Option<CoverSource>,
+    pub original_cover_url: Option<String>,
     pub ncm_id: Option<u64>,
+    pub duration: Option<f64>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlaybackStatus {
     Playing,
     Paused,
@@ -42,19 +58,19 @@ pub enum RepeatMode {
     AI,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct PlayStatePayload {
     pub status: PlaybackStatus,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TimelinePayload {
     pub current_time: f64,
     pub total_time: f64,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayModePayload {
     pub is_shuffling: bool,

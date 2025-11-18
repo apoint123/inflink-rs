@@ -178,6 +178,18 @@ class SMTCNativeBackend {
 		logger.info("禁用 SMTC 会话", "Native Bridge");
 	}
 
+	public enableDiscordRpc() {
+		if (!this.isActive) return;
+		this.dispatch("EnableDiscordRpc", undefined);
+		logger.info("启用 Discord RPC", "Native Bridge");
+	}
+
+	public disableDiscordRpc() {
+		if (!this.isActive) return;
+		this.dispatch("DisableDiscordRpc", undefined);
+		logger.info("禁用 Discord RPC", "Native Bridge");
+	}
+
 	public update(songInfo: MetadataPayload) {
 		this.dispatch("Metadata", songInfo);
 	}
