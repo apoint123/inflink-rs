@@ -12,12 +12,19 @@ pub enum SmtcCommand {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(tag = "type", content = "value")]
+pub enum CoverSource {
+    Url(String),
+    Base64(String),
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MetadataPayload {
     pub song_name: String,
     pub author_name: String,
     pub album_name: String,
-    pub thumbnail_url: String,
+    pub cover: Option<CoverSource>,
     pub ncm_id: Option<u64>,
 }
 

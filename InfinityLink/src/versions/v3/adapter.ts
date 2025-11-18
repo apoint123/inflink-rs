@@ -565,7 +565,9 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 					currentVoice.track?.artists?.map((v) => v.name).join(" / ") ||
 					"未知主播",
 				albumName: currentVoice.radio?.name || "未知播单",
-				thumbnailUrl: currentVoice.coverUrl,
+				cover: currentVoice.coverUrl
+					? { type: "Url", value: currentVoice.coverUrl }
+					: null,
 				ncmId: voiceId,
 			});
 		}
@@ -608,7 +610,6 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		}
 
 		const coverUrl = playingInfo.resourceCoverUrl || "";
-		const thumbnailUrl = coverUrl;
 
 		return ok({
 			songName: playingInfo.resourceName || "未知歌名",
@@ -616,7 +617,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 				playingInfo.resourceArtists?.map((v) => v.name).join(" / ") ||
 				"未知艺术家",
 			albumName: albumName,
-			thumbnailUrl: thumbnailUrl,
+			cover: coverUrl ? { type: "Url", value: coverUrl } : null,
 			ncmId: currentTrackId,
 		});
 	}
@@ -784,7 +785,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 			this.coverManager.getCover(songInfo, this.resolutionSetting, (result) => {
 				this.dispatchEvent(
 					new CustomEvent<SongInfo>("songChange", {
-						detail: { ...result.songInfo, thumbnailUrl: result.dataUri ?? "" },
+						detail: { ...result.songInfo, cover: result.cover },
 					}),
 				);
 			});

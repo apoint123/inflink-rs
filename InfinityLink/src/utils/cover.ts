@@ -1,5 +1,5 @@
 import type { ResolutionSetting } from "../hooks";
-import type { SongInfo } from "../types/smtc";
+import type { CoverSource, SongInfo } from "../types/smtc";
 import logger from "./logger";
 
 export class CoverManager {
@@ -11,17 +11,24 @@ export class CoverManager {
 		resolution: ResolutionSetting,
 		onComplete: (result: {
 			songInfo: SongInfo;
-			dataUri: string | null;
+			cover: CoverSource | null;
 		}) => void,
 	): void {
 		this.fetchController?.abort();
 		this.fetchGeneration++;
 
 		const generation = this.fetchGeneration;
-		const thumbnailUrl = this.createImageUrl(songInfo.thumbnailUrl, resolution);
+		const currentCover = songInfo.cover;
+
+		if (!currentCover || currentCover.type !== "Url") {
+			onComplete({ songInfo, cover: currentCover });
+			return;
+		}
+
+		const thumbnailUrl = this.createImageUrl(currentCover.value, resolution);
 
 		if (!thumbnailUrl) {
-			onComplete({ songInfo, dataUri: null });
+			onComplete({ songInfo, cover: null });
 			return;
 		}
 
@@ -53,7 +60,15 @@ export class CoverManager {
 					"CoverManager",
 				);
 
-				onComplete({ songInfo, dataUri });
+				const base64Data = dataUri.split(",")[1];
+				if (!base64Data) {
+					throw new Error("生成的 Data URI 格式无效");
+				}
+
+				onComplete({
+					songInfo,
+					cover: { type: "Base64", value: base64Data },
+				});
 			} catch (e) {
 				if ((e as Error).name !== "AbortError") {
 					logger.warn(
@@ -61,7 +76,7 @@ export class CoverManager {
 						"CoverManager",
 					);
 					if (generation === this.fetchGeneration) {
-						onComplete({ songInfo, dataUri: songInfo.thumbnailUrl });
+						onComplete({ songInfo, cover: currentCover });
 					}
 				}
 			} finally {

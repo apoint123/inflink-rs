@@ -22,7 +22,8 @@ use windows::{
 };
 
 use crate::model::{
-    CommandResult, CommandStatus, MetadataPayload, PlaybackStatus, RepeatMode, SmtcCommand,
+    CommandResult, CommandStatus, CoverSource, MetadataPayload, PlaybackStatus, RepeatMode,
+    SmtcCommand,
 };
 
 const HNS_PER_MILLISECOND: f64 = 10_000.0;
@@ -385,51 +386,47 @@ pub fn update_metadata(payload: MetadataPayload) {
         old_handle.abort();
     }
     let new_handle = TOKIO_RUNTIME.spawn(async move {
-        let maybe_bytes = if payload.thumbnail_url.is_empty() {
-            warn!("未提供封面URL, 将清空现有封面");
-            None
-        } else if payload.thumbnail_url.starts_with("data:") {
-            debug!("正在从 Data URI 解码封面");
-
-            let start_time = Instant::now();
-            let result = if let Some(comma_index) = payload.thumbnail_url.find(',') {
-                let base64_data = &payload.thumbnail_url[comma_index + 1..];
-                general_purpose::STANDARD.decode(base64_data)
-            } else {
-                Err(base64::DecodeError::InvalidByte(0, 0))
-            };
-
-            match result {
-                Ok(bytes) => {
-                    let elapsed = start_time.elapsed();
-                    debug!(duration = ?elapsed, "封面 Data URI 解码完成");
-                    Some(bytes)
-                }
-                Err(e) => {
-                    warn!("解码封面 Data URI 失败: {e}");
-                    None
-                }
+        let maybe_bytes = match payload.cover {
+            None => {
+                warn!("未提供封面, 将清空现有封面");
+                None
             }
-        } else {
-            debug!("正在从 URL 下载封面: {}", payload.thumbnail_url);
-            let start_time = Instant::now();
-            match reqwest::get(&payload.thumbnail_url).await {
-                Ok(response) => match response.bytes().await {
+            Some(CoverSource::Base64(base64_data)) => {
+                debug!("正在从 Base64 数据解码封面");
+                let start_time = Instant::now();
+                match general_purpose::STANDARD.decode(&base64_data) {
                     Ok(bytes) => {
                         let elapsed = start_time.elapsed();
-                        debug!(duration = ?elapsed, "封面下载成功");
-                        Some(bytes.to_vec())
+                        debug!(duration = ?elapsed, "封面 Base64 解码完成");
+                        Some(bytes)
                     }
                     Err(e) => {
-                        let elapsed = start_time.elapsed();
-                        warn!(duration = ?elapsed, "读取封面响应失败: {e}");
+                        warn!("解码封面 Base64 失败: {e}");
                         None
                     }
-                },
-                Err(e) => {
-                    let elapsed = start_time.elapsed();
-                    warn!(duration = ?elapsed, "下载封面失败: {e}");
-                    None
+                }
+            }
+            Some(CoverSource::Url(url)) => {
+                debug!("正在从 URL 下载封面: {url}");
+                let start_time = Instant::now();
+                match reqwest::get(&url).await {
+                    Ok(response) => match response.bytes().await {
+                        Ok(bytes) => {
+                            let elapsed = start_time.elapsed();
+                            debug!(duration = ?elapsed, "封面下载成功");
+                            Some(bytes.to_vec())
+                        }
+                        Err(e) => {
+                            let elapsed = start_time.elapsed();
+                            warn!(duration = ?elapsed, "读取封面响应失败: {e}");
+                            None
+                        }
+                    },
+                    Err(e) => {
+                        let elapsed = start_time.elapsed();
+                        warn!(duration = ?elapsed, "下载封面失败: {e}");
+                        None
+                    }
                 }
             }
         };

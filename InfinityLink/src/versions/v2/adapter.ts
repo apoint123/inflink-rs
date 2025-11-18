@@ -363,7 +363,9 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 				authorName:
 					songData.artists?.map((v) => v.name).join(" / ") || "未知作者",
 				albumName: songData.album?.name || "未知专辑",
-				thumbnailUrl: songData.album.picUrl,
+				cover: songData.album.picUrl
+					? { type: "Url", value: songData.album.picUrl }
+					: null,
 				ncmId: ncmId,
 			});
 		}
@@ -378,17 +380,20 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 					songName: programCache.name || "未知播客",
 					authorName: programCache.dj?.nickname || "未知主播",
 					albumName: programCache.radio?.name || "未知播单",
-					thumbnailUrl: programCache.coverUrl,
+					cover: programCache.coverUrl
+						? { type: "Url", value: programCache.coverUrl }
+						: null,
 					ncmId: programCache.id,
 				});
 			}
 
+			const radioPic = songData.radio?.picUrl ?? songData.album?.picUrl;
 			return ok({
 				songName: songData.name || "未知播客",
 				authorName:
 					songData.artists?.map((v) => v.name).join(" / ") || "未知主播",
 				albumName: songData.radio?.name || "未知播单",
-				thumbnailUrl: songData.radio?.picUrl ?? songData.album?.picUrl,
+				cover: radioPic ? { type: "Url", value: radioPic } : null,
 				ncmId: songData.programId,
 			});
 		}
@@ -398,7 +403,9 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 			authorName:
 				songData.artists?.map((v) => v.name).join(" / ") || "未知艺术家",
 			albumName: songData.album?.name || "未知专辑",
-			thumbnailUrl: songData.album?.picUrl,
+			cover: songData.album?.picUrl
+				? { type: "Url", value: songData.album.picUrl }
+				: null,
 			ncmId: songData.id,
 		});
 	}
@@ -513,7 +520,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 						new CustomEvent<SongInfo>("songChange", {
 							detail: {
 								...result.songInfo,
-								thumbnailUrl: result.dataUri ?? "",
+								cover: result.cover,
 							},
 						}),
 					);
@@ -536,8 +543,8 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 			);
 		} else if (
 			this.lastDispatchedSongInfo &&
-			!this.lastDispatchedSongInfo.thumbnailUrl &&
-			currentSongInfo.thumbnailUrl
+			!this.lastDispatchedSongInfo.cover &&
+			currentSongInfo.cover
 		) {
 			this.coverManager.getCover(
 				currentSongInfo,
@@ -547,13 +554,13 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 						new CustomEvent<SongInfo>("songChange", {
 							detail: {
 								...result.songInfo,
-								thumbnailUrl: result.dataUri ?? "",
+								cover: result.cover,
 							},
 						}),
 					);
 					this.lastDispatchedSongInfo = {
 						...result.songInfo,
-						thumbnailUrl: result.dataUri ?? "",
+						cover: result.cover,
 					};
 				},
 			);

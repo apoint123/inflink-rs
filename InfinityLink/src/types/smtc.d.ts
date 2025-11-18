@@ -1,10 +1,14 @@
 export type PlaybackStatus = "Playing" | "Paused";
 
+export type CoverSource =
+	| { type: "Url"; value: string }
+	| { type: "Base64"; value: string };
+
 export interface SongInfo {
 	songName: string;
 	albumName: string;
 	authorName: string;
-	thumbnailUrl: string;
+	cover: CoverSource | null;
 	/**
 	 * 歌曲ID，可用于精确匹配歌曲
 	 *
