@@ -370,6 +370,75 @@ pub fn update_play_mode(is_shuffling: bool, repeat_mode: &RepeatMode) -> Result<
     })
 }
 
+async fn get_cover_stream_ref(cover: Option<CoverSource>) -> Option<RandomAccessStreamReference> {
+    let bytes = match cover {
+        None => {
+            warn!("未提供封面, 将清空现有封面");
+            return None;
+        }
+        Some(CoverSource::Base64(base64_data)) => {
+            debug!("正在从 Base64 数据解码封面");
+            let start_time = Instant::now();
+
+            match general_purpose::STANDARD.decode(base64_data) {
+                Ok(b) => {
+                    let elapsed = start_time.elapsed();
+                    debug!(duration = ?elapsed, "封面 Base64 解码完成");
+                    b
+                }
+                Err(e) => {
+                    warn!("解码封面 Base64 失败: {e}");
+                    return None;
+                }
+            }
+        }
+        Some(CoverSource::Url(url)) => {
+            debug!("正在从 URL 下载封面: {url}");
+            let start_time = Instant::now();
+
+            match reqwest::get(&url).await {
+                Ok(res) => match res.bytes().await {
+                    Ok(b) => {
+                        let elapsed = start_time.elapsed();
+                        debug!(duration = ?elapsed, "封面下载成功");
+                        b.to_vec()
+                    }
+                    Err(e) => {
+                        let elapsed = start_time.elapsed();
+                        warn!(duration = ?elapsed, "读取封面响应失败: {e}");
+                        return None;
+                    }
+                },
+                Err(e) => {
+                    let elapsed = start_time.elapsed();
+                    warn!(duration = ?elapsed, "下载封面失败: {e}");
+                    return None;
+                }
+            }
+        }
+    };
+
+    let stream_result: windows::core::Result<RandomAccessStreamReference> = (async {
+        let stream = InMemoryRandomAccessStream::new()?;
+        let writer = DataWriter::CreateDataWriter(&stream)?;
+        writer.WriteBytes(&bytes)?;
+        writer.StoreAsync()?.await?;
+        writer.DetachStream()?;
+        stream.Seek(0)?;
+        RandomAccessStreamReference::CreateFromStream(&stream)
+    })
+    .await;
+
+    match stream_result {
+        Ok(stream_ref) => Some(stream_ref),
+        Err(e) => {
+            error!("创建封面内存流失败: {e:?}");
+            None
+        }
+    }
+}
+
+#[instrument]
 pub fn update_metadata(payload: MetadataPayload) {
     info!(
         title = %payload.song_name,
@@ -378,6 +447,7 @@ pub fn update_metadata(payload: MetadataPayload) {
         ncm_id = ?payload.ncm_id,
         "正在更新 SMTC 歌曲元数据"
     );
+
     let mut handle_guard = match COVER_UPDATE_TASK_HANDLE.lock() {
         Ok(guard) => guard,
         Err(e) => {
@@ -388,51 +458,9 @@ pub fn update_metadata(payload: MetadataPayload) {
     if let Some(old_handle) = handle_guard.take() {
         old_handle.abort();
     }
+
     let new_handle = TOKIO_RUNTIME.spawn(async move {
-        let maybe_bytes = match payload.cover {
-            None => {
-                warn!("未提供封面, 将清空现有封面");
-                None
-            }
-            Some(CoverSource::Base64(base64_data)) => {
-                debug!("正在从 Base64 数据解码封面");
-                let start_time = Instant::now();
-                match general_purpose::STANDARD.decode(&base64_data) {
-                    Ok(bytes) => {
-                        let elapsed = start_time.elapsed();
-                        debug!(duration = ?elapsed, "封面 Base64 解码完成");
-                        Some(bytes)
-                    }
-                    Err(e) => {
-                        warn!("解码封面 Base64 失败: {e}");
-                        None
-                    }
-                }
-            }
-            Some(CoverSource::Url(url)) => {
-                debug!("正在从 URL 下载封面: {url}");
-                let start_time = Instant::now();
-                match reqwest::get(&url).await {
-                    Ok(response) => match response.bytes().await {
-                        Ok(bytes) => {
-                            let elapsed = start_time.elapsed();
-                            debug!(duration = ?elapsed, "封面下载成功");
-                            Some(bytes.to_vec())
-                        }
-                        Err(e) => {
-                            let elapsed = start_time.elapsed();
-                            warn!(duration = ?elapsed, "读取封面响应失败: {e}");
-                            None
-                        }
-                    },
-                    Err(e) => {
-                        let elapsed = start_time.elapsed();
-                        warn!(duration = ?elapsed, "下载封面失败: {e}");
-                        None
-                    }
-                }
-            }
-        };
+        let thumbnail_stream_ref = get_cover_stream_ref(payload.cover).await;
 
         let result = with_smtc("更新元数据", |smtc| {
             let updater = smtc.DisplayUpdater()?;
@@ -451,18 +479,10 @@ pub fn update_metadata(payload: MetadataPayload) {
                 && ncm_id > 0
             {
                 genres_collection.Append(&HSTRING::from(format!("NCM-{ncm_id}")))?;
-                debug!("将 SMTC 流派设置为 NCM ID: {ncm_id}");
             }
 
-            if let Some(bytes) = maybe_bytes {
-                let stream = InMemoryRandomAccessStream::new()?;
-                let writer = DataWriter::CreateDataWriter(&stream)?;
-                writer.WriteBytes(&bytes)?;
-                writer.StoreAsync()?.GetResults()?;
-                writer.DetachStream()?;
-                stream.Seek(0)?;
-                let stream_ref = RandomAccessStreamReference::CreateFromStream(&stream)?;
-                updater.SetThumbnail(&stream_ref)?;
+            if let Some(stream_ref) = thumbnail_stream_ref.as_ref() {
+                updater.SetThumbnail(stream_ref)?;
             } else {
                 updater.SetThumbnail(None)?;
                 debug!("SMTC 封面已清空");
@@ -476,6 +496,7 @@ pub fn update_metadata(payload: MetadataPayload) {
             error!("更新SMTC元数据失败: {e:?}");
         }
     });
+
     *handle_guard = Some(new_handle);
 }
 
