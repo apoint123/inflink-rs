@@ -5,6 +5,7 @@ use cef_safe::{CefResult, CefV8Context, CefV8Value, renderer_post_task_in_v8_ctx
 use serde::Serialize;
 use std::sync::{LazyLock, Mutex};
 use std::time::Instant;
+use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, instrument, trace, warn};
 use windows::{
@@ -29,24 +30,26 @@ use crate::model::{
 
 const HNS_PER_MILLISECOND: f64 = 10_000.0;
 
-use tokio::runtime::Runtime;
-
 static TOKIO_RUNTIME: LazyLock<Runtime> =
     LazyLock::new(|| Runtime::new().expect("创建 Tokio 运行时失败"));
 
-static COVER_UPDATE_TASK_HANDLE: LazyLock<Mutex<Option<JoinHandle<()>>>> =
-    LazyLock::new(|| Mutex::new(None));
+static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36 Chrome/91.0.4472.164 NeteaseMusicDesktop/3.1.23.204750")
+        .build()
+        .expect("创建 HTTP 客户端失败")
+});
 
 struct SmtcCallback {
     v8_context: CefV8Context,
     v8_function: CefV8Value,
 }
-// Safety: 我们目前只是把 CefRefPtr 发送到下面的 EVENT_CALLBACK
-// renderer_post_task_in_v8_ctx 确保了对这些对象的操作会在相同的线程上执行
-#[allow(clippy::non_send_fields_in_send_ty)]
-unsafe impl Send for SmtcCallback {}
 
-static EVENT_CALLBACK: LazyLock<Mutex<Option<SmtcCallback>>> = LazyLock::new(|| Mutex::new(None));
+#[allow(
+    clippy::non_send_fields_in_send_ty,
+    reason = "已确保使用 renderer_post_task_in_v8_ctx 在正确的线程上执行对这些对象的操作"
+)]
+unsafe impl Send for SmtcCallback {}
 
 struct SmtcHandlerTokens {
     button_pressed: i64,
@@ -54,9 +57,6 @@ struct SmtcHandlerTokens {
     repeat_changed: i64,
     seek_requested: i64,
 }
-
-static HANDLER_TOKENS: LazyLock<Mutex<Option<SmtcHandlerTokens>>> =
-    LazyLock::new(|| Mutex::new(None));
 
 #[derive(Serialize, Clone, Debug)]
 #[serde(tag = "type")]
@@ -71,6 +71,46 @@ enum SmtcEvent {
     Seek { position_ms: f64 },
 }
 
+struct SmtcContext {
+    player: MediaPlayer,
+    tokens: SmtcHandlerTokens,
+    callback: Option<SmtcCallback>,
+    cover_task: Option<JoinHandle<()>>,
+}
+
+impl SmtcContext {
+    fn smtc(&self) -> Result<SystemMediaTransportControls> {
+        Ok(self.player.SystemMediaTransportControls()?)
+    }
+
+    fn remove_handlers(&self) -> Result<()> {
+        let smtc = self.smtc()?;
+        smtc.RemoveButtonPressed(self.tokens.button_pressed)?;
+        smtc.RemoveShuffleEnabledChangeRequested(self.tokens.shuffle_changed)?;
+        smtc.RemoveAutoRepeatModeChangeRequested(self.tokens.repeat_changed)?;
+        smtc.RemovePlaybackPositionChangeRequested(self.tokens.seek_requested)?;
+        Ok(())
+    }
+}
+
+impl Drop for SmtcContext {
+    fn drop(&mut self) {
+        if let Some(handle) = self.cover_task.take() {
+            handle.abort();
+        }
+
+        if let Err(e) = self.remove_handlers() {
+            warn!("销毁 SmtcContext 时移除处理器失败: {e:?}");
+        }
+
+        if let Ok(smtc) = self.smtc() {
+            let _ = smtc.SetIsEnabled(false);
+        }
+    }
+}
+
+static SMTC_CONTEXT: LazyLock<Mutex<Option<SmtcContext>>> = LazyLock::new(|| Mutex::new(None));
+
 pub fn register_event_callback(v8_func_ptr: *mut cef_safe::cef_sys::_cef_v8value_t) {
     let callback_result: CefResult<SmtcCallback> = (|| {
         let v8_context = CefV8Context::current()?;
@@ -81,28 +121,30 @@ pub fn register_event_callback(v8_func_ptr: *mut cef_safe::cef_sys::_cef_v8value
         })
     })();
 
-    if let Ok(mut guard) = EVENT_CALLBACK.lock() {
-        match callback_result {
-            Ok(callback) => {
-                *guard = Some(callback);
-                debug!("SMTC 事件回调已成功注册");
-            }
-            Err(e) => {
-                error!("注册 SMTC 事件回调失败: {:?}", e);
-                *guard = None;
+    match SMTC_CONTEXT.lock() {
+        Ok(mut guard) => {
+            if let Some(ctx) = guard.as_mut() {
+                match callback_result {
+                    Ok(cb) => {
+                        ctx.callback = Some(cb);
+                        debug!("SMTC 事件回调已成功注册");
+                    }
+                    Err(e) => error!("创建回调对象失败: {e:?}"),
+                }
+            } else {
+                warn!("尝试注册回调，但 SMTC 未初始化");
             }
         }
-    } else {
-        error!("注册 SMTC 事件回调时锁中毒");
+        Err(e) => error!("注册回调时锁中毒: {e:?}"),
     }
 }
 
 pub fn clear_callback() {
-    if let Ok(mut guard) = EVENT_CALLBACK.lock() {
-        if guard.is_some() {
-            debug!("SMTC 事件回调已清理");
-        }
-        *guard = None;
+    if let Ok(mut guard) = SMTC_CONTEXT.lock()
+        && let Some(ctx) = guard.as_mut()
+    {
+        ctx.callback = None;
+        debug!("SMTC 事件回调已清理");
     } else {
         error!("清理 SMTC 回调时锁中毒");
     }
@@ -115,29 +157,33 @@ fn dispatch_event(event: &SmtcEvent) {
     let event_json = match serde_json::to_string(&event) {
         Ok(json) => json,
         Err(e) => {
-            error!("反序列化SMTC事件失败: {}", e);
+            error!("反序列化SMTC事件失败: {e}");
             return;
         }
     };
 
-    let maybe_context = if let Ok(guard) = EVENT_CALLBACK.lock() {
-        guard.as_ref().map(|cb| cb.v8_context.clone())
+    let maybe_v8_ctx = if let Ok(guard) = SMTC_CONTEXT.lock() {
+        guard
+            .as_ref()
+            .and_then(|ctx| ctx.callback.as_ref().map(|cb| cb.v8_context.clone()))
     } else {
         error!("SMTC 事件回调锁毒化");
         return;
     };
 
-    if let Some(context) = maybe_context {
-        let post_result = renderer_post_task_in_v8_ctx(context, move || {
-            let Ok(guard) = EVENT_CALLBACK.lock() else {
+    if let Some(v8_ctx) = maybe_v8_ctx {
+        let post_result = renderer_post_task_in_v8_ctx(v8_ctx, move || {
+            let Ok(guard) = SMTC_CONTEXT.lock() else {
                 error!("SMTC 事件回调锁在任务中毒化");
                 return;
             };
 
-            if let Some(callback) = guard.as_ref() {
+            if let Some(ctx) = guard.as_ref()
+                && let Some(cb) = ctx.callback.as_ref()
+            {
                 match CefV8Value::try_from_str(&event_json) {
                     Ok(arg) => {
-                        if let Err(e) = callback.v8_function.execute_function(None, vec![arg]) {
+                        if let Err(e) = cb.v8_function.execute_function(None, vec![arg]) {
                             error!("JS 回调函数执行失败: {e:?}");
                         }
                     }
@@ -158,141 +204,99 @@ fn dispatch_event(event: &SmtcEvent) {
     }
 }
 
-fn cleanup_smtc_handlers(smtc: &SystemMediaTransportControls) -> Result<()> {
-    let maybe_tokens = HANDLER_TOKENS
-        .lock()
-        .map_err(|e| anyhow::anyhow!("HANDLER_TOKENS 锁中毒: {e}"))?
-        .take();
-
-    if let Some(tokens) = maybe_tokens {
-        smtc.RemoveButtonPressed(tokens.button_pressed)?;
-        smtc.RemoveShuffleEnabledChangeRequested(tokens.shuffle_changed)?;
-        smtc.RemoveAutoRepeatModeChangeRequested(tokens.repeat_changed)?;
-        smtc.RemovePlaybackPositionChangeRequested(tokens.seek_requested)?;
-    }
-    Ok(())
-}
-
-static MEDIA_PLAYER: LazyLock<Result<Mutex<MediaPlayer>>> = LazyLock::new(|| {
-    let player = MediaPlayer::new()?;
-    let smtc = player.SystemMediaTransportControls()?;
-    smtc.SetIsEnabled(false)?;
-    Ok(Mutex::new(player))
-});
-
-fn with_smtc<F, R>(context_msg: &str, f: F) -> Result<R>
-where
-    F: FnOnce(&SystemMediaTransportControls) -> Result<R>,
-{
-    match MEDIA_PLAYER.as_ref() {
-        Ok(player_mutex) => {
-            let smtc = player_mutex
-                .lock()
-                .map_err(|e| anyhow::anyhow!("获取 SMTC 锁失败 ({context_msg}): {e}"))?
-                .SystemMediaTransportControls()?;
-            f(&smtc)
-        }
-        Err(e) => Err(anyhow::anyhow!("SMTC 初始化失败 ({context_msg}): {e:?}")),
-    }
-}
-
 #[instrument]
 pub fn initialize() -> Result<()> {
     info!("正在初始化 SMTC...");
-
     discord::init();
 
-    let tokens = with_smtc("初始化", |smtc| {
-        if HANDLER_TOKENS
-            .lock()
-            .map_err(|e| anyhow::anyhow!("HANDLER_TOKENS 锁中毒: {e}"))?
-            .is_some()
-        {
-            warn!("发现残留的 SMTC 处理器，可能是上次未能正常关闭。正在清理");
-            if let Err(e) = cleanup_smtc_handlers(smtc) {
-                error!("清理残留的 SMTC 处理器失败: {e:?}");
+    let player = MediaPlayer::new()?;
+    let smtc = player.SystemMediaTransportControls()?;
+
+    smtc.SetIsEnabled(false)?;
+    smtc.SetIsPlayEnabled(true)?;
+    smtc.SetIsPauseEnabled(true)?;
+    smtc.SetIsStopEnabled(true)?;
+    smtc.SetIsNextEnabled(true)?;
+    smtc.SetIsPreviousEnabled(true)?;
+    debug!("已启用各个 SMTC 控制能力");
+
+    let handler = TypedEventHandler::new(
+        move |_sender: Ref<SystemMediaTransportControls>,
+              args: Ref<SystemMediaTransportControlsButtonPressedEventArgs>|
+              -> windows::core::Result<()> {
+            if let Some(args) = args.as_ref() {
+                let button = args.Button()?;
+                debug!(?button, "SMTC 按钮被按下");
+                let event = match button {
+                    SystemMediaTransportControlsButton::Play => SmtcEvent::Play,
+                    SystemMediaTransportControlsButton::Pause => SmtcEvent::Pause,
+                    SystemMediaTransportControlsButton::Stop => SmtcEvent::Stop,
+                    SystemMediaTransportControlsButton::Next => SmtcEvent::NextSong,
+                    SystemMediaTransportControlsButton::Previous => SmtcEvent::PreviousSong,
+                    _ => return Ok(()),
+                };
+                dispatch_event(&event);
             }
-        }
+            Ok(())
+        },
+    );
+    let button_pressed = smtc.ButtonPressed(&handler)?;
 
-        smtc.SetIsPlayEnabled(true)?;
-        smtc.SetIsPauseEnabled(true)?;
-        smtc.SetIsStopEnabled(true)?;
-        smtc.SetIsNextEnabled(true)?;
-        smtc.SetIsPreviousEnabled(true)?;
-        debug!("已启用各个 SMTC 控制能力");
+    let shuffle_handler = TypedEventHandler::new(
+        move |_: Ref<SystemMediaTransportControls>,
+              _: Ref<ShuffleEnabledChangeRequestedEventArgs>| {
+            debug!("SMTC 请求切换随机播放模式");
+            dispatch_event(&SmtcEvent::ToggleShuffle);
+            Ok(())
+        },
+    );
+    let shuffle_changed = smtc.ShuffleEnabledChangeRequested(&shuffle_handler)?;
 
-        let handler = TypedEventHandler::new(
-            move |_sender: Ref<SystemMediaTransportControls>,
-                  args: Ref<SystemMediaTransportControlsButtonPressedEventArgs>|
-                  -> windows::core::Result<()> {
-                if let Some(args) = args.as_ref() {
-                    let button = args.Button()?;
-                    debug!(?button, "SMTC 按钮被按下");
-                    let event = match button {
-                        SystemMediaTransportControlsButton::Play => SmtcEvent::Play,
-                        SystemMediaTransportControlsButton::Pause => SmtcEvent::Pause,
-                        SystemMediaTransportControlsButton::Stop => SmtcEvent::Stop,
-                        SystemMediaTransportControlsButton::Next => SmtcEvent::NextSong,
-                        SystemMediaTransportControlsButton::Previous => SmtcEvent::PreviousSong,
-                        _ => return Ok(()),
-                    };
-                    dispatch_event(&event);
-                }
-                Ok(())
-            },
-        );
-        let button_pressed = smtc.ButtonPressed(&handler)?;
+    let repeat_handler = TypedEventHandler::new(
+        move |_: Ref<SystemMediaTransportControls>,
+              _: Ref<AutoRepeatModeChangeRequestedEventArgs>| {
+            debug!("SMTC 请求切换重复播放模式");
+            dispatch_event(&SmtcEvent::ToggleRepeat);
+            Ok(())
+        },
+    );
+    let repeat_changed = smtc.AutoRepeatModeChangeRequested(&repeat_handler)?;
 
-        let shuffle_handler = TypedEventHandler::new(
-            move |_: Ref<SystemMediaTransportControls>,
-                  _: Ref<ShuffleEnabledChangeRequestedEventArgs>|
-                  -> windows::core::Result<()> {
-                debug!("SMTC 请求切换随机播放模式");
-                dispatch_event(&SmtcEvent::ToggleShuffle);
-                Ok(())
-            },
-        );
-        let shuffle_changed = smtc.ShuffleEnabledChangeRequested(&shuffle_handler)?;
+    let seek_handler = TypedEventHandler::new(
+        move |_: Ref<SystemMediaTransportControls>,
+              args: Ref<PlaybackPositionChangeRequestedEventArgs>|
+              -> windows::core::Result<()> {
+            if let Some(args) = args.as_ref() {
+                let position = args.RequestedPlaybackPosition()?;
+                let position_ms = (position.Duration as f64) / HNS_PER_MILLISECOND;
+                debug!(position_ms, "SMTC 请求跳转播放位置");
+                dispatch_event(&SmtcEvent::Seek { position_ms });
+            }
+            Ok(())
+        },
+    );
+    let seek_requested = smtc.PlaybackPositionChangeRequested(&seek_handler)?;
 
-        let repeat_handler = TypedEventHandler::new(
-            move |_: Ref<SystemMediaTransportControls>,
-                  _: Ref<AutoRepeatModeChangeRequestedEventArgs>|
-                  -> windows::core::Result<()> {
-                debug!("SMTC 请求切换重复播放模式");
-                dispatch_event(&SmtcEvent::ToggleRepeat);
-                Ok(())
-            },
-        );
-        let repeat_changed = smtc.AutoRepeatModeChangeRequested(&repeat_handler)?;
+    debug!("SMTC 事件处理器已全部附加");
 
-        let seek_handler = TypedEventHandler::new(
-            move |_: Ref<SystemMediaTransportControls>,
-                  args: Ref<PlaybackPositionChangeRequestedEventArgs>|
-                  -> windows::core::Result<()> {
-                if let Some(args) = args.as_ref() {
-                    let position = args.RequestedPlaybackPosition()?;
-                    let position_ms = (position.Duration as f64) / HNS_PER_MILLISECOND;
-                    debug!(position_ms, "SMTC 请求跳转播放位置");
-                    dispatch_event(&SmtcEvent::Seek { position_ms });
-                }
-                Ok(())
-            },
-        );
-        let seek_requested = smtc.PlaybackPositionChangeRequested(&seek_handler)?;
-
-        debug!("SMTC 事件处理器已全部附加");
-
-        Ok(SmtcHandlerTokens {
+    let context = SmtcContext {
+        player,
+        tokens: SmtcHandlerTokens {
             button_pressed,
             shuffle_changed,
             repeat_changed,
             seek_requested,
-        })
-    })?;
+        },
+        callback: None,
+        cover_task: None,
+    };
 
-    *HANDLER_TOKENS
-        .lock()
-        .map_err(|e| anyhow::anyhow!("HANDLER_TOKENS 锁中毒: {e}"))? = Some(tokens);
+    {
+        let mut guard = SMTC_CONTEXT
+            .lock()
+            .map_err(|e| anyhow::anyhow!("SmtcContext 锁中毒: {e}"))?;
+        *guard = Some(context);
+    }
 
     debug!("SMTC 已初始化");
     Ok(())
@@ -300,21 +304,32 @@ pub fn initialize() -> Result<()> {
 
 #[instrument]
 pub fn shutdown() -> Result<()> {
-    if let Ok(mut handle_guard) = COVER_UPDATE_TASK_HANDLE.lock() {
-        if let Some(handle) = handle_guard.take() {
-            handle.abort();
-        }
+    if let Ok(mut guard) = SMTC_CONTEXT.lock() {
+        *guard = None;
     } else {
-        error!("COVER_UPDATE_TASK_HANDLE 在关闭时锁中毒");
+        error!("关闭时锁中毒");
     }
-    with_smtc("关闭", |smtc| {
-        cleanup_smtc_handlers(smtc).context("清理 SMTC 处理器失败")?;
-        smtc.SetIsEnabled(false)?;
-        Ok(())
-    })?;
-    clear_callback();
+
+    discord::disable();
     debug!("SMTC 已关闭");
     Ok(())
+}
+
+fn with_smtc_ctx<F>(action_name: &str, f: F) -> Result<()>
+where
+    F: FnOnce(&mut SmtcContext) -> Result<()>,
+{
+    let mut guard = SMTC_CONTEXT
+        .lock()
+        .map_err(|e| anyhow::anyhow!("获取 SMTC 锁失败 ({action_name}): {e}"))?;
+
+    guard.as_mut().map_or_else(
+        || {
+            warn!("尝试执行 {action_name}，但 SMTCContext 未初始化");
+            Ok(())
+        },
+        f,
+    )
 }
 
 #[instrument]
@@ -325,7 +340,8 @@ pub fn update_play_state(status: PlaybackStatus) -> Result<()> {
     };
     debug!(new_status = ?status, "正在更新 SMTC 播放状态");
 
-    with_smtc("更新播放状态", |smtc| {
+    with_smtc_ctx("更新播放状态", |ctx| {
+        let smtc = ctx.smtc()?;
         smtc.SetPlaybackStatus(win_status)?;
         debug!("SMTC 播放状态更新成功");
         Ok(())
@@ -345,9 +361,9 @@ pub fn update_timeline(current_ms: f64, total_ms: f64) -> Result<()> {
         Duration: (total_ms * HNS_PER_MILLISECOND) as i64,
     })?;
 
-    with_smtc("更新时间线", |smtc| {
+    with_smtc_ctx("更新时间线", |ctx| {
+        let smtc = ctx.smtc()?;
         smtc.UpdateTimelineProperties(&props)?;
-        trace!("SMTC 时间线更新成功");
         Ok(())
     })
 }
@@ -356,7 +372,8 @@ pub fn update_timeline(current_ms: f64, total_ms: f64) -> Result<()> {
 pub fn update_play_mode(is_shuffling: bool, repeat_mode: &RepeatMode) -> Result<()> {
     debug!(is_shuffling, ?repeat_mode, "正在更新 SMTC 播放模式");
 
-    with_smtc("更新播放模式", |smtc| {
+    with_smtc_ctx("更新播放模式", |ctx| {
+        let smtc = ctx.smtc()?;
         smtc.SetShuffleEnabled(is_shuffling)?;
 
         let repeat_mode_win = match repeat_mode {
@@ -396,7 +413,7 @@ async fn get_cover_stream_ref(cover: Option<CoverSource>) -> Option<RandomAccess
             debug!("正在从 URL 下载封面: {url}");
             let start_time = Instant::now();
 
-            match reqwest::get(&url).await {
+            match HTTP_CLIENT.get(&url).send().await {
                 Ok(res) => match res.bytes().await {
                     Ok(b) => {
                         let elapsed = start_time.elapsed();
@@ -448,21 +465,24 @@ pub fn update_metadata(payload: MetadataPayload) {
         "正在更新 SMTC 歌曲元数据"
     );
 
-    let mut handle_guard = match COVER_UPDATE_TASK_HANDLE.lock() {
-        Ok(guard) => guard,
-        Err(e) => {
-            error!("COVER_UPDATE_TASK_HANDLE 锁中毒: {e}");
-            return;
-        }
+    let Ok(mut guard) = SMTC_CONTEXT.lock() else {
+        error!("SmtcContext 锁中毒");
+        return;
     };
-    if let Some(old_handle) = handle_guard.take() {
+
+    let Some(ctx) = guard.as_mut() else {
+        return;
+    };
+
+    if let Some(old_handle) = ctx.cover_task.take() {
         old_handle.abort();
     }
 
     let new_handle = TOKIO_RUNTIME.spawn(async move {
         let thumbnail_stream_ref = get_cover_stream_ref(payload.cover).await;
 
-        let result = with_smtc("更新元数据", |smtc| {
+        let result = with_smtc_ctx("更新元数据", |inner_ctx| {
+            let smtc = inner_ctx.smtc()?;
             let updater = smtc.DisplayUpdater()?;
             updater.SetType(MediaPlaybackType::Music)?;
 
@@ -497,7 +517,7 @@ pub fn update_metadata(payload: MetadataPayload) {
         }
     });
 
-    *handle_guard = Some(new_handle);
+    ctx.cover_task = Some(new_handle);
 }
 
 fn handle_command_inner(command_json: &str) -> Result<()> {
@@ -523,12 +543,10 @@ fn handle_command_inner(command_json: &str) -> Result<()> {
                 .context("更新播放模式失败")?;
         }
         SmtcCommand::EnableSmtc => {
-            with_smtc("启用 SMTC", |smtc| Ok(smtc.SetIsEnabled(true)?))
-                .context("启用 SMTC 失败")?;
+            with_smtc_ctx("启用 SMTC", |ctx| Ok(ctx.smtc()?.SetIsEnabled(true)?))?;
         }
         SmtcCommand::DisableSmtc => {
-            with_smtc("禁用 SMTC", |smtc| Ok(smtc.SetIsEnabled(false)?))
-                .context("禁用 SMTC 失败")?;
+            with_smtc_ctx("禁用 SMTC", |ctx| Ok(ctx.smtc()?.SetIsEnabled(false)?))?;
         }
         SmtcCommand::EnableDiscordRpc => {
             discord::enable();
