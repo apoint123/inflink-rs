@@ -107,7 +107,7 @@ pub unsafe extern "C" fn inflink_initialize(_args: *mut *mut c_void) -> *mut c_c
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn inflink_shutdown(_args: *mut *mut c_void) -> *mut c_char {
     safe_call(|| {
-        smtc_core::clear_callback();
+        logger::clear_callback();
         if let Err(e) = smtc_core::shutdown() {
             error!("关闭失败: {e}");
         }
@@ -189,16 +189,6 @@ pub unsafe extern "C" fn inflink_register_logger(args: *mut *mut c_void) -> *mut
     })
 }
 
-#[instrument(skip(_args))]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn inflink_cleanup(_args: *mut *mut c_void) -> *mut c_char {
-    safe_call(|| {
-        logger::clear_callback();
-        smtc_core::clear_callback();
-        ptr::null_mut()
-    })
-}
-
 #[instrument(skip(args))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn inflink_set_log_level(args: *mut *mut c_void) -> *mut c_char {
@@ -259,7 +249,6 @@ pub unsafe extern "C" fn BetterNCMPluginMain(api: *mut PluginAPI) -> c_int {
                         Some(&DISPATCH_ARGS),
                         inflink_set_log_level,
                     ),
-                    register_api(add_api, "inflink.cleanup", None, inflink_cleanup),
                     register_api(add_api, "inflink.shutdown", None, inflink_shutdown),
                     register_api(
                         add_api,

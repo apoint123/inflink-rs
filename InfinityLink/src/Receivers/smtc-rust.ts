@@ -17,7 +17,6 @@ type NativeApiFunction =
 	| "initialize"
 	| "register_logger"
 	| "set_log_level"
-	| "cleanup"
 	| "shutdown"
 	| "register_event_callback"
 	| "dispatch";
@@ -80,14 +79,20 @@ class SMTCNativeBackend {
 		control_handler: (msg: ControlMessage) => void,
 		on_ready: () => void,
 	) {
-		// betterncm 热重载时会直接销毁整个JS环境，并且不会运行我们的清理函数，
-		// 这会导致后端因为悬垂指针崩溃，所以必须每次运行之前都清理一次
-		this.call("cleanup");
+		this.call("shutdown");
 
 		if (this.isActive) return;
 		this.isActive = true;
 		this.registerLogger();
 		this.call("initialize");
+
+		window.addEventListener("beforeunload", () => {
+			if (this.isActive) {
+				this.disableDiscordRpc();
+				this.disableSmtcSession();
+				this.call("shutdown");
+			}
+		});
 
 		const eventCallback = (eventJson: string) => {
 			try {
@@ -161,7 +166,6 @@ class SMTCNativeBackend {
 		if (!this.isActive) return;
 		this.isActive = false;
 
-		this.call("cleanup");
 		this.call("shutdown");
 		logger.info("SMTC 已禁用", "Native Bridge");
 	}
