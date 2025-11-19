@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.2.4
+
+### Patch Changes
+
+- f9f854f: feat(discord): 添加 Discord RPC 支持
+
 ## 3.2.3
 
 ### Patch Changes
