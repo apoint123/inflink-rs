@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.2.5
+
+### Patch Changes
+
+- b2385ed: fix: 修复一个死锁问题
+
 ## 3.2.4
 
 ### Patch Changes
