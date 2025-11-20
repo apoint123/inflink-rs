@@ -341,51 +341,77 @@ pub fn update_play_state(status: PlaybackStatus) -> Result<()> {
     };
     debug!(new_status = ?status, "正在更新 SMTC 播放状态");
 
-    with_smtc_ctx("更新播放状态", |ctx| {
-        let smtc = ctx.smtc()?;
-        smtc.SetPlaybackStatus(win_status)?;
-        debug!("SMTC 播放状态更新成功");
-        Ok(())
-    })
+    TOKIO_RUNTIME.spawn(async move {
+        let result = with_smtc_ctx("更新播放状态", |ctx| {
+            let smtc = ctx.smtc()?;
+            smtc.SetPlaybackStatus(win_status)?;
+            debug!("更新 SMTC 播放状态成功");
+            Ok(())
+        });
+        if let Err(e) = result {
+            error!("更新播放状态失败: {e:?}");
+        }
+    });
+    Ok(())
 }
 
 #[instrument]
 pub fn update_timeline(current_ms: f64, total_ms: f64) -> Result<()> {
     trace!(current_ms, total_ms, "正在更新 SMTC 时间线");
 
-    let props = SystemMediaTransportControlsTimelineProperties::new()?;
-    props.SetStartTime(TimeSpan { Duration: 0 })?;
-    props.SetPosition(TimeSpan {
-        Duration: (current_ms * HNS_PER_MILLISECOND) as i64,
-    })?;
-    props.SetEndTime(TimeSpan {
-        Duration: (total_ms * HNS_PER_MILLISECOND) as i64,
-    })?;
+    TOKIO_RUNTIME.spawn(async move {
+        let result = (|| -> Result<()> {
+            let props = SystemMediaTransportControlsTimelineProperties::new()?;
+            props.SetStartTime(TimeSpan { Duration: 0 })?;
+            props.SetPosition(TimeSpan {
+                Duration: (current_ms * HNS_PER_MILLISECOND) as i64,
+            })?;
+            props.SetEndTime(TimeSpan {
+                Duration: (total_ms * HNS_PER_MILLISECOND) as i64,
+            })?;
 
-    with_smtc_ctx("更新时间线", |ctx| {
-        let smtc = ctx.smtc()?;
-        smtc.UpdateTimelineProperties(&props)?;
-        Ok(())
-    })
+            with_smtc_ctx("更新时间线", |ctx| {
+                let smtc = ctx.smtc()?;
+                smtc.UpdateTimelineProperties(&props)?;
+                Ok(())
+            })
+        })();
+
+        if let Err(e) = result {
+            error!("更新时间线失败: {e:?}");
+        }
+    });
+
+    Ok(())
 }
 
 #[instrument]
 pub fn update_play_mode(is_shuffling: bool, repeat_mode: &RepeatMode) -> Result<()> {
+    let repeat_mode_clone = repeat_mode.clone();
+
     debug!(is_shuffling, ?repeat_mode, "正在更新 SMTC 播放模式");
 
-    with_smtc_ctx("更新播放模式", |ctx| {
-        let smtc = ctx.smtc()?;
-        smtc.SetShuffleEnabled(is_shuffling)?;
+    TOKIO_RUNTIME.spawn(async move {
+        let result = with_smtc_ctx("更新播放模式", |ctx| {
+            let smtc = ctx.smtc()?;
+            smtc.SetShuffleEnabled(is_shuffling)?;
 
-        let repeat_mode_win = match repeat_mode {
-            RepeatMode::Track => MediaPlaybackAutoRepeatMode::Track,
-            RepeatMode::List => MediaPlaybackAutoRepeatMode::List,
-            RepeatMode::None | RepeatMode::AI => MediaPlaybackAutoRepeatMode::None,
-        };
-        smtc.SetAutoRepeatMode(repeat_mode_win)?;
-        debug!("SMTC 播放模式更新成功");
-        Ok(())
-    })
+            let repeat_mode_win = match repeat_mode_clone {
+                RepeatMode::Track => MediaPlaybackAutoRepeatMode::Track,
+                RepeatMode::List => MediaPlaybackAutoRepeatMode::List,
+                RepeatMode::None | RepeatMode::AI => MediaPlaybackAutoRepeatMode::None,
+            };
+            smtc.SetAutoRepeatMode(repeat_mode_win)?;
+            debug!("更新 SMTC 播放模式成功");
+            Ok(())
+        });
+
+        if let Err(e) = result {
+            error!("更新播放模式失败: {e:?}");
+        }
+    });
+
+    Ok(())
 }
 
 async fn get_cover_stream_ref(cover: Option<CoverSource>) -> Option<RandomAccessStreamReference> {
