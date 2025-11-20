@@ -79,9 +79,9 @@ class SMTCNativeBackend {
 		control_handler: (msg: ControlMessage) => void,
 		on_ready: () => void,
 	) {
+		if (this.isActive) return;
 		this.call("shutdown");
 
-		if (this.isActive) return;
 		this.isActive = true;
 		this.registerLogger();
 		this.call("initialize");
