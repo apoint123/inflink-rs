@@ -2,7 +2,7 @@
 	"name": "inflink-rs-workspace",
 	"private": true,
 	"version": "3.2.5",
-	"packageManager": "pnpm@10.20.0",
+	"packageManager": "pnpm@10.23.0",
 	"engines": {
 		"node": ">=20.0.0",
 		"pnpm": ">=10.0.0"
@@ -24,8 +24,6 @@
 	"devDependencies": {
 		"@biomejs/biome": "^2.3.7",
 		"@changesets/cli": "^2.29.7",
-		"@commitlint/cli": "^20.1.0",
-		"@commitlint/config-conventional": "^20.0.0",
 		"@types/node": "^24.10.1",
 		"husky": "^9.1.7",
 		"typescript": "^5.9.3"
