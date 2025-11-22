@@ -1,3 +1,5 @@
+// @ts-check
+
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -5,7 +7,7 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-async function main() {
+function main() {
 	try {
 		const projectRoot = path.resolve(__dirname, "..");
 		const sourcePackageJsonPath = path.join(
@@ -24,6 +26,8 @@ async function main() {
 		const sourcePackageJson = JSON.parse(
 			fs.readFileSync(sourcePackageJsonPath, "utf-8"),
 		);
+
+		/** @type {string} */
 		const newVersion = sourcePackageJson.version;
 
 		if (!newVersion) {
@@ -31,14 +35,17 @@ async function main() {
 		}
 		console.log(`新版本号: ${newVersion}`);
 
-		const updateJsonVersion = (filePath) => {
+		const updateJsonVersion = (/** @type {string} */ filePath) => {
 			const fileContent = JSON.parse(fs.readFileSync(filePath, "utf-8"));
 			fileContent.version = newVersion;
-			fs.writeFileSync(filePath, `${JSON.stringify(fileContent, null, 2)}\n`);
+			fs.writeFileSync(
+				filePath,
+				`${JSON.stringify(fileContent, null, "\t")}\n`,
+			);
 			console.log(`已更新 ${path.basename(filePath)}`);
 		};
 
-		const updateCargoTomlVersion = (filePath) => {
+		const updateCargoTomlVersion = (/** @type {string} */ filePath) => {
 			const fileContent = fs.readFileSync(filePath, "utf-8");
 			const updatedContent = fileContent.replace(
 				/^version\s*=\s*".*"$/m,
