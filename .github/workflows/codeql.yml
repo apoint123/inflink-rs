@@ -1,45 +1,45 @@
 name: "CodeQL"
 
 on:
-    schedule:
-        - cron: "0 3 * * *"
+  schedule:
+    - cron: "0 3 * * *"
 
 permissions:
-    contents: read
+  contents: read
 
 jobs:
-    analyze:
-        name: Analyze (${{ matrix.language }})
-        runs-on: windows-latest
-        permissions:
-            security-events: write
-            packages: read
-            actions: read
-            contents: read
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: windows-latest
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
 
-        strategy:
-            fail-fast: false
-            matrix:
-                include:
-                    - language: javascript-typescript
-                      build-mode: none
-                    - language: rust
-                      build-mode: none
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: javascript-typescript
+            build-mode: none
+          - language: rust
+            build-mode: none
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v5
-              with:
-                  submodules: "recursive"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          submodules: "recursive"
 
-            - name: Initialize CodeQL
-              uses: github/codeql-action/init@v4
-              with:
-                  languages: ${{ matrix.language }}
-                  build-mode: ${{ matrix.build-mode }}
-                  queries: security-extended,security-and-quality
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-extended,security-and-quality
 
-            - name: Perform CodeQL Analysis
-              uses: github/codeql-action/analyze@v4
-              with:
-                  category: "/language:${{matrix.language}}"
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{matrix.language}}"

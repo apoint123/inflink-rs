@@ -1,52 +1,52 @@
 name: 发布到插件商店
 
 on:
-    push:
-        tags:
-            - "v*.*.*"
+  push:
+    tags:
+      - "v*.*.*"
 
 permissions:
-    contents: write
+  contents: write
 
 jobs:
-    publish-to-store:
-        runs-on: windows-latest
+  publish-to-store:
+    runs-on: windows-latest
 
-        steps:
-            - name: 检出代码
-              uses: actions/checkout@v5
-              with:
-                  submodules: "recursive"
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v5
+        with:
+          submodules: "recursive"
 
-            - name: 安装 pnpm
-              uses: pnpm/action-setup@v4
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
 
-            - name: 安装 Node.js
-              uses: actions/setup-node@v6
-              with:
-                  cache: pnpm
+      - name: 安装 Node.js
+        uses: actions/setup-node@v6
+        with:
+          cache: pnpm
 
-            - name: 安装 Rust 工具链
-              uses: dtolnay/rust-toolchain@stable
-              with:
-                  toolchain: stable
-                  targets: i686-pc-windows-msvc, x86_64-pc-windows-msvc
+      - name: 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: i686-pc-windows-msvc, x86_64-pc-windows-msvc
 
-            - name: 缓存 Rust 依赖
-              uses: Swatinem/rust-cache@v2
+      - name: 缓存 Rust 依赖
+        uses: Swatinem/rust-cache@v2
 
-            - name: 安装依赖
-              run: pnpm install
+      - name: 安装依赖
+        run: pnpm install
 
-            - name: 构建项目
-              run: pnpm build
+      - name: 构建项目
+        run: pnpm build
 
-            - name: 部署产物
-              uses: peaceiris/actions-gh-pages@v4
-              with:
-                  github_token: ${{ secrets.GITHUB_TOKEN }}
-                  publish_dir: ./InfinityLink/dist
-                  publish_branch: release
-                  force_orphan: true
-                  user_name: "github-actions[bot]"
-                  user_email: "github-actions[bot]@users.noreply.github.com"
+      - name: 部署产物
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./InfinityLink/dist
+          publish_branch: release
+          force_orphan: true
+          user_name: "github-actions[bot]"
+          user_email: "github-actions[bot]@users.noreply.github.com"
