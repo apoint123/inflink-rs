@@ -1,14 +1,5 @@
 {
 	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-	"files": {
-		"includes": [
-			"**/*.{js,ts,jsx,tsx,json,astro,mjs,cjs,css,jsonc}",
-			"!**/node_modules",
-			"!**/dist",
-			"!**/build",
-			"!**/target"
-		]
-	},
 	"formatter": {
 		"enabled": true,
 		"formatWithErrors": false,
@@ -39,5 +30,10 @@
 				"organizeImports": "on"
 			}
 		}
+	},
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
 	}
 }
