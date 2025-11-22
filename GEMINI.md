@@ -2,97 +2,68 @@
 
 This document provides an overview of the **InfLink-rs** project, its architecture, and development conventions. It is intended to be used as a contextual reference for AI-powered development assistance.
 
-## Project Overview
+## 1. Project Overview
 
-**InfLink-rs** is a high-performance plugin for the **BetterNCM** modding platform for the Netease Cloud Music desktop client. Its primary function is to integrate the music player with the native **Windows System Media Transport Controls (SMTC)**. This allows users to view song information and control playback directly from the Windows volume and media overlay. A secondary, but powerful feature is the embedding of the Netease Cloud Music song ID into the SMTC's metadata (using the `Genres` field), enabling precise song identification for third-party applications. The plugin also exposes a **public, version-agnostic API** to allow other BetterNCM plugins to control playback and subscribe to state changes.
+**Project Name:** InfLink-rs
 
-A key feature of the project is its adaptive architecture, designed to support multiple versions of the Netease Cloud Music client, including both the modern **64-bit (v3)** and legacy **32-bit (v2)** releases, via a **single, universal plugin package**.
+**Description:**
+InfLink-rs is a sophisticated plugin designed for the **NetEase Cloud Music (NCM)** desktop application (specifically via the BetterNCM plugin framework). Its primary function is to bridge the gap between the web-based NCM client and the native Windows operating system.
 
-The project follows a modern monorepo architecture, combining the strengths of Rust for backend performance and safety with a TypeScript/React frontend for the user interface.
+By utilizing a hybrid architecture of **TypeScript** (running in the client's Chromium environment) and **Rust** (running as a native backend), the project enables native **System Media Transport Controls (SMTC)** integration. This allows users to control music playback using hardware media keys, see track information in the Windows overlay, and sync their status with **Discord Rich Presence (RPC)**.
 
-### Architecture & Technologies
+### 2. Key Features
 
-The project is architecturally divided into two main parts that communicate via a native FFI bridge:
+* **System Media Transport Controls (SMTC) Integration:**
+    * **Media Keys Support:** Enables the use of hardware Play, Pause, Stop, Next, and Previous buttons to control the NCM client.
+    * **Native Windows Overlay:** Displays the current song title, artist, album, and high-resolution cover art in the Windows volume/media overlay.
+    * **Timeline Synchronization:** Syncs the playback progress bar and duration with the Windows interface, allowing seeking from the OS UI.
+    * **Play Mode Control:** allows toggling Shuffle and Repeat modes directly from the system controls.
+* **Discord Rich Presence:**
+    * Automatically updates the user's Discord status to show the currently playing track, artist, and album.
+    * Displays the album art and a progress bar in the Discord profile activity.
+    * Includes a "Listen" button redirecting to the song url.
+* **Version Compatibility (Adapters):**
+    * Includes robust adapters (`v2adapter` and `v3adapter`) to support different versions or rendering engines of the NetEase Cloud Music client (Legacy V2 and React-based V3).
+* **Configurable UI:**
+    * Provides a Material UI (MUI) based settings panel within BetterNCM.
+    * Allows toggling SMTC and Discord features, adjusting cover art resolution, and managing log levels.
 
-1.  **Rust Backend (`smtc_handler`)**:
-    * **Language**: Rust.
-    * **Role**: The core of the plugin, compiled into native dynamic libraries (`.cdylib`) for both **x64 and x86** architectures.
-    * **Responsibilities**:
-        * Interfacing directly with the Windows API to manage the SMTC session.
-        * Exposing a set of native functions to the JavaScript environment.
-        * Receiving commands from the frontend and forwarding events (e.g., SMTC button presses) back to it.
-        * **Interoperability Feature**: Sets the SMTC `genre` field to `NCM-{ID}` to allow other applications to identify the currently playing track.
-    * **Key Crates**: `cef-safe` (for safe communication with the Chromium Embedded Framework), `windows`, `tracing`, `serde`.
+### 3. How it Works
 
-2.  **TypeScript Frontend (`InfinityLink`) - Version-Adaptive**:
-    * **Language**: TypeScript with React and Material UI (MUI).
-    * **Role**: Acts as a version-aware bridge between the Rust backend and the specific Netease client version it's running on.
-    * **Core Strategy**: The frontend employs a robust **Adapter + Provider Pattern**. A single, version-agnostic `SmtcProvider` orchestrates the plugin's logic. At runtime, a version-specific "Adapter" is created and injected into the Provider. This Adapter acts as an anti-corruption layer, handling all direct, fragile interactions with the client.
-    * **Utilities**: Common logic is organized into a modular `utils/` directory, featuring shared pure functions for playback mode calculations (`playModeLogic.ts`) and helpers for interacting with the client's Webpack module system (`webpack.ts`).
+The project follows a bidirectional communication architecture between the NCM Frontend (Chromium/V8) and the Native Backend (Rust).
 
-### Frontend Architecture: Adapter + Provider Pattern
+#### A. The Frontend Layer (TypeScript/React)
+1.  **State Extraction (Adapters):** The core logic relies on `v2/adapter.ts` and `v3/adapter.ts`. These modules inject themselves into the NCM client's internals.
+    * **V3 Adapter:** Traverses the React Fiber tree or uses internal `dva` tools to locate the Redux store. It subscribes to state changes to detect song switches, volume changes, and play status.
+    * **V2 Adapter:** Interacts with older obfuscated API endpoints (`playerInstance.KJ`) and distinct Redux stores.
+2.  **Event Listener:** The adapters listen for specific NCM internal events (progress updates, seek actions) and normalize them into a standard `SongInfo` or `TimelineInfo` format.
+3.  **Provider Facade:** `provider.ts` creates a unified interface over the adapters, abstracting away version differences for the rest of the application.
 
-All version-specific logic is encapsulated within **Adapter** classes, which are managed by a single, universal **Provider**. This design favors **composition over inheritance** and ensures a clean separation of concerns.
+#### B. The Native Bridge (FFI & CEF)
+1.  **Communication:** The frontend communicates with the backend via `smtc-rust.ts`, which calls native functions exposed by `ffi.rs`.
+2.  **Thread Safety:** `task.rs` implements a mechanism to execute Rust closures on specific CEF (Chromium Embedded Framework) threads (specifically the Renderer thread). This ensures that V8 context operations are thread-safe.
+3.  **V8 Interop:** `v8.rs` handles the conversion of data types between Rust and JavaScript strings/objects.
 
-* **`INcmAdapter` Interface (`versions/adapter.d.ts`)**: This is the central contract for the frontend architecture. It defines the standardized API (e.g., `getCurrentSongInfo()`, `play()`, `setRepeatMode()`) that all version-specific adapters must implement. This ensures the `SmtcProvider` remains completely decoupled from any client version's implementation details.
+#### C. The Backend Layer (Rust)
+1.  **SMTC Core:** `smtc_core.rs` uses the Windows Runtime (WinRT) APIs (`Windows.Media.Playback`) to initialize a virtual `MediaPlayer`.
+    * It receives metadata updates from the frontend and pushes them to the Windows System Media Transport Controls.
+    * It sets up event handlers for Windows media buttons. When a button is pressed, it triggers a callback that sends a message back to the Frontend to execute the command (e.g., `adapter.play()`).
+2.  **Discord RPC:** `discord.rs` runs a background thread that connects to the Discord IPC. It receives metadata/timeline payloads and updates the user's activity status, handling connection retries and debouncing to prevent rate limits.
+3.  **Async Runtime:** The backend uses the `tokio` runtime to handle asynchronous tasks like downloading cover art images or updating timeline properties without blocking the main thread.
 
-* **`SmtcProvider` (`provider.ts`)**: This is the single, universal, and version-agnostic orchestrator of the frontend.
-    * **Role**: It acts as the central bridge connecting the active `Adapter`, the UI (React hooks), and the Rust backend bridge. It contains no version-specific logic.
-    * **Design**: It receives an `INcmAdapter` instance in its constructor (Dependency Injection). For its own event system, it uses composition by containing a private `EventTarget` instance, allowing it to have a clean, strongly-typed public event API (`addEventListener`) without the complexities of inheritance.
+### 4. Tech Stack
 
-* **Adapter Implementations (`V3NcmAdapter`, `V2NcmAdapter`)**: These classes implement the `INcmAdapter` interface and contain all the "dirty" logic for interacting with a specific client version.
-    * **`V3NcmAdapter`**: The implementation for the modern 64-bit client. It reads state and sends commands by dispatching actions to the client's **Redux store**. For robust timeline updates, it dynamically finds and subscribes to the internal `AudioPlayer` module's `subscribePlayStatus` method.
-    * **`V2NcmAdapter`**: The implementation for the legacy 32-bit client. It uses a hybrid approach of subscribing to both the **Redux store** and the `legacyNativeCmder` for state reading. For playback control, it uses a dedicated `NcmV2PlayerApi` wrapper to interact with the client's obfuscated internal JavaScript APIs.
+**Frontend:**
+* **Language:** TypeScript
+* **Framework:** React (using Hooks and Context)
+* **UI Library:** Material UI (MUI)
+* **Build Tool:** Vite
+* **Target Environment:** Chromium (CEF) / BetterNCM
 
-### Public API for Inter-Plugin Communication
-
-The plugin exposes a clean, version-agnostic public API to allow other BetterNCM plugins to control playback and access state information.
-
-* **Interface**: The formal contract for the API is defined in the `IInfLinkApi` interface (`types/api.d.ts`).
-* **Access**: The API object is exposed globally on `window.InfLinkApi` when the plugin is active.
-* **Functionality**:
-    * **State Retrieval**: `getCurrentSong()`, `getPlaybackStatus()`, `getTimeline()`, `getPlayMode()`.
-    * **Playback Control**: `play()`, `pause()`, `next()`, `previous()`, `seekTo()`, `toggleShuffle()`, `toggleRepeat()`, and `setRepeatMode()`.
-    * **Event Subscription**: A reactive event model using `addEventListener` for key events like `songChange` and `playStateChange`.
-
-### Build System & Packaging (Universal)
-
-The build process is configured to produce a **single, universal plugin package** that works on both 32-bit and 64-bit clients.
-
-*   **Dual-Target Backend Compilation**: The Rust backend is compiled for both `x86_64-pc-windows-msvc` (64-bit) and `i686-pc-windows-msvc` (32-bit) targets.
-*   **Unified Frontend Build**: The `vite.config.ts` orchestrates a single build process with a universal output.
-    *   **Output Directory**: All artifacts are placed in a single `InfinityLink/dist` directory.
-    *   **DLL Handling**:
-        *   The 32-bit DLL is copied and named `smtc_handler.dll`.
-        *   The 64-bit DLL is copied and named `smtc_handler.dll.x64.dll`.
-    *   **Manifest Handling**: A single, universal `manifest.json` is copied to the output directory. Its `native_plugin` key points to the base `smtc_handler.dll`.
-*   **BetterNCM Loading Mechanism**: When the plugin is loaded, BetterNCM first tries to load `smtc_handler.dll`. On a 64-bit client, this fails, and it then automatically tries to load `smtc_handler.dll.x64.dll`, which succeeds. On a 32-bit client, the first attempt succeeds.
-*   **Final Output**: The `pnpm build` command produces one ready-to-distribute, universal plugin folder.
-
-## Development Conventions
-
-### General
-
-*   **Monorepo Management**: The project is a monorepo managed with `pnpm` workspaces.
-*   **Commit Style**: Contributions should follow the **Conventional Commits** specification.
-*   **Versioning & Changelog**: The project uses **Changesets** for version management and automated changelog generation.
-    *   **Daily Workflow**: Run `pnpm cs:add` after completing a meaningful change.
-    *   **Release Workflow**: Run `pnpm cs:version`, which calls `changeset version` and then a custom `scripts/sync-versions.js` script to propagate the new version number to all relevant files (`Cargo.toml`, `manifest.json`, etc.).
-
-### Frontend (TypeScript/React)
-
-*   **Style & Linting**: **Biome** is used for formatting and linting.
-*   **API Abstraction**: Client-specific internal APIs are strictly abstracted behind Provider classes. Obfuscated methods are further encapsulated in dedicated wrapper classes (e.g., `NcmV2PlayerApi`).
-
-### Backend (Rust)
-
-*   **Style & Linting**: **Clippy** is used with strict rule sets (`pedantic`, `nursery`) enabled, indicating a high standard for idiomatic and safe Rust code.
-*   **Logging**: The `tracing` crate is used for comprehensive, structured logging. Logs are piped to both a file and the frontend console, with dynamically configurable log levels.
-*   **Safety**: While FFI necessitates `unsafe` code, its usage is localized. The project uses safe wrappers where possible.
-
-### Release Automation
-
-The project utilizes GitHub Actions for a fully automated release process.
-
-*   **`release.yml`**: Triggered on `v*.*.*` tags. This workflow builds the universal plugin, packages it into a `.plugin` file, and attaches it to a new GitHub Release.
-*   **`publish-store.yml`**: Also triggered on `v*.*.*` tags. This workflow builds the project and pushes the raw plugin contents (from `InfinityLink/dist`) to a dedicated `release` branch. This branch serves as a stable, clean distribution source for the BetterNCM plugin store.
+**Native Backend:**
+* **Language:** Rust
+* **Async Runtime:** Tokio
+* **Windows API:** `windows` crate (WinRT/UWP integration for Media controls)
+* **Browser Integration:** `cef-sys` (Raw bindings to CEF), `cef-safe` (custom V8 wrappers).
+* **Discord Integration:** `discord-rich-presence` crate.
+* **Utilities:** `serde` (Serialization), `tracing` (Logging), `anyhow` (Error handling).
