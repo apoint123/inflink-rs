@@ -43,7 +43,7 @@ type NcmVersion = "v3" | "v2" | "unsupported";
 
 /**
  * 检测当前网易云音乐客户端的版本
- * @returns 'v3', 'unsupported', 或 null (检测中)
+ * @returns 'v3', 'v2', 'unsupported', 或 null (检测中)
  */
 export function useNcmVersion(): NcmVersion | null {
 	const [version, setVersion] = useState<NcmVersion | null>(null);
@@ -278,8 +278,23 @@ export function useVersionCheck(repo: string): NewVersionInfo | null {
 }
 
 function getNcmThemeMode(): PaletteMode {
-	const currentTheme = localStorage.getItem("currentTheme") || "light";
-	return /^dark/i.test(currentTheme) ? "dark" : "light";
+	const v3Theme = localStorage.getItem("currentTheme");
+	if (v3Theme) {
+		return /^dark/i.test(v3Theme) ? "dark" : "light";
+	}
+
+	const v2Theme = localStorage.getItem("NM_SETTING_SKIN");
+	if (v2Theme) {
+		try {
+			const v2ThemeConfig = JSON.parse(v2Theme);
+			const selectedTheme = v2ThemeConfig?.selected?.name;
+			return selectedTheme === "default" ? "dark" : "light";
+		} catch (e) {
+			logger.warn("解析 v2 主题设置失败", e);
+		}
+	}
+
+	return "light";
 }
 
 export function useNcmTheme(): PaletteMode {
@@ -287,7 +302,10 @@ export function useNcmTheme(): PaletteMode {
 
 	useEffect(() => {
 		const handleStorageChange = (event: StorageEvent) => {
-			if (event.key === "currentTheme") {
+			if (
+				event.key === "currentTheme" || // v3
+				event.key === "NM_SETTING_SKIN" // v2
+			) {
 				setNcmThemeMode(getNcmThemeMode());
 			}
 		};
