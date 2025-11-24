@@ -146,7 +146,7 @@ fn dispatch_event(event: &SmtcEvent) {
     let event_json = match serde_json::to_string(&event) {
         Ok(json) => json,
         Err(e) => {
-            error!("反序列化SMTC事件失败: {e}");
+            error!("序列化SMTC事件失败: {e}");
             return;
         }
     };
