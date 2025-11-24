@@ -23,6 +23,10 @@ export class SmtcProvider {
 		this.adapter.addEventListener("playModeChange", this.onPlayModeChange);
 		this.adapter.addEventListener("timelineUpdate", this.onTimelineUpdate);
 		this.adapter.addEventListener("volumeChange", this.onVolumeChange);
+		this.adapter.addEventListener(
+			"rawTimelineUpdate",
+			this.onRawTimelineUpdate,
+		);
 	}
 
 	private dispatch<K extends keyof ProviderEventMap>(
@@ -106,6 +110,10 @@ export class SmtcProvider {
 		this.adapter.removeEventListener("playModeChange", this.onPlayModeChange);
 		this.adapter.removeEventListener("timelineUpdate", this.onTimelineUpdate);
 		this.adapter.removeEventListener("volumeChange", this.onVolumeChange);
+		this.adapter.removeEventListener(
+			"rawTimelineUpdate",
+			this.onRawTimelineUpdate,
+		);
 		this.adapter.dispose();
 	}
 
@@ -171,6 +179,12 @@ export class SmtcProvider {
 		e: NcmAdapterEventMap["timelineUpdate"],
 	): void => {
 		this.dispatch("updateTimeline", e.detail);
+	};
+
+	private readonly onRawTimelineUpdate = (
+		e: NcmAdapterEventMap["rawTimelineUpdate"],
+	): void => {
+		this.dispatch("rawTimelineUpdate", e.detail);
 	};
 
 	private readonly onVolumeChange = (

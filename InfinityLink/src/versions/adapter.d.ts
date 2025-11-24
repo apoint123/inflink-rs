@@ -14,6 +14,7 @@ export type NcmAdapterEventMap = {
 	playStateChange: CustomEvent<PlaybackStatus>;
 	playModeChange: CustomEvent<PlayMode>;
 	timelineUpdate: CustomEvent<TimelineInfo>;
+	rawTimelineUpdate: CustomEvent<TimelineInfo>;
 	volumeChange: CustomEvent<VolumeInfo>;
 };
 

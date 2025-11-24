@@ -648,6 +648,16 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		e: ParsedEventMap["progressUpdate"],
 	): void => {
 		this.musicPlayProgress = e.detail;
+
+		this.dispatchEvent(
+			new CustomEvent<TimelineInfo>("rawTimelineUpdate", {
+				detail: {
+					currentTime: this.musicPlayProgress,
+					totalTime: this.musicDuration,
+				},
+			}),
+		);
+
 		this.dispatchTimelineThrottled();
 	};
 

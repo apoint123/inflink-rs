@@ -107,6 +107,7 @@ export interface ProviderEventMap {
 	updateSongInfo: CustomEvent<SongInfo>;
 	updatePlayState: CustomEvent<PlaybackStatus>;
 	updateTimeline: CustomEvent<TimelineInfo>;
+	rawTimelineUpdate: CustomEvent<TimelineInfo>;
 	updatePlayMode: CustomEvent<PlayModePayload>;
 	updateVolume: CustomEvent<VolumeInfo>;
 	disable: CustomEvent<void>;
