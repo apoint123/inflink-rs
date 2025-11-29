@@ -103,13 +103,11 @@ export type LogEntry = {
 	target: string;
 };
 
-export interface ProviderEventMap {
-	updateSongInfo: CustomEvent<SongInfo>;
-	updatePlayState: CustomEvent<PlaybackStatus>;
-	updateTimeline: CustomEvent<TimelineInfo>;
+export interface InfLinkEventMap {
+	songChange: CustomEvent<SongInfo>;
+	playStateChange: CustomEvent<PlaybackStatus>;
+	timelineUpdate: CustomEvent<TimelineInfo>;
 	rawTimelineUpdate: CustomEvent<TimelineInfo>;
-	updatePlayMode: CustomEvent<PlayModePayload>;
-	updateVolume: CustomEvent<VolumeInfo>;
-	disable: CustomEvent<void>;
-	control: CustomEvent<ControlMessage>;
+	playModeChange: CustomEvent<PlayMode>;
+	volumeChange: CustomEvent<VolumeInfo>;
 }

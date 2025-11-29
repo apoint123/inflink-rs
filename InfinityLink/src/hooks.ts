@@ -1,13 +1,12 @@
 import type { PaletteMode } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
 import { STORE_KEY_RESOLUTION } from "./keys";
-import { SmtcProvider } from "./provider";
 import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
 import type { IInfLinkApi } from "./types/api";
 import type { NcmAdapterError } from "./types/errors";
-import type { ControlMessage, ProviderEventMap } from "./types/smtc";
+import type { ControlMessage } from "./types/smtc";
 import logger from "./utils/logger";
-import type { INcmAdapter } from "./versions/adapter";
+import type { INcmAdapter, NcmAdapterEventMap } from "./versions/adapter";
 
 export function useLocalStorage<T>(
 	key: string,
@@ -70,21 +69,21 @@ export function useNcmVersion(): NcmVersion | null {
 	return version;
 }
 
-export interface ProviderState {
-	provider: SmtcProvider | null;
+export interface AdapterState {
+	adapter: INcmAdapter | null;
 	status: "loading" | "ready" | "error";
 	error: NcmAdapterError | null;
 }
 
-const INITIAL_PROVIDER_STATE: ProviderState = {
-	provider: null,
+const INITIAL_ADAPTER_STATE: AdapterState = {
+	adapter: null,
 	status: "loading",
 	error: null,
 };
 
-export function useInfoProvider(version: NcmVersion | null): ProviderState {
-	const [providerState, setProviderState] = useState<ProviderState>(
-		INITIAL_PROVIDER_STATE,
+export function useInfoProvider(version: NcmVersion | null): AdapterState {
+	const [adapterState, setAdapterState] = useState<AdapterState>(
+		INITIAL_ADAPTER_STATE,
 	);
 
 	useEffect(() => {
@@ -93,7 +92,7 @@ export function useInfoProvider(version: NcmVersion | null): ProviderState {
 		const initializeProvider = async () => {
 			if (!version || version === "unsupported") {
 				if (!didUnmount) {
-					setProviderState(INITIAL_PROVIDER_STATE);
+					setAdapterState(INITIAL_ADAPTER_STATE);
 				}
 				return;
 			}
@@ -125,27 +124,26 @@ export function useInfoProvider(version: NcmVersion | null): ProviderState {
 						"useInfoProvider",
 						initResult.error,
 					);
-					setProviderState({
-						provider: null,
+					setAdapterState({
+						adapter: null,
 						status: "error",
 						error: initResult.error,
 					});
 					return;
 				} else {
-					const newProvider = new SmtcProvider(adapter);
-					setProviderState({
-						provider: newProvider,
+					setAdapterState({
+						adapter: adapter,
 						status: "ready",
 						error: null,
 					});
 
 					return () => {
-						newProvider.dispose();
+						adapter?.dispose();
 					};
 				}
 			} else {
 				if (!didUnmount) {
-					setProviderState(INITIAL_PROVIDER_STATE);
+					setAdapterState(INITIAL_ADAPTER_STATE);
 				}
 				return;
 			}
@@ -166,18 +164,59 @@ export function useInfoProvider(version: NcmVersion | null): ProviderState {
 		};
 	}, [version]);
 
-	return providerState;
+	return adapterState;
+}
+
+function handleAdapterCommand(adapter: INcmAdapter, msg: ControlMessage) {
+	switch (msg.type) {
+		case "Play":
+			adapter.play();
+			break;
+		case "Pause":
+			adapter.pause();
+			break;
+		case "Stop":
+			adapter.stop();
+			break;
+		case "NextSong":
+			adapter.nextSong();
+			break;
+		case "PreviousSong":
+			adapter.previousSong();
+			break;
+		case "Seek":
+			adapter.seekTo(msg.position);
+			break;
+		case "ToggleShuffle":
+			adapter.toggleShuffle();
+			break;
+		case "ToggleRepeat":
+			adapter.toggleRepeat();
+			break;
+		case "SetRepeat":
+			adapter.setRepeatMode(msg.mode);
+			break;
+		case "SetVolume":
+			adapter.setVolume(msg.level);
+			break;
+		case "ToggleMute":
+			adapter.toggleMute();
+			break;
+		default:
+			logger.warn(`未处理的命令:`, "handleAdapterCommand", msg);
+			break;
+	}
 }
 
 export function useSmtcConnection(
-	providerState: ProviderState,
+	adapterState: AdapterState,
 	isEnabled: boolean,
 ) {
-	const { provider, status } = providerState;
+	const { adapter, status } = adapterState;
 	const hasSentInitialMetadata = useRef(false);
 
 	useEffect(() => {
-		if (status !== "ready" || !provider) {
+		if (status !== "ready" || !adapter) {
 			return;
 		}
 
@@ -188,45 +227,53 @@ export function useSmtcConnection(
 			return;
 		}
 
-		const onUpdateSongInfo = (e: ProviderEventMap["updateSongInfo"]) => {
+		const onSongChange = (e: NcmAdapterEventMap["songChange"]) => {
 			smtcImplObj.update(e.detail);
 			if (isEnabled && !hasSentInitialMetadata.current) {
 				hasSentInitialMetadata.current = true;
 				smtcImplObj.enableSmtcSession();
 			}
 		};
-		const onUpdatePlayState = (e: ProviderEventMap["updatePlayState"]) =>
+		const onPlayStateChange = (e: NcmAdapterEventMap["playStateChange"]) =>
 			smtcImplObj.updatePlayState(e.detail);
-		const onUpdateTimeline = (e: ProviderEventMap["updateTimeline"]) =>
+		const onTimelineUpdate = (e: NcmAdapterEventMap["timelineUpdate"]) =>
 			smtcImplObj.updateTimeline(e.detail);
-		const onUpdatePlayMode = (e: ProviderEventMap["updatePlayMode"]) =>
+		const onPlayModeChange = (e: NcmAdapterEventMap["playModeChange"]) =>
 			smtcImplObj.updatePlayMode(e.detail);
 
 		const onControl = (msg: ControlMessage) => {
-			provider.handleControlCommand(msg);
+			handleAdapterCommand(adapter, msg);
 		};
 
-		provider.addEventListener("updateSongInfo", onUpdateSongInfo);
-		provider.addEventListener("updatePlayState", onUpdatePlayState);
-		provider.addEventListener("updateTimeline", onUpdateTimeline);
-		provider.addEventListener("updatePlayMode", onUpdatePlayMode);
+		adapter.addEventListener("songChange", onSongChange);
+		adapter.addEventListener("playStateChange", onPlayStateChange);
+		adapter.addEventListener("timelineUpdate", onTimelineUpdate);
+		adapter.addEventListener("playModeChange", onPlayModeChange);
 
 		const connectCallback = async () => {
-			await provider.ready;
-			provider.forceDispatchFullState();
+			const songInfoResult = adapter.getCurrentSongInfo();
+			if (songInfoResult.isOk()) {
+				smtcImplObj.update(songInfoResult.value);
+			}
+			smtcImplObj.updatePlayState(adapter.getPlaybackStatus());
+			smtcImplObj.updatePlayMode(adapter.getPlayMode());
+			const timelineResult = adapter.getTimelineInfo();
+			if (timelineResult.isOk()) {
+				smtcImplObj.updateTimeline(timelineResult.value);
+			}
 		};
 
 		smtcImplObj.initialize(onControl, connectCallback);
 
 		return () => {
-			provider.removeEventListener("updateSongInfo", onUpdateSongInfo);
-			provider.removeEventListener("updatePlayState", onUpdatePlayState);
-			provider.removeEventListener("updateTimeline", onUpdateTimeline);
-			provider.removeEventListener("updatePlayMode", onUpdatePlayMode);
+			adapter.removeEventListener("songChange", onSongChange);
+			adapter.removeEventListener("playStateChange", onPlayStateChange);
+			adapter.removeEventListener("timelineUpdate", onTimelineUpdate);
+			adapter.removeEventListener("playModeChange", onPlayModeChange);
 			smtcImplObj.disable();
 			hasSentInitialMetadata.current = false;
 		};
-	}, [provider, status, isEnabled]);
+	}, [adapter, status, isEnabled]);
 }
 
 export interface NewVersionInfo {
@@ -332,38 +379,37 @@ export function useResolutionSetting(): [
 	return [resolution, setResolution];
 }
 
-export function useGlobalApi(provider: SmtcProvider | null) {
+export function useGlobalApi(adapter: INcmAdapter | null) {
 	useEffect(() => {
-		if (provider) {
+		if (adapter) {
 			const api: IInfLinkApi = {
-				getCurrentSong: () => provider.getCurrentSongInfo().unwrapOr(null),
-				getPlaybackStatus: () => provider.getPlaybackStatus(),
-				getTimeline: () => provider.getTimelineInfo().unwrapOr(null),
-				getPlayMode: () => provider.getPlayMode(),
-				getVolume: () => provider.getVolume(),
+				getCurrentSong: () => adapter.getCurrentSongInfo().unwrapOr(null),
+				getPlaybackStatus: () => adapter.getPlaybackStatus(),
+				getTimeline: () => adapter.getTimelineInfo().unwrapOr(null),
+				getPlayMode: () => adapter.getPlayMode(),
+				getVolume: () => adapter.getVolumeInfo(),
 
-				play: () => provider.handleControlCommand({ type: "Play" }),
-				pause: () => provider.handleControlCommand({ type: "Pause" }),
-				stop: () => provider.handleControlCommand({ type: "Stop" }),
-				next: () => provider.handleControlCommand({ type: "NextSong" }),
-				previous: () => provider.handleControlCommand({ type: "PreviousSong" }),
+				play: () => handleAdapterCommand(adapter, { type: "Play" }),
+				pause: () => handleAdapterCommand(adapter, { type: "Pause" }),
+				stop: () => handleAdapterCommand(adapter, { type: "Stop" }),
+				next: () => handleAdapterCommand(adapter, { type: "NextSong" }),
+				previous: () => handleAdapterCommand(adapter, { type: "PreviousSong" }),
 				seekTo: (pos) =>
-					provider.handleControlCommand({ type: "Seek", position: pos }),
-
+					handleAdapterCommand(adapter, { type: "Seek", position: pos }),
 				toggleShuffle: () =>
-					provider.handleControlCommand({ type: "ToggleShuffle" }),
+					handleAdapterCommand(adapter, { type: "ToggleShuffle" }),
 				toggleRepeat: () =>
-					provider.handleControlCommand({ type: "ToggleRepeat" }),
+					handleAdapterCommand(adapter, { type: "ToggleRepeat" }),
 				setRepeatMode: (mode) =>
-					provider.handleControlCommand({ type: "SetRepeat", mode }),
+					handleAdapterCommand(adapter, { type: "SetRepeat", mode }),
 				setVolume: (level) =>
-					provider.handleControlCommand({ type: "SetVolume", level }),
-				toggleMute: () => provider.handleControlCommand({ type: "ToggleMute" }),
+					handleAdapterCommand(adapter, { type: "SetVolume", level }),
+				toggleMute: () => handleAdapterCommand(adapter, { type: "ToggleMute" }),
 
 				addEventListener: (type, listener) =>
-					provider.addEventListener(type, listener),
+					adapter.addEventListener(type, listener),
 				removeEventListener: (type, listener) =>
-					provider.removeEventListener(type, listener),
+					adapter.removeEventListener(type, listener),
 			};
 
 			window.InfLinkApi = api;
@@ -373,5 +419,5 @@ export function useGlobalApi(provider: SmtcProvider | null) {
 			};
 		}
 		return;
-	}, [provider]);
+	}, [adapter]);
 }

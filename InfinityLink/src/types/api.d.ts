@@ -1,7 +1,7 @@
 import type {
+	InfLinkEventMap,
 	PlaybackStatus,
 	PlayModePayload,
-	ProviderEventMap,
 	RepeatMode,
 	SongInfo,
 	TimelineInfo,
@@ -43,13 +43,13 @@ export interface IInfLinkApi {
 	setVolume(level: number): void;
 	toggleMute(): void;
 
-	addEventListener<K extends keyof ProviderEventMap>(
+	addEventListener<K extends keyof InfLinkEventMap>(
 		type: K,
-		listener: (ev: ProviderEventMap[K]) => unknown,
+		listener: (ev: InfLinkEventMap[K]) => unknown,
 	): void;
 
-	removeEventListener<K extends keyof ProviderEventMap>(
+	removeEventListener<K extends keyof InfLinkEventMap>(
 		type: K,
-		listener: (ev: ProviderEventMap[K]) => unknown,
+		listener: (ev: InfLinkEventMap[K]) => unknown,
 	): void;
 }

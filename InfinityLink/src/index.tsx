@@ -430,27 +430,27 @@ function Main() {
 	const [resolution, setResolution] = useResolutionSetting();
 
 	const newVersionInfo = useVersionCheck(GITHUB_REPO);
-	const providerState = useInfoProvider(ncmVersion);
-	const { provider, status, error } = providerState;
+	const adapterState = useInfoProvider(ncmVersion);
+	const { adapter, status, error } = adapterState;
 
-	useSmtcConnection(providerState, SMTCEnabled);
+	useSmtcConnection(adapterState, SMTCEnabled);
 
-	useGlobalApi(provider);
+	useGlobalApi(adapter);
 
 	useEffect(() => {
-		if (status === "ready" && provider) {
-			const hasSupport = provider.adapter.hasNativeSmtcSupport();
+		if (status === "ready" && adapter) {
+			const hasSupport = adapter.hasNativeSmtcSupport();
 			if (hasSupport) {
 				logger.info("检测到内置的 SMTC 功能 (应该已禁用)", "Main");
 			}
 		}
-	}, [status, provider]);
+	}, [status, adapter]);
 
 	useEffect(() => {
-		if (provider) {
-			provider.adapter.setInternalLogging(internalLogging);
+		if (adapter) {
+			adapter.setInternalLogging(internalLogging);
 		}
-	}, [provider, internalLogging]);
+	}, [adapter, internalLogging]);
 
 	useEffect(() => {
 		if (ncmVersion !== null) {
@@ -472,35 +472,33 @@ function Main() {
 	}, [backendLogLevel]);
 
 	useEffect(() => {
-		if (provider) {
-			provider.setResolution(resolution);
+		if (adapter) {
+			adapter.setResolution(resolution);
 		}
-	}, [provider, resolution]);
+	}, [adapter, resolution]);
 
 	useEffect(() => {
-		if (providerState.status === "ready") {
+		if (adapterState.status === "ready" && adapter) {
 			if (discordEnabled) {
 				SMTCNativeBackendInstance.enableDiscordRpc();
-				if (provider) {
-					const infoResult = provider.getCurrentSongInfo();
-					if (infoResult.isOk()) {
-						SMTCNativeBackendInstance.update(infoResult.value);
-					}
+				const infoResult = adapter.getCurrentSongInfo();
+				if (infoResult.isOk()) {
+					SMTCNativeBackendInstance.update(infoResult.value);
+				}
 
-					// 必须发送，否则后端默认状态为 Paused，会导致 Discord 不显示会话
-					const status = provider.getPlaybackStatus();
-					SMTCNativeBackendInstance.updatePlayState(status);
+				// 必须发送，否则后端默认状态为 Paused，会导致 Discord 不显示会话
+				const status = adapter.getPlaybackStatus();
+				SMTCNativeBackendInstance.updatePlayState(status);
 
-					const timelineResult = provider.getTimelineInfo();
-					if (timelineResult.isOk()) {
-						SMTCNativeBackendInstance.updateTimeline(timelineResult.value);
-					}
+				const timelineResult = adapter.getTimelineInfo();
+				if (timelineResult.isOk()) {
+					SMTCNativeBackendInstance.updateTimeline(timelineResult.value);
 				}
 			} else {
 				SMTCNativeBackendInstance.disableDiscordRpc();
 			}
 		}
-	}, [discordEnabled, providerState.status, provider]);
+	}, [discordEnabled, adapterState.status, adapter]);
 
 	if (ncmVersion === null || status === "loading") {
 		return <LoadingIndicator />;
