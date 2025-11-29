@@ -208,30 +208,38 @@ function handleAdapterCommand(adapter: INcmAdapter, msg: ControlMessage) {
 	}
 }
 
-export function useSmtcConnection(
+export function useBackendConnection(
 	adapterState: AdapterState,
-	isEnabled: boolean,
+	smtcEnabled: boolean,
+	discordEnabled: boolean,
 ) {
 	const { adapter, status } = adapterState;
 	const hasSentInitialMetadata = useRef(false);
 
+	const configRef = useRef({ smtcEnabled, discordEnabled });
 	useEffect(() => {
-		if (status !== "ready" || !adapter) {
+		configRef.current = { smtcEnabled, discordEnabled };
+	}, [smtcEnabled, discordEnabled]);
+
+	const shouldConnect =
+		status === "ready" && adapter && (smtcEnabled || discordEnabled);
+
+	useEffect(() => {
+		if (!shouldConnect || !adapter) {
+			SMTCNativeBackendInstance.disable();
+			hasSentInitialMetadata.current = false;
 			return;
 		}
 
 		const smtcImplObj = SMTCNativeBackendInstance;
 
-		if (!isEnabled) {
-			smtcImplObj.disable();
-			return;
-		}
-
 		const onSongChange = (e: NcmAdapterEventMap["songChange"]) => {
 			smtcImplObj.update(e.detail);
-			if (isEnabled && !hasSentInitialMetadata.current) {
+			if (!hasSentInitialMetadata.current) {
 				hasSentInitialMetadata.current = true;
-				smtcImplObj.enableSmtcSession();
+				if (configRef.current.smtcEnabled) {
+					smtcImplObj.enableSmtcSession();
+				}
 			}
 		};
 		const onPlayStateChange = (e: NcmAdapterEventMap["playStateChange"]) =>
@@ -250,20 +258,7 @@ export function useSmtcConnection(
 		adapter.addEventListener("timelineUpdate", onTimelineUpdate);
 		adapter.addEventListener("playModeChange", onPlayModeChange);
 
-		const connectCallback = async () => {
-			const songInfoResult = adapter.getCurrentSongInfo();
-			if (songInfoResult.isOk()) {
-				smtcImplObj.update(songInfoResult.value);
-			}
-			smtcImplObj.updatePlayState(adapter.getPlaybackStatus());
-			smtcImplObj.updatePlayMode(adapter.getPlayMode());
-			const timelineResult = adapter.getTimelineInfo();
-			if (timelineResult.isOk()) {
-				smtcImplObj.updateTimeline(timelineResult.value);
-			}
-		};
-
-		smtcImplObj.initialize(onControl, connectCallback);
+		smtcImplObj.initialize(onControl);
 
 		return () => {
 			adapter.removeEventListener("songChange", onSongChange);
@@ -273,7 +268,25 @@ export function useSmtcConnection(
 			smtcImplObj.disable();
 			hasSentInitialMetadata.current = false;
 		};
-	}, [adapter, status, isEnabled]);
+	}, [shouldConnect, adapter]);
+
+	useEffect(() => {
+		if (!shouldConnect) return;
+
+		const smtcImplObj = SMTCNativeBackendInstance;
+
+		if (smtcEnabled) {
+			smtcImplObj.enableSmtcSession();
+		} else {
+			smtcImplObj.disableSmtcSession();
+		}
+
+		if (discordEnabled) {
+			smtcImplObj.enableDiscordRpc();
+		} else {
+			smtcImplObj.disableDiscordRpc();
+		}
+	}, [shouldConnect, smtcEnabled, discordEnabled]);
 }
 
 export interface NewVersionInfo {

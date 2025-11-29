@@ -30,13 +30,13 @@ import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { StrictMode, useEffect, useId, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
+	useBackendConnection,
 	useGlobalApi,
 	useInfoProvider,
 	useLocalStorage,
 	useNcmTheme,
 	useNcmVersion,
 	useResolutionSetting,
-	useSmtcConnection,
 	useVersionCheck,
 } from "./hooks";
 import {
@@ -433,7 +433,7 @@ function Main() {
 	const adapterState = useInfoProvider(ncmVersion);
 	const { adapter, status, error } = adapterState;
 
-	useSmtcConnection(adapterState, SMTCEnabled);
+	useBackendConnection(adapterState, SMTCEnabled, discordEnabled);
 
 	useGlobalApi(adapter);
 
@@ -476,29 +476,6 @@ function Main() {
 			adapter.setResolution(resolution);
 		}
 	}, [adapter, resolution]);
-
-	useEffect(() => {
-		if (adapterState.status === "ready" && adapter) {
-			if (discordEnabled) {
-				SMTCNativeBackendInstance.enableDiscordRpc();
-				const infoResult = adapter.getCurrentSongInfo();
-				if (infoResult.isOk()) {
-					SMTCNativeBackendInstance.update(infoResult.value);
-				}
-
-				// 必须发送，否则后端默认状态为 Paused，会导致 Discord 不显示会话
-				const status = adapter.getPlaybackStatus();
-				SMTCNativeBackendInstance.updatePlayState(status);
-
-				const timelineResult = adapter.getTimelineInfo();
-				if (timelineResult.isOk()) {
-					SMTCNativeBackendInstance.updateTimeline(timelineResult.value);
-				}
-			} else {
-				SMTCNativeBackendInstance.disableDiscordRpc();
-			}
-		}
-	}, [discordEnabled, adapterState.status, adapter]);
 
 	if (ncmVersion === null || status === "loading") {
 		return <LoadingIndicator />;

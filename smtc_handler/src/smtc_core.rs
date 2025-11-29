@@ -76,6 +76,7 @@ struct SmtcContext {
     tokens: SmtcHandlerTokens,
     callback: Option<SmtcCallback>,
     cover_task: Option<JoinHandle<()>>,
+    is_enabled: bool,
 }
 
 impl SmtcContext {
@@ -278,6 +279,7 @@ pub fn initialize() -> Result<()> {
         },
         callback: None,
         cover_task: None,
+        is_enabled: false,
     };
 
     {
@@ -343,6 +345,9 @@ pub fn update_play_state(status: PlaybackStatus) -> Result<()> {
 
     TOKIO_RUNTIME.spawn(async move {
         let result = with_smtc_ctx("更新播放状态", |ctx| {
+            if !ctx.is_enabled {
+                return Ok(());
+            }
             let smtc = ctx.smtc()?;
             smtc.SetPlaybackStatus(win_status)?;
             debug!("更新 SMTC 播放状态成功");
@@ -371,6 +376,9 @@ pub fn update_timeline(current_ms: f64, total_ms: f64) -> Result<()> {
             })?;
 
             with_smtc_ctx("更新时间线", |ctx| {
+                if !ctx.is_enabled {
+                    return Ok(());
+                }
                 let smtc = ctx.smtc()?;
                 smtc.UpdateTimelineProperties(&props)?;
                 Ok(())
@@ -393,6 +401,9 @@ pub fn update_play_mode(is_shuffling: bool, repeat_mode: &RepeatMode) -> Result<
 
     TOKIO_RUNTIME.spawn(async move {
         let result = with_smtc_ctx("更新播放模式", |ctx| {
+            if !ctx.is_enabled {
+                return Ok(());
+            }
             let smtc = ctx.smtc()?;
             smtc.SetShuffleEnabled(is_shuffling)?;
 
@@ -484,14 +495,6 @@ async fn get_cover_stream_ref(cover: Option<CoverSource>) -> Option<RandomAccess
 
 #[instrument]
 pub fn update_metadata(payload: MetadataPayload) {
-    info!(
-        title = %payload.song_name,
-        artist = %payload.author_name,
-        album = %payload.album_name,
-        ncm_id = ?payload.ncm_id,
-        "正在更新 SMTC 歌曲元数据"
-    );
-
     let Ok(mut guard) = SMTC_CONTEXT.lock() else {
         error!("SmtcContext 锁中毒");
         return;
@@ -501,14 +504,30 @@ pub fn update_metadata(payload: MetadataPayload) {
         return;
     };
 
+    if !ctx.is_enabled {
+        return;
+    }
+
     if let Some(old_handle) = ctx.cover_task.take() {
         old_handle.abort();
     }
+
+    info!(
+        title = %payload.song_name,
+        artist = %payload.author_name,
+        album = %payload.album_name,
+        ncm_id = ?payload.ncm_id,
+        "正在更新 SMTC 歌曲元数据"
+    );
 
     let new_handle = TOKIO_RUNTIME.spawn(async move {
         let thumbnail_stream_ref = get_cover_stream_ref(payload.cover).await;
 
         let result = with_smtc_ctx("更新元数据", |inner_ctx| {
+            if !inner_ctx.is_enabled {
+                return Ok(());
+            }
+
             let smtc = inner_ctx.smtc()?;
             let updater = smtc.DisplayUpdater()?;
             updater.SetType(MediaPlaybackType::Music)?;
@@ -570,10 +589,16 @@ fn handle_command_inner(command_json: &str) -> Result<()> {
                 .context("更新播放模式失败")?;
         }
         SmtcCommand::EnableSmtc => {
-            with_smtc_ctx("启用 SMTC", |ctx| Ok(ctx.smtc()?.SetIsEnabled(true)?))?;
+            with_smtc_ctx("启用 SMTC", |ctx| {
+                ctx.is_enabled = true;
+                Ok(ctx.smtc()?.SetIsEnabled(true)?)
+            })?;
         }
         SmtcCommand::DisableSmtc => {
-            with_smtc_ctx("禁用 SMTC", |ctx| Ok(ctx.smtc()?.SetIsEnabled(false)?))?;
+            with_smtc_ctx("禁用 SMTC", |ctx| {
+                ctx.is_enabled = false;
+                Ok(ctx.smtc()?.SetIsEnabled(false)?)
+            })?;
         }
         SmtcCommand::EnableDiscordRpc => {
             discord::enable();

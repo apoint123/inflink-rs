@@ -75,10 +75,7 @@ class SMTCNativeBackend {
 		}
 	}
 
-	public initialize(
-		control_handler: (msg: ControlMessage) => void,
-		on_ready: () => void,
-	) {
+	public initialize(control_handler: (msg: ControlMessage) => void) {
 		if (this.isActive) return;
 		this.call("shutdown");
 
@@ -111,8 +108,6 @@ class SMTCNativeBackend {
 		};
 
 		this.call("register_event_callback", [eventCallback]);
-
-		on_ready();
 	}
 
 	public setBackendLogLevel(level: LogLevel) {
