@@ -94,14 +94,7 @@ class SMTCNativeBackend {
 		const eventCallback = (eventJson: string) => {
 			try {
 				const event: SmtcEvent = JSON.parse(eventJson);
-				if (event.type === "Seek") {
-					control_handler({
-						type: "Seek",
-						position: event.position_ms,
-					});
-				} else {
-					control_handler(event);
-				}
+				control_handler(event);
 			} catch (e) {
 				logger.error("解析后端事件失败:", "Native Bridge", e);
 			}

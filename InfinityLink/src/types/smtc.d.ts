@@ -43,7 +43,7 @@ export type ControlMessage =
 	| { type: "Stop" }
 	| { type: "NextSong" }
 	| { type: "PreviousSong" }
-	| { type: "Seek"; position: number }
+	| { type: "Seek"; position_ms: number }
 	| { type: "ToggleShuffle" }
 	| { type: "ToggleRepeat" }
 	| { type: "SetRepeat"; mode: RepeatMode }

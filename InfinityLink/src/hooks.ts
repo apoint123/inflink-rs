@@ -185,7 +185,7 @@ function handleAdapterCommand(adapter: INcmAdapter, msg: ControlMessage) {
 			adapter.previousSong();
 			break;
 		case "Seek":
-			adapter.seekTo(msg.position);
+			adapter.seekTo(msg.position_ms);
 			break;
 		case "ToggleShuffle":
 			adapter.toggleShuffle();
@@ -408,7 +408,7 @@ export function useGlobalApi(adapter: INcmAdapter | null) {
 				next: () => handleAdapterCommand(adapter, { type: "NextSong" }),
 				previous: () => handleAdapterCommand(adapter, { type: "PreviousSong" }),
 				seekTo: (pos) =>
-					handleAdapterCommand(adapter, { type: "Seek", position: pos }),
+					handleAdapterCommand(adapter, { type: "Seek", position_ms: pos }),
 				toggleShuffle: () =>
 					handleAdapterCommand(adapter, { type: "ToggleShuffle" }),
 				toggleRepeat: () =>
