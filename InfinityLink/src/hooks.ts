@@ -212,14 +212,15 @@ export function useBackendConnection(
 	adapterState: AdapterState,
 	smtcEnabled: boolean,
 	discordEnabled: boolean,
+	discordShowPaused: boolean,
 ) {
 	const { adapter, status } = adapterState;
 	const hasSentInitialMetadata = useRef(false);
 
-	const configRef = useRef({ smtcEnabled, discordEnabled });
+	const configRef = useRef({ smtcEnabled, discordEnabled, discordShowPaused });
 	useEffect(() => {
-		configRef.current = { smtcEnabled, discordEnabled };
-	}, [smtcEnabled, discordEnabled]);
+		configRef.current = { smtcEnabled, discordEnabled, discordShowPaused };
+	}, [smtcEnabled, discordEnabled, discordShowPaused]);
 
 	const shouldConnect =
 		status === "ready" && adapter && (smtcEnabled || discordEnabled);
@@ -286,7 +287,11 @@ export function useBackendConnection(
 		} else {
 			smtcImplObj.disableDiscordRpc();
 		}
-	}, [shouldConnect, smtcEnabled, discordEnabled]);
+
+		smtcImplObj.updateDiscordConfig({
+			showWhenPaused: discordShowPaused,
+		});
+	}, [shouldConnect, smtcEnabled, discordEnabled, discordShowPaused]);
 }
 
 export interface NewVersionInfo {

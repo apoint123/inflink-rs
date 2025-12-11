@@ -24,6 +24,7 @@ import {
 	Select,
 	Switch,
 	TextField,
+	Tooltip,
 	Typography,
 } from "@mui/material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
@@ -42,6 +43,7 @@ import {
 import {
 	STORE_KEY_BACKEND_LOG_LEVEL,
 	STORE_KEY_DISCORD_ENABLED,
+	STORE_KEY_DISCORD_SHOW_PAUSED,
 	STORE_KEY_FRONTEND_LOG_LEVEL,
 	STORE_KEY_INTERNAL_LOGGING_ENABLED,
 	STORE_KEY_SMTC_ENABLED,
@@ -199,6 +201,8 @@ interface SmtcSettingsProps {
 	onSmtcEnabledChange: (enabled: boolean) => void;
 	discordEnabled: boolean;
 	onDiscordEnabledChange: (enabled: boolean) => void;
+	discordShowPaused: boolean;
+	onDiscordShowPausedChange: (enabled: boolean) => void;
 }
 
 function SmtcSettings({
@@ -206,13 +210,15 @@ function SmtcSettings({
 	onSmtcEnabledChange,
 	discordEnabled,
 	onDiscordEnabledChange,
+	discordShowPaused,
+	onDiscordShowPausedChange,
 }: SmtcSettingsProps) {
 	return (
 		<>
 			<Typography variant="h6" gutterBottom sx={{ mt: 2, fontSize: "1rem" }}>
 				功能设置
 			</Typography>
-			<FormGroup>
+			<FormGroup sx={{ alignItems: "flex-start" }}>
 				<FormControlLabel
 					control={
 						<Switch
@@ -231,6 +237,33 @@ function SmtcSettings({
 					}
 					label="启用 Discord RPC"
 				/>
+
+				{discordEnabled && (
+					<Tooltip
+						title={
+							<>
+								<Typography variant="body2">
+									如果启用，则在暂停时也显示 Discord
+									状态。如果不启用则在暂停时清除 Discord 状态
+								</Typography>
+								<br />
+								<Typography variant="body2">
+									注意：由于 Discord 的限制，已播放时间将变为 00:00
+								</Typography>
+							</>
+						}
+					>
+						<FormControlLabel
+							control={
+								<Switch
+									checked={discordShowPaused}
+									onChange={(_e, checked) => onDiscordShowPausedChange(checked)}
+								/>
+							}
+							label="暂停时显示 Discord 状态"
+						/>
+					</Tooltip>
+				)}
 			</FormGroup>
 		</>
 	);
@@ -414,6 +447,10 @@ function Main() {
 		STORE_KEY_DISCORD_ENABLED,
 		false,
 	);
+	const [discordShowPaused, setDiscordShowPaused] = useLocalStorage(
+		STORE_KEY_DISCORD_SHOW_PAUSED,
+		false,
+	);
 	const [frontendLogLevel, setFrontendLogLevel] = useLocalStorage<LogLevel>(
 		STORE_KEY_FRONTEND_LOG_LEVEL,
 		"warn",
@@ -433,7 +470,12 @@ function Main() {
 	const adapterState = useInfoProvider(ncmVersion);
 	const { adapter, status, error } = adapterState;
 
-	useBackendConnection(adapterState, SMTCEnabled, discordEnabled);
+	useBackendConnection(
+		adapterState,
+		SMTCEnabled,
+		discordEnabled,
+		discordShowPaused,
+	);
 
 	useGlobalApi(adapter);
 
@@ -502,6 +544,8 @@ function Main() {
 				onSmtcEnabledChange={setSMTCEnabled}
 				discordEnabled={discordEnabled}
 				onDiscordEnabledChange={setDiscordEnabled}
+				discordShowPaused={discordShowPaused}
+				onDiscordShowPausedChange={setDiscordShowPaused}
 			/>
 
 			<ResolutionSettings

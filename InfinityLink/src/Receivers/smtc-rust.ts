@@ -1,6 +1,7 @@
 import type {
 	CommandResult,
 	ControlMessage,
+	DiscordConfigPayload,
 	LogEntry,
 	MetadataPayload,
 	PlaybackStatus,
@@ -180,6 +181,15 @@ class SMTCNativeBackend {
 		if (!this.isActive) return;
 		this.dispatch("DisableDiscordRpc", undefined);
 		logger.info("禁用 Discord RPC", "Native Bridge");
+	}
+
+	public updateDiscordConfig(config: DiscordConfigPayload) {
+		if (!this.isActive) return;
+		this.dispatch("DiscordConfig", config);
+		logger.debug(
+			`更新 Discord 配置: showWhenPaused=${config.showWhenPaused}`,
+			"Native Bridge",
+		);
 	}
 
 	public update(songInfo: MetadataPayload) {

@@ -606,6 +606,9 @@ fn handle_command_inner(command_json: &str) -> Result<()> {
         SmtcCommand::DisableDiscordRpc => {
             discord::disable();
         }
+        SmtcCommand::DiscordConfig(payload) => {
+            discord::update_config(payload);
+        }
     }
 
     Ok(())

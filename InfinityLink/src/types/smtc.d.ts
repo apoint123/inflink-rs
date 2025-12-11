@@ -68,6 +68,9 @@ export interface TimelinePayload {
 	currentTime: number;
 	totalTime: number;
 }
+export interface DiscordConfigPayload {
+	showWhenPaused: boolean;
+}
 
 export type RepeatMode = "None" | "Track" | "List" | "AI";
 
@@ -90,6 +93,7 @@ export type SmtcCommandPayloads = {
 
 	EnableDiscordRpc: undefined;
 	DisableDiscordRpc: undefined;
+	DiscordConfig: DiscordConfigPayload;
 };
 
 export type CommandResult = {

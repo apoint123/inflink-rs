@@ -14,6 +14,7 @@ pub enum SmtcCommand {
 
     EnableDiscordRpc,
     DisableDiscordRpc,
+    DiscordConfig(DiscordConfigPayload),
 }
 
 #[derive(Deserialize, Serialize, Clone, PartialEq, Eq)]
@@ -75,6 +76,12 @@ pub struct TimelinePayload {
 pub struct PlayModePayload {
     pub is_shuffling: bool,
     pub repeat_mode: RepeatMode,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscordConfigPayload {
+    pub show_when_paused: bool,
 }
 
 #[derive(Serialize, Debug)]
