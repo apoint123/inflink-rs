@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.2.6
+
+### Patch Changes
+
+- a4bab7c: refactor: 略微解耦 SMTC 功能和 Discord RPC 功能以允许只开启 Discord RPC 而关闭 SMTC
+- db8e97b: feat: 添加暂停时继续显示 Discord 活动的选项
+- 4169d62: fix: 适配 v2 客户端的主题变化
+
 ## 3.2.5
 
 ### Patch Changes
