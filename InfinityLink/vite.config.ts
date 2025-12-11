@@ -122,7 +122,6 @@ export default defineConfig(({ mode }) => {
 		build: {
 			outDir: "dist",
 			target: "chrome91",
-			sourcemap: isProduction ? false : "inline",
 			lib: {
 				entry: "src/index.tsx",
 				name: "InfinityLink",
