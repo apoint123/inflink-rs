@@ -3,12 +3,15 @@ use std::sync::{LazyLock, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use discord_rich_presence::activity::{Activity, ActivityType, Assets, Button, Timestamps};
+use discord_rich_presence::activity::{
+    Activity, ActivityType, Assets, Button, StatusDisplayType, Timestamps,
+};
 use discord_rich_presence::{DiscordIpc, DiscordIpcClient};
 use tracing::{debug, info, warn};
 
 use crate::model::{
-    DiscordConfigPayload, MetadataPayload, PlayStatePayload, PlaybackStatus, TimelinePayload,
+    DiscordConfigPayload, DiscordDisplayMode, MetadataPayload, PlayStatePayload, PlaybackStatus,
+    TimelinePayload,
 };
 
 const APP_ID: &str = "1427186361827594375";
@@ -77,7 +80,7 @@ impl ActivityData {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct RpcWorker {
     client: Option<DiscordIpcClient>,
     data: Option<ActivityData>,
@@ -87,6 +90,21 @@ struct RpcWorker {
     // 用于防抖，也用于判断是否要清除 Activity
     last_sent_end_timestamp: Option<i64>,
     show_when_paused: bool,
+    display_mode: DiscordDisplayMode,
+}
+
+impl Default for RpcWorker {
+    fn default() -> Self {
+        Self {
+            client: None,
+            data: None,
+            is_enabled: false,
+            connect_retry_count: 0,
+            last_sent_end_timestamp: None,
+            show_when_paused: false,
+            display_mode: DiscordDisplayMode::Name,
+        }
+    }
 }
 
 impl RpcWorker {
@@ -103,8 +121,17 @@ impl RpcWorker {
                 self.disconnect();
             }
             RpcMessage::Config(payload) => {
-                info!(show_when_paused = ?payload.show_when_paused, "更新 Discord 配置",);
+                info!(
+                    show_when_paused = ?payload.show_when_paused,
+                    display_mode = ?payload.display_mode,
+                    "更新 Discord 配置",
+                );
                 self.show_when_paused = payload.show_when_paused;
+
+                if let Some(mode) = payload.display_mode {
+                    self.display_mode = mode;
+                }
+
                 self.last_sent_end_timestamp = None;
             }
             RpcMessage::Metadata(payload) => {
@@ -189,6 +216,7 @@ impl RpcWorker {
                 data,
                 &mut self.last_sent_end_timestamp,
                 self.show_when_paused,
+                &self.display_mode,
             );
             if !success {
                 self.disconnect();
@@ -196,7 +224,10 @@ impl RpcWorker {
         }
     }
 
-    fn build_base_activity(data: &ActivityData) -> Activity<'_> {
+    fn build_base_activity<'a>(
+        data: &'a ActivityData,
+        display_mode: &DiscordDisplayMode,
+    ) -> Activity<'a> {
         let assets = Assets::new()
             .large_image(&data.cached_cover_url)
             .large_text(&data.metadata.album_name)
@@ -205,12 +236,19 @@ impl RpcWorker {
 
         let buttons = vec![Button::new("🎧 Listen", &data.cached_song_url)];
 
+        let status_type = match display_mode {
+            DiscordDisplayMode::Name => StatusDisplayType::Name,
+            DiscordDisplayMode::State => StatusDisplayType::State,
+            DiscordDisplayMode::Details => StatusDisplayType::Details,
+        };
+
         Activity::new()
             .details(&data.metadata.song_name)
             .state(&data.metadata.author_name)
             .activity_type(ActivityType::Listening)
             .assets(assets)
             .buttons(buttons)
+            .status_display_type(status_type)
     }
 
     fn calc_paused_timestamps(current_time: f64, duration: f64) -> (i64, i64) {
@@ -250,8 +288,9 @@ impl RpcWorker {
         data: &ActivityData,
         last_sent_end_timestamp: &mut Option<i64>,
         show_when_paused: bool,
+        display_mode: &DiscordDisplayMode,
     ) -> bool {
-        let mut activity = Self::build_base_activity(data);
+        let mut activity = Self::build_base_activity(data, display_mode);
         let mut new_end_timestamp = None;
         let should_send;
 

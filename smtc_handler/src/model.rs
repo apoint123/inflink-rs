@@ -82,6 +82,14 @@ pub struct PlayModePayload {
 #[serde(rename_all = "camelCase")]
 pub struct DiscordConfigPayload {
     pub show_when_paused: bool,
+    pub display_mode: Option<DiscordDisplayMode>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum DiscordDisplayMode {
+    Name,    // Listening to Spotify
+    State,   // Listening to Rick Astley
+    Details, // Listening to Never Gonna Give You Up
 }
 
 #[derive(Serialize, Debug)]

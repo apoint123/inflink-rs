@@ -42,6 +42,7 @@ import {
 } from "./hooks";
 import {
 	STORE_KEY_BACKEND_LOG_LEVEL,
+	STORE_KEY_DISCORD_DISPLAY_MODE,
 	STORE_KEY_DISCORD_ENABLED,
 	STORE_KEY_DISCORD_SHOW_PAUSED,
 	STORE_KEY_FRONTEND_LOG_LEVEL,
@@ -49,6 +50,7 @@ import {
 	STORE_KEY_SMTC_ENABLED,
 } from "./keys";
 import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
+import type { DiscordDisplayMode } from "./types/smtc";
 import logger, { type LogLevel, setLogLevel } from "./utils/logger";
 
 const configElement = document.createElement("div");
@@ -203,6 +205,8 @@ interface SmtcSettingsProps {
 	onDiscordEnabledChange: (enabled: boolean) => void;
 	discordShowPaused: boolean;
 	onDiscordShowPausedChange: (enabled: boolean) => void;
+	discordDisplayMode: DiscordDisplayMode;
+	onDiscordDisplayModeChange: (mode: DiscordDisplayMode) => void;
 }
 
 function SmtcSettings({
@@ -212,7 +216,11 @@ function SmtcSettings({
 	onDiscordEnabledChange,
 	discordShowPaused,
 	onDiscordShowPausedChange,
+	discordDisplayMode,
+	onDiscordDisplayModeChange,
 }: SmtcSettingsProps) {
+	const displayModeId = useId();
+
 	return (
 		<>
 			<Typography variant="h6" gutterBottom sx={{ mt: 2, fontSize: "1rem" }}>
@@ -264,6 +272,24 @@ function SmtcSettings({
 						/>
 					</Tooltip>
 				)}
+
+				{discordEnabled && (
+					<FormControl size="small" sx={{ mt: 2, ml: 0.5, minWidth: 200 }}>
+						<InputLabel id={displayModeId}>状态显示风格</InputLabel>
+						<Select
+							labelId={displayModeId}
+							value={discordDisplayMode}
+							label="状态显示风格"
+							onChange={(e) =>
+								onDiscordDisplayModeChange(e.target.value as DiscordDisplayMode)
+							}
+						>
+							<MenuItem value="Name">网易云音乐</MenuItem>
+							<MenuItem value="State">艺术家名称</MenuItem>
+							<MenuItem value="Details">歌曲名称</MenuItem>
+						</Select>
+					</FormControl>
+				)}
 			</FormGroup>
 		</>
 	);
@@ -290,7 +316,7 @@ function ResolutionSettings({
 	};
 
 	const handleBlur = (event: React.FocusEvent<HTMLInputElement>) => {
-		const newValue = (event.target as HTMLInputElement).value;
+		const newValue = event.target.value;
 		if (
 			newValue &&
 			(newValue.toLowerCase() === "max" || /^\d+$/.test(newValue))
@@ -382,9 +408,7 @@ function AdvancedSettings({
 							labelId={frontendId}
 							value={frontendLogLevel}
 							label="前端日志级别"
-							onChange={(e) =>
-								onFrontendLogLevelChange(e.target.value as LogLevel)
-							}
+							onChange={(e) => onFrontendLogLevelChange(e.target.value)}
 							sx={{ minWidth: 120 }}
 						>
 							{logLevels.map((level) => (
@@ -400,9 +424,7 @@ function AdvancedSettings({
 							labelId={backendId}
 							value={backendLogLevel}
 							label="后端日志级别"
-							onChange={(e) =>
-								onBackendLogLevelChange(e.target.value as LogLevel)
-							}
+							onChange={(e) => onBackendLogLevelChange(e.target.value)}
 							sx={{ minWidth: 120 }}
 						>
 							{logLevels.map((level) => (
@@ -451,6 +473,8 @@ function Main() {
 		STORE_KEY_DISCORD_SHOW_PAUSED,
 		false,
 	);
+	const [discordDisplayMode, setDiscordDisplayMode] =
+		useLocalStorage<DiscordDisplayMode>(STORE_KEY_DISCORD_DISPLAY_MODE, "Name");
 	const [frontendLogLevel, setFrontendLogLevel] = useLocalStorage<LogLevel>(
 		STORE_KEY_FRONTEND_LOG_LEVEL,
 		"warn",
@@ -475,6 +499,7 @@ function Main() {
 		SMTCEnabled,
 		discordEnabled,
 		discordShowPaused,
+		discordDisplayMode,
 	);
 
 	useGlobalApi(adapter);
@@ -546,6 +571,8 @@ function Main() {
 				onDiscordEnabledChange={setDiscordEnabled}
 				discordShowPaused={discordShowPaused}
 				onDiscordShowPausedChange={setDiscordShowPaused}
+				discordDisplayMode={discordDisplayMode}
+				onDiscordDisplayModeChange={setDiscordDisplayMode}
 			/>
 
 			<ResolutionSettings

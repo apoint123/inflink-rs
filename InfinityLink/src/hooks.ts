@@ -4,7 +4,7 @@ import { STORE_KEY_RESOLUTION } from "./keys";
 import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
 import type { IInfLinkApi } from "./types/api";
 import type { NcmAdapterError } from "./types/errors";
-import type { ControlMessage } from "./types/smtc";
+import type { ControlMessage, DiscordDisplayMode } from "./types/smtc";
 import logger from "./utils/logger";
 import type { INcmAdapter, NcmAdapterEventMap } from "./versions/adapter";
 
@@ -213,14 +213,25 @@ export function useBackendConnection(
 	smtcEnabled: boolean,
 	discordEnabled: boolean,
 	discordShowPaused: boolean,
+	discordDisplayMode: DiscordDisplayMode,
 ) {
 	const { adapter, status } = adapterState;
 	const hasSentInitialMetadata = useRef(false);
 
-	const configRef = useRef({ smtcEnabled, discordEnabled, discordShowPaused });
+	const configRef = useRef({
+		smtcEnabled,
+		discordEnabled,
+		discordShowPaused,
+		discordDisplayMode,
+	});
 	useEffect(() => {
-		configRef.current = { smtcEnabled, discordEnabled, discordShowPaused };
-	}, [smtcEnabled, discordEnabled, discordShowPaused]);
+		configRef.current = {
+			smtcEnabled,
+			discordEnabled,
+			discordShowPaused,
+			discordDisplayMode,
+		};
+	}, [smtcEnabled, discordEnabled, discordShowPaused, discordDisplayMode]);
 
 	const shouldConnect =
 		status === "ready" && adapter && (smtcEnabled || discordEnabled);
@@ -290,8 +301,15 @@ export function useBackendConnection(
 
 		smtcImplObj.updateDiscordConfig({
 			showWhenPaused: discordShowPaused,
+			displayMode: discordDisplayMode,
 		});
-	}, [shouldConnect, smtcEnabled, discordEnabled, discordShowPaused]);
+	}, [
+		shouldConnect,
+		smtcEnabled,
+		discordEnabled,
+		discordShowPaused,
+		discordDisplayMode,
+	]);
 }
 
 export interface NewVersionInfo {

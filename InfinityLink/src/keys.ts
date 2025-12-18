@@ -6,3 +6,4 @@ export const STORE_KEY_RESOLUTION = `${STORE_KEY_BASE}.resolution_setting`;
 export const STORE_KEY_INTERNAL_LOGGING_ENABLED = `${STORE_KEY_BASE}.internal_logging_enabled`;
 export const STORE_KEY_DISCORD_ENABLED = `${STORE_KEY_BASE}.discord_enabled`;
 export const STORE_KEY_DISCORD_SHOW_PAUSED = `${STORE_KEY_BASE}.discord_show_paused`;
+export const STORE_KEY_DISCORD_DISPLAY_MODE = `${STORE_KEY_BASE}.discord_display_mode`;
