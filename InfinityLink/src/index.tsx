@@ -3,7 +3,15 @@
  * InfLink-rs 插件的主入口文件
  */
 
+import BugReportIcon from "@mui/icons-material/BugReport";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import GraphicEqIcon from "@mui/icons-material/GraphicEq";
+import HeadsetIcon from "@mui/icons-material/Headset";
+import HighQualityIcon from "@mui/icons-material/HighQuality";
+import PauseCircleIcon from "@mui/icons-material/PauseCircle";
+import StorageIcon from "@mui/icons-material/Storage";
+import StyleIcon from "@mui/icons-material/Style";
+import TerminalIcon from "@mui/icons-material/Terminal";
 import UpgradeIcon from "@mui/icons-material/Upgrade";
 import {
 	Accordion,
@@ -16,19 +24,23 @@ import {
 	Button,
 	CircularProgress,
 	FormControl,
-	FormControlLabel,
-	FormGroup,
-	InputLabel,
+	Link,
 	MenuItem,
+	Paper,
 	Select,
 	Switch,
 	TextField,
-	Tooltip,
 	Typography,
 } from "@mui/material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { useAtom } from "jotai";
-import { StrictMode, useEffect, useId, useMemo, useState } from "react";
+import {
+	type ReactNode,
+	StrictMode,
+	useEffect,
+	useMemo,
+	useState,
+} from "react";
 import { createRoot } from "react-dom/client";
 import {
 	useBackendConnection,
@@ -104,8 +116,6 @@ plugin.onLoad((selfPlugin) => {
 		logger.error("React 组件渲染失败:", "onLoad", error);
 	}
 });
-
-const logLevels: LogLevel[] = ["trace", "debug", "info", "warn", "error"];
 
 function App() {
 	const ncmThemeMode = useNcmTheme();
@@ -196,8 +206,88 @@ function NewVersionAlert({ newVersionInfo }: NewVersionAlertProps) {
 	);
 }
 
-function SmtcSettings() {
+interface SettingItemProps {
+	icon?: ReactNode;
+	title: string;
+	description?: ReactNode;
+	action: ReactNode;
+	visible?: boolean;
+}
+
+function SettingItem({
+	icon,
+	title,
+	description,
+	action,
+	visible = true,
+}: SettingItemProps) {
+	if (!visible) return null;
+
+	return (
+		<Paper
+			variant="outlined"
+			sx={{
+				p: 2,
+				mb: 1.5,
+				borderRadius: 3,
+				display: "flex",
+				alignItems: "center",
+				justifyContent: "space-between",
+				borderColor: "rgba(0, 0, 0, 0.08)",
+				backgroundColor: (theme) =>
+					theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.05)" : "#fff",
+			}}
+		>
+			{icon && (
+				<Box
+					sx={{
+						mr: 2,
+						display: "flex",
+						alignItems: "center",
+						justifyContent: "center",
+						color: "text.secondary",
+						p: 1,
+					}}
+				>
+					{icon}
+				</Box>
+			)}
+
+			<Box sx={{ mr: 2, flex: 1 }}>
+				<Typography
+					variant="subtitle1"
+					sx={{ fontWeight: 500, fontSize: "0.95rem" }}
+				>
+					{title}
+				</Typography>
+				{description && (
+					<Typography
+						variant="body2"
+						color="text.secondary"
+						sx={{ fontSize: "0.85rem", mt: 0.5 }}
+					>
+						{description}
+					</Typography>
+				)}
+			</Box>
+			<Box
+				sx={{
+					minWidth: "auto",
+					display: "flex",
+					justifyContent: "flex-end",
+					alignItems: "center",
+				}}
+			>
+				{action}
+			</Box>
+		</Paper>
+	);
+}
+
+function FeatureSettings() {
 	const [smtcEnabled, setSmtcEnabled] = useAtom(smtcEnabledAtom);
+	const [resolution, setResolution] = useAtom(resolutionAtom);
+
 	const [discordEnabled, setDiscordEnabled] = useAtom(discordEnabledAtom);
 	const [discordShowPaused, setDiscordShowPaused] = useAtom(
 		discordShowPausedAtom,
@@ -206,97 +296,8 @@ function SmtcSettings() {
 		discordDisplayModeAtom,
 	);
 
-	const displayModeId = useId();
-
-	return (
-		<>
-			<Typography variant="h6" gutterBottom sx={{ mt: 2, fontSize: "1rem" }}>
-				功能设置
-			</Typography>
-			<FormGroup sx={{ alignItems: "flex-start" }}>
-				<FormControlLabel
-					control={
-						<Switch
-							checked={smtcEnabled}
-							onChange={(_e, checked) => setSmtcEnabled(checked)}
-						/>
-					}
-					label="启用 SMTC"
-				/>
-				<FormControlLabel
-					control={
-						<Switch
-							checked={discordEnabled}
-							onChange={(_e, checked) => setDiscordEnabled(checked)}
-						/>
-					}
-					label="启用 Discord RPC"
-				/>
-
-				{discordEnabled && (
-					<Tooltip
-						title={
-							<>
-								<Typography variant="body2">
-									如果启用，则在暂停时也显示 Discord
-									状态。如果不启用则在暂停时清除 Discord 状态
-								</Typography>
-								<br />
-								<Typography variant="body2">
-									注意：由于 Discord 的限制，已播放时间将变为 00:00
-								</Typography>
-							</>
-						}
-					>
-						<FormControlLabel
-							control={
-								<Switch
-									checked={discordShowPaused}
-									onChange={(_e, checked) => setDiscordShowPaused(checked)}
-								/>
-							}
-							label="暂停时显示 Discord 状态"
-						/>
-					</Tooltip>
-				)}
-
-				{discordEnabled && (
-					<Tooltip
-						placement="top-start"
-						title={
-							<Box sx={{ p: 0.5 }}>
-								<Typography variant="body2" component="div">
-									紧跟在 "Listening to" 之后的文本
-								</Typography>
-							</Box>
-						}
-					>
-						<FormControl size="small" sx={{ mt: 2, ml: 0.5, minWidth: 200 }}>
-							<InputLabel id={displayModeId}>状态显示选项</InputLabel>
-							<Select
-								labelId={displayModeId}
-								value={discordDisplayMode}
-								label="状态显示风格"
-								onChange={(e) => setDiscordDisplayMode(e.target.value)}
-							>
-								<MenuItem value="Name">Netease CloudMusic</MenuItem>
-								<MenuItem value="State">歌手名</MenuItem>
-								<MenuItem value="Details">歌曲名</MenuItem>
-							</Select>
-						</FormControl>
-					</Tooltip>
-				)}
-			</FormGroup>
-		</>
-	);
-}
-
-function ResolutionSettings() {
-	const [resolution, setResolution] = useAtom(resolutionAtom);
-
 	const predefinedResolutions = ["300", "500", "1024", "max"];
-
-	const handleChange = (_event: unknown, newValue: string | null) => {
+	const handleResChange = (_event: unknown, newValue: string | null) => {
 		if (
 			newValue &&
 			(newValue.toLowerCase() === "max" || /^\d+$/.test(newValue))
@@ -304,8 +305,7 @@ function ResolutionSettings() {
 			setResolution(newValue);
 		}
 	};
-
-	const handleBlur = (event: React.FocusEvent<HTMLInputElement>) => {
+	const handleResBlur = (event: React.FocusEvent<HTMLInputElement>) => {
 		const newValue = event.target.value;
 		if (
 			newValue &&
@@ -316,36 +316,120 @@ function ResolutionSettings() {
 	};
 
 	return (
-		<Box sx={{ mt: 3 }}>
-			<FormControl size="small" sx={{ minWidth: 150 }}>
-				<Autocomplete
-					freeSolo
-					value={resolution}
-					options={predefinedResolutions}
-					onChange={handleChange}
-					onBlur={handleBlur}
-					renderInput={(params) => {
-						const { InputLabelProps, ...rest } = params;
-						const { className, style, ...restInputLabelProps } =
-							InputLabelProps;
-						return (
-							<TextField
-								{...rest}
-								slotProps={{
-									inputLabel: {
-										...restInputLabelProps,
-										...(className && { className }),
-										...(style && { style }),
-									},
-								}}
-								label="封面分辨率"
-								size="small"
-								helperText="过大的值可能会影响封面加载速度"
-							/>
-						);
-					}}
-				/>
-			</FormControl>
+		<Box sx={{ mt: 1 }}>
+			<Typography
+				variant="subtitle2"
+				color="text.secondary"
+				sx={{ mb: 1, ml: 1 }}
+			>
+				SMTC 设置
+			</Typography>
+
+			<SettingItem
+				icon={<GraphicEqIcon />}
+				title="启用 SMTC 集成"
+				description={
+					<span>
+						<Link
+							component="button"
+							variant="body2"
+							underline="hover"
+							onClick={() => {
+								betterncm.ncm.openUrl(
+									"https://learn.microsoft.com/zh-cn/windows/uwp/audio-video-camera/integrate-with-systemmediatransportcontrols",
+								);
+							}}
+							sx={{
+								verticalAlign: "baseline",
+								cursor: "pointer",
+								fontSize: "inherit",
+							}}
+						>
+							在微软文档中查看
+						</Link>
+					</span>
+				}
+				action={
+					<Switch
+						checked={smtcEnabled}
+						onChange={(_e, checked) => setSmtcEnabled(checked)}
+					/>
+				}
+			/>
+
+			<SettingItem
+				visible={smtcEnabled}
+				icon={<HighQualityIcon />}
+				title="封面分辨率"
+				description="可让 Wallpaper 之类的软件显示更高清的封面，但可能会减缓切歌后 SMTC 的更新速度"
+				action={
+					<Autocomplete
+						freeSolo
+						value={resolution}
+						options={predefinedResolutions}
+						onChange={handleResChange}
+						onBlur={handleResBlur}
+						sx={{ width: 140 }}
+						renderInput={(params) => (
+							// @ts-expect-error MUI 自己的类型问题
+							<TextField {...params} size="small" variant="outlined" />
+						)}
+					/>
+				}
+			/>
+
+			<Typography
+				variant="subtitle2"
+				color="text.secondary"
+				sx={{ mb: 1, ml: 1 }}
+			>
+				Discord Rich Presence 设置
+			</Typography>
+
+			<SettingItem
+				icon={<HeadsetIcon />}
+				title="启用 Discord RPC 集成"
+				description="将当前播放的歌曲同步显示到 Discord 状态中"
+				action={
+					<Switch
+						checked={discordEnabled}
+						onChange={(_e, checked) => setDiscordEnabled(checked)}
+					/>
+				}
+			/>
+
+			<SettingItem
+				visible={discordEnabled}
+				icon={<PauseCircleIcon />}
+				title="暂停时保持状态"
+				description="暂停时保留 Discord 状态显示 (注：由于 Discord 的限制，已播放时间将变为 00:00)"
+				action={
+					<Switch
+						checked={discordShowPaused}
+						onChange={(_e, checked) => setDiscordShowPaused(checked)}
+					/>
+				}
+			/>
+
+			<SettingItem
+				visible={discordEnabled}
+				icon={<StyleIcon />}
+				title="状态显示风格"
+				description={<span>自定义 "Listening to" 后面的文本内容</span>}
+				action={
+					<FormControl size="small" sx={{ width: 140 }}>
+						<Select
+							value={discordDisplayMode}
+							onChange={(e) => setDiscordDisplayMode(e.target.value)}
+							variant="outlined"
+						>
+							<MenuItem value="Name">应用名称</MenuItem>
+							<MenuItem value="State">歌手名</MenuItem>
+							<MenuItem value="Details">歌曲名</MenuItem>
+						</Select>
+					</FormControl>
+				}
+			/>
 		</Box>
 	);
 }
@@ -354,9 +438,10 @@ function AdvancedSettings() {
 	const [frontendLogLevel, setFrontendLogLevel] = useAtom(frontendLogLevelAtom);
 	const [backendLogLevel, setBackendLogLevel] = useAtom(backendLogLevelAtom);
 	const [internalLogging, setInternalLogging] = useAtom(internalLoggingAtom);
+
 	const [isAdvancedExpanded, setIsAdvancedExpanded] = useState(false);
-	const frontendId = useId();
-	const backendId = useId();
+
+	const logLevels: LogLevel[] = ["trace", "debug", "info", "warn", "error"];
 
 	return (
 		<Accordion
@@ -366,70 +451,72 @@ function AdvancedSettings() {
 			disableGutters
 			sx={{
 				backgroundColor: "transparent",
-				"&::before": {
-					display: "none",
-				},
-				mt: 2,
+				"&::before": { display: "none" },
+				mt: 1,
 			}}
 		>
-			<AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ padding: 0 }}>
-				<Typography variant="h6" gutterBottom sx={{ fontSize: "1rem" }}>
-					高级设置
+			<AccordionSummary
+				expandIcon={<ExpandMoreIcon />}
+				sx={{
+					padding: 0,
+					minHeight: 48,
+					"& .MuiAccordionSummary-content": { margin: "12px 0" },
+				}}
+			>
+				<Typography variant="subtitle2" color="text.secondary" sx={{ ml: 1 }}>
+					高级选项
 				</Typography>
 			</AccordionSummary>
-			<AccordionDetails sx={{ padding: 0, pt: 2 }}>
-				<Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
-					<FormControl size="small">
-						<InputLabel id={frontendId}>前端日志级别</InputLabel>
-						<Select
-							labelId={frontendId}
-							value={frontendLogLevel}
-							label="前端日志级别"
-							onChange={(e) => setFrontendLogLevel(e.target.value)}
-							sx={{ minWidth: 120 }}
-						>
-							{logLevels.map((level) => (
-								<MenuItem key={level} value={level}>
-									{level}
-								</MenuItem>
-							))}
-						</Select>
-					</FormControl>
-					<FormControl size="small">
-						<InputLabel id={backendId}>后端日志级别</InputLabel>
-						<Select
-							labelId={backendId}
-							value={backendLogLevel}
-							label="后端日志级别"
-							onChange={(e) => setBackendLogLevel(e.target.value)}
-							sx={{ minWidth: 120 }}
-						>
-							{logLevels.map((level) => (
-								<MenuItem key={level} value={level}>
-									{level}
-								</MenuItem>
-							))}
-						</Select>
-					</FormControl>
-				</Box>
-				<FormGroup sx={{ mt: 2 }}>
-					<FormControlLabel
-						control={
-							<Switch
-								checked={internalLogging}
-								onChange={(_e, checked) => setInternalLogging(checked)}
-							/>
-						}
-						label="转发网易云内部的日志到控制台"
-					/>
-					<Typography
-						variant="body2"
-						color="text.secondary"
-						sx={{ mt: -0.5, mb: 1, ml: 6 }}
-					>
-						仅用于调试
-					</Typography>
-				</FormGroup>
+			<AccordionDetails sx={{ px: 0, py: 1 }}>
+				<SettingItem
+					icon={<TerminalIcon />}
+					title="前端日志级别"
+					action={
+						<FormControl size="small" sx={{ width: 120 }}>
+							<Select
+								value={frontendLogLevel}
+								onChange={(e) => setFrontendLogLevel(e.target.value)}
+							>
+								{logLevels.map((l) => (
+									<MenuItem key={l} value={l}>
+										{l}
+									</MenuItem>
+								))}
+							</Select>
+						</FormControl>
+					}
+				/>
+
+				<SettingItem
+					icon={<StorageIcon />}
+					title="后端日志级别"
+					action={
+						<FormControl size="small" sx={{ width: 120 }}>
+							<Select
+								value={backendLogLevel}
+								onChange={(e) => setBackendLogLevel(e.target.value)}
+							>
+								{logLevels.map((l) => (
+									<MenuItem key={l} value={l}>
+										{l}
+									</MenuItem>
+								))}
+							</Select>
+						</FormControl>
+					}
+				/>
+
+				<SettingItem
+					icon={<BugReportIcon />}
+					title="内部日志转发"
+					description="仅供调试"
+					action={
+						<Switch
+							checked={internalLogging}
+							onChange={(_e, checked) => setInternalLogging(checked)}
+						/>
+					}
+				/>
 			</AccordionDetails>
 		</Accordion>
 	);
@@ -492,17 +579,17 @@ function Main() {
 	}
 
 	return (
-		<div>
+		<Box sx={{ pb: 4, pt: 1 }}>
 			{newVersionInfo && <NewVersionAlert newVersionInfo={newVersionInfo} />}
 
-			<Typography variant="h6" gutterBottom>
+			<Typography variant="h5" sx={{ mb: 3, fontWeight: "bold" }}>
 				InfLink-rs 设置
 			</Typography>
 
-			<SmtcSettings />
-			<ResolutionSettings />
+			<FeatureSettings />
+
 			<AdvancedSettings />
-		</div>
+		</Box>
 	);
 }
 
