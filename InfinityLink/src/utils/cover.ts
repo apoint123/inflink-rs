@@ -1,5 +1,4 @@
-import type { ResolutionSetting } from "../hooks";
-import type { CoverSource, SongInfo } from "../types/smtc";
+import type { CoverSource, SongInfo } from "../types/backend";
 import logger from "./logger";
 
 export class CoverManager {
@@ -8,7 +7,7 @@ export class CoverManager {
 
 	public getCover(
 		songInfo: SongInfo,
-		resolution: ResolutionSetting,
+		resolution: string,
 		onComplete: (result: {
 			songInfo: SongInfo;
 			cover: CoverSource | null;
@@ -87,7 +86,7 @@ export class CoverManager {
 		})();
 	}
 
-	private createImageUrl(url: string, resolution: ResolutionSetting): string {
+	private createImageUrl(url: string, resolution: string): string {
 		if (!url || !url.startsWith("http")) {
 			return url;
 		}

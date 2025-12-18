@@ -1,7 +1,6 @@
 /**
  * @fileoverview
- * 此处的脚本将会在插件管理器加载插件期间被加载
- * 一般情况下只需要从这个入口点进行开发即可满足绝大部分需求
+ * InfLink-rs 插件的主入口文件
  */
 
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -28,29 +27,28 @@ import {
 	Typography,
 } from "@mui/material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
+import { useAtom } from "jotai";
 import { StrictMode, useEffect, useId, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
 	useBackendConnection,
 	useGlobalApi,
 	useInfoProvider,
-	useLocalStorage,
 	useNcmTheme,
 	useNcmVersion,
-	useResolutionSetting,
 	useVersionCheck,
 } from "./hooks";
-import {
-	STORE_KEY_BACKEND_LOG_LEVEL,
-	STORE_KEY_DISCORD_DISPLAY_MODE,
-	STORE_KEY_DISCORD_ENABLED,
-	STORE_KEY_DISCORD_SHOW_PAUSED,
-	STORE_KEY_FRONTEND_LOG_LEVEL,
-	STORE_KEY_INTERNAL_LOGGING_ENABLED,
-	STORE_KEY_SMTC_ENABLED,
-} from "./keys";
 import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
-import type { DiscordDisplayMode } from "./types/smtc";
+import {
+	backendLogLevelAtom,
+	discordDisplayModeAtom,
+	discordEnabledAtom,
+	discordShowPausedAtom,
+	frontendLogLevelAtom,
+	internalLoggingAtom,
+	resolutionAtom,
+	smtcEnabledAtom,
+} from "./store";
 import logger, { type LogLevel, setLogLevel } from "./utils/logger";
 
 const configElement = document.createElement("div");
@@ -198,27 +196,16 @@ function NewVersionAlert({ newVersionInfo }: NewVersionAlertProps) {
 	);
 }
 
-interface SmtcSettingsProps {
-	smtcEnabled: boolean;
-	onSmtcEnabledChange: (enabled: boolean) => void;
-	discordEnabled: boolean;
-	onDiscordEnabledChange: (enabled: boolean) => void;
-	discordShowPaused: boolean;
-	onDiscordShowPausedChange: (enabled: boolean) => void;
-	discordDisplayMode: DiscordDisplayMode;
-	onDiscordDisplayModeChange: (mode: DiscordDisplayMode) => void;
-}
+function SmtcSettings() {
+	const [smtcEnabled, setSmtcEnabled] = useAtom(smtcEnabledAtom);
+	const [discordEnabled, setDiscordEnabled] = useAtom(discordEnabledAtom);
+	const [discordShowPaused, setDiscordShowPaused] = useAtom(
+		discordShowPausedAtom,
+	);
+	const [discordDisplayMode, setDiscordDisplayMode] = useAtom(
+		discordDisplayModeAtom,
+	);
 
-function SmtcSettings({
-	smtcEnabled,
-	onSmtcEnabledChange,
-	discordEnabled,
-	onDiscordEnabledChange,
-	discordShowPaused,
-	onDiscordShowPausedChange,
-	discordDisplayMode,
-	onDiscordDisplayModeChange,
-}: SmtcSettingsProps) {
 	const displayModeId = useId();
 
 	return (
@@ -231,7 +218,7 @@ function SmtcSettings({
 					control={
 						<Switch
 							checked={smtcEnabled}
-							onChange={(_e, checked) => onSmtcEnabledChange(checked)}
+							onChange={(_e, checked) => setSmtcEnabled(checked)}
 						/>
 					}
 					label="启用 SMTC"
@@ -240,7 +227,7 @@ function SmtcSettings({
 					control={
 						<Switch
 							checked={discordEnabled}
-							onChange={(_e, checked) => onDiscordEnabledChange(checked)}
+							onChange={(_e, checked) => setDiscordEnabled(checked)}
 						/>
 					}
 					label="启用 Discord RPC"
@@ -265,7 +252,7 @@ function SmtcSettings({
 							control={
 								<Switch
 									checked={discordShowPaused}
-									onChange={(_e, checked) => onDiscordShowPausedChange(checked)}
+									onChange={(_e, checked) => setDiscordShowPaused(checked)}
 								/>
 							}
 							label="暂停时显示 Discord 状态"
@@ -274,36 +261,39 @@ function SmtcSettings({
 				)}
 
 				{discordEnabled && (
-					<FormControl size="small" sx={{ mt: 2, ml: 0.5, minWidth: 200 }}>
-						<InputLabel id={displayModeId}>状态显示风格</InputLabel>
-						<Select
-							labelId={displayModeId}
-							value={discordDisplayMode}
-							label="状态显示风格"
-							onChange={(e) =>
-								onDiscordDisplayModeChange(e.target.value as DiscordDisplayMode)
-							}
-						>
-							<MenuItem value="Name">网易云音乐</MenuItem>
-							<MenuItem value="State">艺术家名称</MenuItem>
-							<MenuItem value="Details">歌曲名称</MenuItem>
-						</Select>
-					</FormControl>
+					<Tooltip
+						placement="top-start"
+						title={
+							<Box sx={{ p: 0.5 }}>
+								<Typography variant="body2" component="div">
+									紧跟在 "Listening to" 之后的文本
+								</Typography>
+							</Box>
+						}
+					>
+						<FormControl size="small" sx={{ mt: 2, ml: 0.5, minWidth: 200 }}>
+							<InputLabel id={displayModeId}>状态显示选项</InputLabel>
+							<Select
+								labelId={displayModeId}
+								value={discordDisplayMode}
+								label="状态显示风格"
+								onChange={(e) => setDiscordDisplayMode(e.target.value)}
+							>
+								<MenuItem value="Name">Netease CloudMusic</MenuItem>
+								<MenuItem value="State">歌手名</MenuItem>
+								<MenuItem value="Details">歌曲名</MenuItem>
+							</Select>
+						</FormControl>
+					</Tooltip>
 				)}
 			</FormGroup>
 		</>
 	);
 }
 
-interface ResolutionSettingsProps {
-	resolution: string;
-	onResolutionChange: (resolution: string) => void;
-}
+function ResolutionSettings() {
+	const [resolution, setResolution] = useAtom(resolutionAtom);
 
-function ResolutionSettings({
-	resolution,
-	onResolutionChange,
-}: ResolutionSettingsProps) {
 	const predefinedResolutions = ["300", "500", "1024", "max"];
 
 	const handleChange = (_event: unknown, newValue: string | null) => {
@@ -311,7 +301,7 @@ function ResolutionSettings({
 			newValue &&
 			(newValue.toLowerCase() === "max" || /^\d+$/.test(newValue))
 		) {
-			onResolutionChange(newValue);
+			setResolution(newValue);
 		}
 	};
 
@@ -321,7 +311,7 @@ function ResolutionSettings({
 			newValue &&
 			(newValue.toLowerCase() === "max" || /^\d+$/.test(newValue))
 		) {
-			onResolutionChange(newValue);
+			setResolution(newValue);
 		}
 	};
 
@@ -360,23 +350,10 @@ function ResolutionSettings({
 	);
 }
 
-interface AdvancedSettingsProps {
-	frontendLogLevel: LogLevel;
-	backendLogLevel: LogLevel;
-	internalLogging: boolean;
-	onFrontendLogLevelChange: (level: LogLevel) => void;
-	onBackendLogLevelChange: (level: LogLevel) => void;
-	onInternalLoggingChange: (enabled: boolean) => void;
-}
-
-function AdvancedSettings({
-	frontendLogLevel,
-	backendLogLevel,
-	internalLogging,
-	onFrontendLogLevelChange,
-	onBackendLogLevelChange,
-	onInternalLoggingChange,
-}: AdvancedSettingsProps) {
+function AdvancedSettings() {
+	const [frontendLogLevel, setFrontendLogLevel] = useAtom(frontendLogLevelAtom);
+	const [backendLogLevel, setBackendLogLevel] = useAtom(backendLogLevelAtom);
+	const [internalLogging, setInternalLogging] = useAtom(internalLoggingAtom);
 	const [isAdvancedExpanded, setIsAdvancedExpanded] = useState(false);
 	const frontendId = useId();
 	const backendId = useId();
@@ -408,7 +385,7 @@ function AdvancedSettings({
 							labelId={frontendId}
 							value={frontendLogLevel}
 							label="前端日志级别"
-							onChange={(e) => onFrontendLogLevelChange(e.target.value)}
+							onChange={(e) => setFrontendLogLevel(e.target.value)}
 							sx={{ minWidth: 120 }}
 						>
 							{logLevels.map((level) => (
@@ -424,7 +401,7 @@ function AdvancedSettings({
 							labelId={backendId}
 							value={backendLogLevel}
 							label="后端日志级别"
-							onChange={(e) => onBackendLogLevelChange(e.target.value)}
+							onChange={(e) => setBackendLogLevel(e.target.value)}
 							sx={{ minWidth: 120 }}
 						>
 							{logLevels.map((level) => (
@@ -440,7 +417,7 @@ function AdvancedSettings({
 						control={
 							<Switch
 								checked={internalLogging}
-								onChange={(_e, checked) => onInternalLoggingChange(checked)}
+								onChange={(_e, checked) => setInternalLogging(checked)}
 							/>
 						}
 						label="转发网易云内部的日志到控制台"
@@ -460,48 +437,16 @@ function AdvancedSettings({
 
 function Main() {
 	const ncmVersion = useNcmVersion();
-
-	const [SMTCEnabled, setSMTCEnabled] = useLocalStorage(
-		STORE_KEY_SMTC_ENABLED,
-		true,
-	);
-	const [discordEnabled, setDiscordEnabled] = useLocalStorage(
-		STORE_KEY_DISCORD_ENABLED,
-		false,
-	);
-	const [discordShowPaused, setDiscordShowPaused] = useLocalStorage(
-		STORE_KEY_DISCORD_SHOW_PAUSED,
-		false,
-	);
-	const [discordDisplayMode, setDiscordDisplayMode] =
-		useLocalStorage<DiscordDisplayMode>(STORE_KEY_DISCORD_DISPLAY_MODE, "Name");
-	const [frontendLogLevel, setFrontendLogLevel] = useLocalStorage<LogLevel>(
-		STORE_KEY_FRONTEND_LOG_LEVEL,
-		"warn",
-	);
-	const [backendLogLevel, setBackendLogLevel] = useLocalStorage<LogLevel>(
-		STORE_KEY_BACKEND_LOG_LEVEL,
-		"warn",
-	);
-	const [internalLogging, setInternalLogging] = useLocalStorage(
-		STORE_KEY_INTERNAL_LOGGING_ENABLED,
-		false,
-	);
-
-	const [resolution, setResolution] = useResolutionSetting();
-
 	const newVersionInfo = useVersionCheck(GITHUB_REPO);
 	const adapterState = useInfoProvider(ncmVersion);
 	const { adapter, status, error } = adapterState;
 
-	useBackendConnection(
-		adapterState,
-		SMTCEnabled,
-		discordEnabled,
-		discordShowPaused,
-		discordDisplayMode,
-	);
+	const [frontendLogLevel] = useAtom(frontendLogLevelAtom);
+	const [backendLogLevel] = useAtom(backendLogLevelAtom);
+	const [internalLogging] = useAtom(internalLoggingAtom);
+	const [resolution] = useAtom(resolutionAtom);
 
+	useBackendConnection(adapterState);
 	useGlobalApi(adapter);
 
 	useEffect(() => {
@@ -518,16 +463,6 @@ function Main() {
 			adapter.setInternalLogging(internalLogging);
 		}
 	}, [adapter, internalLogging]);
-
-	useEffect(() => {
-		if (ncmVersion !== null) {
-			logger.debug(`兼容的版本: ${ncmVersion}`, "Main");
-		}
-	}, [ncmVersion]);
-
-	useEffect(() => {
-		logger.debug(`SMTC 支持: ${SMTCEnabled}`, "Main");
-	}, [SMTCEnabled]);
 
 	useEffect(() => {
 		setLogLevel(frontendLogLevel);
@@ -564,30 +499,9 @@ function Main() {
 				InfLink-rs 设置
 			</Typography>
 
-			<SmtcSettings
-				smtcEnabled={SMTCEnabled}
-				onSmtcEnabledChange={setSMTCEnabled}
-				discordEnabled={discordEnabled}
-				onDiscordEnabledChange={setDiscordEnabled}
-				discordShowPaused={discordShowPaused}
-				onDiscordShowPausedChange={setDiscordShowPaused}
-				discordDisplayMode={discordDisplayMode}
-				onDiscordDisplayModeChange={setDiscordDisplayMode}
-			/>
-
-			<ResolutionSettings
-				resolution={resolution}
-				onResolutionChange={setResolution}
-			/>
-
-			<AdvancedSettings
-				frontendLogLevel={frontendLogLevel}
-				backendLogLevel={backendLogLevel}
-				internalLogging={internalLogging}
-				onFrontendLogLevelChange={setFrontendLogLevel}
-				onBackendLogLevelChange={setBackendLogLevel}
-				onInternalLoggingChange={setInternalLogging}
-			/>
+			<SmtcSettings />
+			<ResolutionSettings />
+			<AdvancedSettings />
 		</div>
 	);
 }

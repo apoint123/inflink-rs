@@ -1,5 +1,4 @@
 import type { Result } from "neverthrow";
-import type { NcmAdapterError } from "../types/errors";
 import type {
 	PlaybackStatus,
 	PlayMode,
@@ -7,7 +6,8 @@ import type {
 	SongInfo,
 	TimelineInfo,
 	VolumeInfo,
-} from "../types/smtc";
+} from "../types/backend";
+import type { NcmAdapterError } from "../types/errors";
 
 export type NcmAdapterEventMap = {
 	songChange: CustomEvent<SongInfo>;

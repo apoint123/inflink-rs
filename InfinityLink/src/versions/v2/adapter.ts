@@ -1,5 +1,12 @@
 import { err, ok, type Result } from "neverthrow";
-import type { ResolutionSetting } from "../../hooks";
+import type {
+	PlaybackStatus,
+	PlayMode,
+	RepeatMode,
+	SongInfo,
+	TimelineInfo,
+	VolumeInfo,
+} from "../../types/backend";
 import {
 	DomElementNotFoundError,
 	type NcmAdapterError,
@@ -8,14 +15,6 @@ import {
 	TimelineNotAvailableError,
 } from "../../types/errors";
 import type { v2 } from "../../types/ncm";
-import type {
-	PlaybackStatus,
-	PlayMode,
-	RepeatMode,
-	SongInfo,
-	TimelineInfo,
-	VolumeInfo,
-} from "../../types/smtc";
 import {
 	CoverManager,
 	NcmEventAdapter,
@@ -253,7 +252,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	private readonly eventAdapter: NcmEventAdapter;
 	private readonly apiClient = new NcmV2ApiClient();
 	private readonly coverManager = new CoverManager();
-	private resolutionSetting: ResolutionSetting = "500";
+	private resolutionSetting: string = "500";
 
 	private musicDuration = 0;
 	private musicPlayProgress = 0;

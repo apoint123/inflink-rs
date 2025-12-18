@@ -8,7 +8,7 @@ import type {
 	RepeatMode,
 	SmtcCommandPayloads,
 	SmtcEvent,
-} from "../types/smtc";
+} from "../types/backend";
 import type { LogLevel } from "../utils/logger";
 import logger from "../utils/logger";
 

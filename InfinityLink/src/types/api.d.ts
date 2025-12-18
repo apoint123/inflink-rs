@@ -6,7 +6,7 @@ import type {
 	SongInfo,
 	TimelineInfo,
 	VolumeInfo,
-} from "./smtc";
+} from "./backend";
 
 /**
  * 可以给其它插件用的接口

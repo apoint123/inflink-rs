@@ -1,4 +1,4 @@
-import type { PlayMode, RepeatMode } from "../types/smtc";
+import type { PlayMode, RepeatMode } from "../types/backend";
 
 /**
  * 负责管理和计算播放模式切换逻辑

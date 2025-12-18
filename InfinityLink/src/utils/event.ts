@@ -1,6 +1,6 @@
+import type { PlaybackStatus } from "../types/backend";
 import type { OrpheusCommand } from "../types/global";
 import type { EventMap, EventName } from "../types/ncm";
-import type { PlaybackStatus } from "../types/smtc";
 import logger from "./logger";
 
 export interface ParsedEventMap {

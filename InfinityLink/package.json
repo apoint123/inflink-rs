@@ -10,6 +10,7 @@
 	"dependencies": {
 		"@mui/icons-material": "^7.3.5",
 		"@mui/material": "^7.3.5",
+		"jotai": "^2.16.0",
 		"loglevel": "^1.9.2",
 		"neverthrow": "^8.2.0",
 		"react": "^19.2.0",

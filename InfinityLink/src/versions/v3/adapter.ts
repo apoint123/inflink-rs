@@ -1,5 +1,12 @@
 import { err, ok, type Result } from "neverthrow";
-import type { ResolutionSetting } from "../../hooks";
+import type {
+	PlaybackStatus,
+	PlayMode,
+	RepeatMode,
+	SongInfo,
+	TimelineInfo,
+	VolumeInfo,
+} from "../../types/backend";
 import {
 	DomElementNotFoundError,
 	InconsistentStateError,
@@ -10,14 +17,6 @@ import {
 } from "../../types/errors";
 import type { OrpheusCommand } from "../../types/global";
 import type { v3 } from "../../types/ncm";
-import type {
-	PlaybackStatus,
-	PlayMode,
-	RepeatMode,
-	SongInfo,
-	TimelineInfo,
-	VolumeInfo,
-} from "../../types/smtc";
 import {
 	CoverManager,
 	findModule,
@@ -189,7 +188,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	private hasRestoredInitialState = false;
 	private ignoreNextZeroProgressEvent = false;
 	private readonly coverManager = new CoverManager();
-	private resolutionSetting: ResolutionSetting = "500";
+	private resolutionSetting: string = "500";
 
 	private musicDuration = 0;
 	private musicPlayProgress = 0;
@@ -765,7 +764,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		this.reduxStore?.dispatch({ type: "playing/switchMute" });
 	}
 
-	public setResolution(resolution: ResolutionSetting): void {
+	public setResolution(resolution: string): void {
 		this.resolutionSetting = resolution;
 	}
 

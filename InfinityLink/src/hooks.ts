@@ -1,42 +1,13 @@
 import type { PaletteMode } from "@mui/material";
+import { useAtomValue } from "jotai";
 import { useEffect, useRef, useState } from "react";
-import { STORE_KEY_RESOLUTION } from "./keys";
 import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
+import { appConfigAtom } from "./store";
 import type { IInfLinkApi } from "./types/api";
+import type { ControlMessage } from "./types/backend";
 import type { NcmAdapterError } from "./types/errors";
-import type { ControlMessage, DiscordDisplayMode } from "./types/smtc";
 import logger from "./utils/logger";
 import type { INcmAdapter, NcmAdapterEventMap } from "./versions/adapter";
-
-export function useLocalStorage<T>(
-	key: string,
-	initialValue: T,
-	parse: (string: string) => T = JSON.parse,
-	stringify: (value: T) => string = JSON.stringify,
-): [T, (value: T | ((prevValue: T) => T)) => void] {
-	const [storedValue, setStoredValue] = useState(() => {
-		try {
-			const item = window.localStorage.getItem(key);
-			return item ? parse(item) : initialValue;
-		} catch (error) {
-			logger.error(error);
-			return initialValue;
-		}
-	});
-
-	const setValue = (value: T | ((prevValue: T) => T)) => {
-		try {
-			const valueToStore =
-				value instanceof Function ? value(storedValue) : value;
-			setStoredValue(valueToStore);
-			window.localStorage.setItem(key, stringify(valueToStore));
-		} catch (error) {
-			logger.error(error);
-		}
-	};
-
-	return [storedValue, setValue];
-}
 
 type NcmVersion = "v3" | "v2" | "unsupported";
 
@@ -208,30 +179,19 @@ function handleAdapterCommand(adapter: INcmAdapter, msg: ControlMessage) {
 	}
 }
 
-export function useBackendConnection(
-	adapterState: AdapterState,
-	smtcEnabled: boolean,
-	discordEnabled: boolean,
-	discordShowPaused: boolean,
-	discordDisplayMode: DiscordDisplayMode,
-) {
+export function useBackendConnection(adapterState: AdapterState) {
 	const { adapter, status } = adapterState;
+
+	const config = useAtomValue(appConfigAtom);
+	const { smtcEnabled, discordEnabled, discordShowPaused, discordDisplayMode } =
+		config;
+
 	const hasSentInitialMetadata = useRef(false);
 
-	const configRef = useRef({
-		smtcEnabled,
-		discordEnabled,
-		discordShowPaused,
-		discordDisplayMode,
-	});
+	const configRef = useRef(config);
 	useEffect(() => {
-		configRef.current = {
-			smtcEnabled,
-			discordEnabled,
-			discordShowPaused,
-			discordDisplayMode,
-		};
-	}, [smtcEnabled, discordEnabled, discordShowPaused, discordDisplayMode]);
+		configRef.current = config;
+	}, [config]);
 
 	const shouldConnect =
 		status === "ready" && adapter && (smtcEnabled || discordEnabled);
@@ -400,19 +360,6 @@ export function useNcmTheme(): PaletteMode {
 	}, []);
 
 	return ncmThemeMode;
-}
-
-export type ResolutionSetting = string;
-
-export function useResolutionSetting(): [
-	ResolutionSetting,
-	(value: ResolutionSetting) => void,
-] {
-	const [resolution, setResolution] = useLocalStorage<ResolutionSetting>(
-		STORE_KEY_RESOLUTION,
-		"500",
-	);
-	return [resolution, setResolution];
 }
 
 export function useGlobalApi(adapter: INcmAdapter | null) {
