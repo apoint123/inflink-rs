@@ -34,7 +34,7 @@ jobs:
         run: bun install
 
       - name: 构建项目
-        run: bun build
+        run: bun run build
 
       - name: 打包产物
         run: |

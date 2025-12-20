@@ -1,4 +1,5 @@
 /** biome-ignore-all lint/complexity/useLiteralKeys: 和 ts 配置 noPropertyAccessFromIndexSignature 冲突 */
+import { feature } from "bun:bundle";
 import { err, ok, type Result } from "neverthrow";
 import type {
 	PlaybackStatus,
@@ -236,7 +237,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 			this.reduxStore = storeResult.value;
 		}
 
-		if (import.meta.env.MODE === "development") {
+		if (feature("DEV")) {
 			window.infstore = this.reduxStore;
 		}
 
@@ -510,7 +511,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 
 		if (!this.storageModule) {
 			logger.warn("未找到内部存储模块", "Adapter V3");
-		} else if (import.meta.env.MODE === "development") {
+		} else if (feature("DEV")) {
 			window.infStorage = this.storageModule;
 		}
 	}

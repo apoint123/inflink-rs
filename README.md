@@ -64,7 +64,7 @@
 
 ## 更新日志
 
-[**CHANGELOG.md**](./InfinityLink/CHANGELOG.md)
+[**CHANGELOG.md**](./packages/frontend/CHANGELOG.md)
 
 ## 构建
 
@@ -98,7 +98,7 @@ bun install
 4. 构建
 
 ```bash
-bun build
+bun run build
 ```
 
-这个命令会自动完成整个扩展 (包括前端和后端) 的构建，你可以在 `InfinityLink\dist` 找到构建产物
+这个命令会自动完成整个扩展 (包括前端和后端) 的构建，你可以在 `packages\frontend\dist` 找到构建产物

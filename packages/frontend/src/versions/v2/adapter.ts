@@ -1,3 +1,4 @@
+import { feature } from "bun:bundle";
 import { err, ok, type Result } from "neverthrow";
 import type {
 	PlaybackStatus,
@@ -296,7 +297,7 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 		}
 		this.reduxStore = storeResult.value;
 
-		if (import.meta.env.MODE === "development") {
+		if (feature("DEV")) {
 			window.infstore = this.reduxStore;
 		}
 

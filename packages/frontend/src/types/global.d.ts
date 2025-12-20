@@ -119,7 +119,6 @@ declare global {
 	const plugin: Window["plugin"];
 
 	const __APP_VERSION__: string;
-	const DEBUG: boolean;
 }
 
 /**

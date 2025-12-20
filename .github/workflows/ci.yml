@@ -37,3 +37,6 @@ jobs:
 
       - name: 检查 Clippy
         run: cargo clippy --workspace -- -D warnings
+
+      - name: 构建项目
+        run: bun run build

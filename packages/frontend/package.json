@@ -1,12 +1,7 @@
 {
 	"name": "frontend",
 	"version": "3.2.6",
-	"main": "index.js",
 	"license": "GPL-3.0-only",
-	"scripts": {
-		"build": "vite build",
-		"build:dev": "vite build --mode development --watch"
-	},
 	"dependencies": {
 		"@emotion/react": "^11.14.0",
 		"@emotion/styled": "^11.14.1",
@@ -21,8 +16,6 @@
 	"devDependencies": {
 		"@types/react": "^19.2.7",
 		"@types/react-dom": "^19.2.3",
-		"@vitejs/plugin-react-swc": "^4.2.2",
-		"redux": "^5.0.1",
-		"vite": "^7.2.4"
+		"redux": "^5.0.1"
 	}
 }
