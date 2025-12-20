@@ -21,14 +21,14 @@ export function useNcmVersion(): NcmVersion | null {
 	useEffect(() => {
 		try {
 			const versionStr = betterncm.ncm.getNCMVersion();
-			const majorVersion = parseInt(versionStr.split(".")[0], 10);
+			const majorVersion = parseInt(versionStr?.split(".")[0] ?? "", 10);
 
 			if (majorVersion >= 3) {
 				setVersion("v3");
 			} else if (majorVersion === 2) {
 				setVersion("v2");
 			} else {
-				logger.warn(`不支持的网易云音乐版本: ${majorVersion}`);
+				logger.warn(`不支持的网易云音乐版本: ${versionStr}`);
 				setVersion("unsupported");
 			}
 		} catch (e) {

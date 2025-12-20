@@ -18,13 +18,8 @@ jobs:
         with:
           submodules: "recursive"
 
-      - name: 安装 pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: 安装 Node.js
-        uses: actions/setup-node@v6
-        with:
-          cache: pnpm
+      - name: 安装 Bun
+        uses: oven-sh/setup-bun@v2
 
       - name: 安装 Rust 工具链
         uses: dtolnay/rust-toolchain@stable
@@ -36,10 +31,10 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: 安装依赖
-        run: pnpm install
+        run: bun install
 
       - name: 构建项目
-        run: pnpm build
+        run: bun build
 
       - name: 打包产物
         run: |

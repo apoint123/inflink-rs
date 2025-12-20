@@ -1,6 +1,0 @@
-packages:
-  - InfinityLink
-
-onlyBuiltDependencies:
-  - '@swc/core'
-  - esbuild

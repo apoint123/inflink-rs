@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/useLiteralKeys: 和 ts 配置 noPropertyAccessFromIndexSignature 冲突 */
 import { err, ok, type Result } from "neverthrow";
 import type {
 	PlaybackStatus,
@@ -493,15 +494,15 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 
 				if (
 					!("lastPlaying" in b) ||
-					typeof b.lastPlaying !== "object" ||
-					b.lastPlaying === null
+					typeof b["lastPlaying"] !== "object" ||
+					b["lastPlaying"] === null
 				) {
 					return false;
 				}
 
-				const lastPlaying = b.lastPlaying as Record<string, unknown>;
+				const lastPlaying = b["lastPlaying"] as Record<string, unknown>;
 
-				return "get" in lastPlaying && typeof lastPlaying.get === "function";
+				return "get" in lastPlaying && typeof lastPlaying["get"] === "function";
 			},
 		);
 

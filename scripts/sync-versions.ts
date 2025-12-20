@@ -1,5 +1,3 @@
-// @ts-check
-
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,15 +25,14 @@ function main() {
 			fs.readFileSync(sourcePackageJsonPath, "utf-8"),
 		);
 
-		/** @type {string} */
-		const newVersion = sourcePackageJson.version;
+		const newVersion: string = sourcePackageJson.version;
 
 		if (!newVersion) {
 			throw new Error(`无法从 ${sourcePackageJsonPath} 中读取版本号。`);
 		}
 		console.log(`新版本号: ${newVersion}`);
 
-		const updateJsonVersion = (/** @type {string} */ filePath) => {
+		const updateJsonVersion = (filePath: string) => {
 			const fileContent = JSON.parse(fs.readFileSync(filePath, "utf-8"));
 			fileContent.version = newVersion;
 			fs.writeFileSync(
@@ -45,7 +42,7 @@ function main() {
 			console.log(`已更新 ${path.basename(filePath)}`);
 		};
 
-		const updateCargoTomlVersion = (/** @type {string} */ filePath) => {
+		const updateCargoTomlVersion = (filePath: string) => {
 			const fileContent = fs.readFileSync(filePath, "utf-8");
 			const updatedContent = fileContent.replace(
 				/^version\s*=\s*".*"$/m,
