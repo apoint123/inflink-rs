@@ -31,7 +31,7 @@ const ALL_LOG_LEVELS: Readonly<LogLevel[]> = [
 ];
 
 function isLogLevel(level: string): level is LogLevel {
-	return (ALL_LOG_LEVELS as string[]).includes(level);
+	return ALL_LOG_LEVELS.some((l) => l === level);
 }
 
 class SMTCNativeBackend {
@@ -138,7 +138,8 @@ class SMTCNativeBackend {
 					"border-radius: 0 3px 3px 0",
 				].join(";");
 
-				console.log(
+				const logMethod = console[level] ?? console.log;
+				logMethod(
 					`%c${pluginPart}%c${sourcePart}`,
 					badgePluginCss,
 					badgeSourceCss,
