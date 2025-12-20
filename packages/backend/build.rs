@@ -3,7 +3,7 @@ use std::path::Path;
 
 fn main() {
     let dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-    let binding = Path::new(&dir).join("../libcef");
+    let binding = Path::new(&dir).join("../../libs/libcef");
     let libcef_path = binding.to_string_lossy();
 
     println!("cargo:rustc-link-search={libcef_path}");

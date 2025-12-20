@@ -61,7 +61,7 @@ const copyAssetsPlugin = (mode: string): Plugin => {
 		name: "vite-plugin-copy-assets",
 		closeBundle: () => {
 			const buildProfile = mode === "production" ? "release" : "debug";
-			const projectRoot = path.resolve(__dirname, "..");
+			const projectRoot = path.resolve(__dirname, "../..");
 			const outputDir = path.resolve(__dirname, "dist");
 			const dllSrcX86 = path.resolve(
 				projectRoot,

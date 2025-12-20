@@ -4,7 +4,7 @@ use std::path::PathBuf;
 fn main() {
     println!("cargo:rerun-if-changed=wrapper.h");
 
-    let cef_root_path = PathBuf::from("../../libcef");
+    let cef_root_path = PathBuf::from("../../../libs/libcef");
 
     let bindings = bindgen::Builder::default()
         .header("wrapper.h")

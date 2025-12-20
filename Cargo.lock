@@ -24,6 +24,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
+name = "backend"
+version = "3.2.6"
+dependencies = [
+ "anyhow",
+ "base64",
+ "cef-safe",
+ "dirs",
+ "discord-rich-presence",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "windows",
+]
+
+[[package]]
 name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1241,25 +1260,6 @@ name = "smallvec"
 version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
-
-[[package]]
-name = "smtc_handler"
-version = "3.2.6"
-dependencies = [
- "anyhow",
- "base64",
- "cef-safe",
- "dirs",
- "discord-rich-presence",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "windows",
-]
 
 [[package]]
 name = "socket2"

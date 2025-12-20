@@ -1,5 +1,8 @@
 {
-	"include": ["InfinityLink/src/**/*.ts", "InfinityLink/src/**/*.tsx"],
+	"include": [
+		"packages/frontend/src/**/*.ts",
+		"packages/frontend/src/**/*.tsx"
+	],
 	"compilerOptions": {
 		// Environment setup & latest features
 		"lib": ["ESNext", "DOM", "DOM.Iterable"],
@@ -8,7 +11,7 @@
 		"moduleDetection": "force",
 		"baseUrl": ".",
 		"paths": {
-			"@/*": ["InfinityLink/src/*"]
+			"@/*": ["packages/frontend/src/*"]
 		},
 		"jsx": "react-jsx",
 		"allowJs": false,

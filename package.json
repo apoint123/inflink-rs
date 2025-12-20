@@ -8,14 +8,14 @@
 		"bun": ">=1.1.0"
 	},
 	"workspaces": [
-		"InfinityLink"
+		"packages/frontend"
 	],
 	"scripts": {
-		"build:frontend": "bun run --cwd InfinityLink build",
-		"watch": "bun run --cwd InfinityLink build:dev",
+		"build:frontend": "bun run --filter frontend build",
+		"watch": "bun run --filter frontend build:dev",
 		"dev": "bun watch",
-		"build:backend:x64": "cargo build --release --target=x86_64-pc-windows-msvc -p smtc_handler",
-		"build:backend:x86": "cargo build --release --target=i686-pc-windows-msvc -p smtc_handler",
+		"build:backend:x64": "cargo build --release --target=x86_64-pc-windows-msvc -p backend",
+		"build:backend:x86": "cargo build --release --target=i686-pc-windows-msvc -p backend",
 		"build:backend": "bun build:backend:x64 && bun build:backend:x86",
 		"build": "bun build:backend && bun build:frontend",
 		"lint": "bun biome check .",

@@ -10,16 +10,20 @@ function main() {
 		const projectRoot = path.resolve(__dirname, "..");
 		const sourcePackageJsonPath = path.join(
 			projectRoot,
-			"InfinityLink",
+			"packages/frontend",
 			"package.json",
 		);
 		const rootPackageJsonPath = path.join(projectRoot, "package.json");
 		const manifestPath = path.join(
 			projectRoot,
-			"InfinityLink",
+			"packages/frontend",
 			"manifest.json",
 		);
-		const cargoTomlPath = path.join(projectRoot, "smtc_handler", "Cargo.toml");
+		const cargoTomlPath = path.join(
+			projectRoot,
+			"packages/backend",
+			"Cargo.toml",
+		);
 
 		const sourcePackageJson = JSON.parse(
 			fs.readFileSync(sourcePackageJsonPath, "utf-8"),

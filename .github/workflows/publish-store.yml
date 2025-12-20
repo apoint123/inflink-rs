@@ -40,7 +40,7 @@ jobs:
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./InfinityLink/dist
+          publish_dir: ./packages/frontend/dist
           publish_branch: release
           force_orphan: true
           user_name: "github-actions[bot]"

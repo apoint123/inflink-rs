@@ -38,7 +38,7 @@ jobs:
 
       - name: 打包产物
         run: |
-          Compress-Archive -Path InfinityLink/dist/* -DestinationPath InfLink-rs.zip
+          Compress-Archive -Path packages/frontend/dist/* -DestinationPath InfLink-rs.zip
           Rename-Item -Path InfLink-rs.zip -NewName InfLink-rs.plugin
         shell: powershell
 
@@ -46,5 +46,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           body: |
-            查看详细更新日志：[CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/InfinityLink/CHANGELOG.md)
+            查看详细更新日志：[CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/packages/frontend/CHANGELOG.md)
           files: InfLink-rs.plugin

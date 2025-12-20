@@ -1,5 +1,5 @@
 [workspace]
-members = ["smtc_handler", "cef-safe"]
+members = ["packages/backend", "packages/cef-safe"]
 
 resolver = "3"
 
