@@ -323,14 +323,16 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	}
 
 	public setInternalLogging(enabled: boolean): void {
-		if (window.APP_CONF) {
-			window.APP_CONF.console = enabled;
-			logger.info(`内部日志已${enabled ? "开启" : "关闭"}`, "Adapter V2");
-		} else {
-			logger.warn(
-				"未找到 window.APP_CONF, 无法把内部日志打印到控制台上",
-				"Adapter V2",
-			);
+		if (feature("DEV")) {
+			if (window.APP_CONF) {
+				window.APP_CONF.console = enabled;
+				logger.info(`内部日志已${enabled ? "开启" : "关闭"}`, "Adapter V2");
+			} else {
+				logger.warn(
+					"未找到 window.APP_CONF, 无法把内部日志打印到控制台上",
+					"Adapter V2",
+				);
+			}
 		}
 	}
 
