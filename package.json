@@ -6,7 +6,7 @@
 	"packageManager": "bun@1.3.5",
 	"engines": {
 		"node": ">=20.0.0",
-		"bun": ">=1.1.0"
+		"bun": ">=1.3.5"
 	},
 	"workspaces": [
 		"packages/frontend"
@@ -26,7 +26,7 @@
 		"cs:version": "bun changeset version && bun ./scripts/sync-versions.ts"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.3.8",
+		"@biomejs/biome": "^2.3.10",
 		"@changesets/cli": "^2.29.8",
 		"@types/bun": "^1.3.5",
 		"@types/node": "^25.0.3",
