@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.2.8
+
+### Patch Changes
+
+- beb1973: build: 修复一个构建问题
+
 ## 3.2.7
 
 ### Patch Changes
