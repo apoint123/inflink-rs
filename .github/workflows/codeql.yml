@@ -2,7 +2,7 @@ name: "CodeQL"
 
 on:
   schedule:
-    - cron: "0 3 * * *"
+    - cron: "0 0 1 * *"
 
 permissions:
   contents: read

@@ -9,7 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  build-and-publish:
+    name: 构建并发布
     runs-on: windows-latest
 
     steps:
@@ -36,15 +37,27 @@ jobs:
       - name: 构建项目
         run: bun run build
 
-      - name: 打包产物
+      - name: 部署到插件商店分支
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./packages/frontend/dist
+          publish_branch: release
+          force_orphan: true
+          user_name: "github-actions[bot]"
+          user_email: "github-actions[bot]@users.noreply.github.com"
+
+      - name: 打包插件文件
         run: |
           Compress-Archive -Path packages/frontend/dist/* -DestinationPath InfLink-rs.zip
           Rename-Item -Path InfLink-rs.zip -NewName InfLink-rs.plugin
         shell: powershell
 
+      - name: 提取更新日志
+        run: bun run scripts/extract-changelog.ts
+
       - name: 创建 Release
         uses: softprops/action-gh-release@v2
         with:
-          body: |
-            查看详细更新日志：[CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/packages/frontend/CHANGELOG.md)
+          body_path: RELEASE_NOTES.md
           files: InfLink-rs.plugin
