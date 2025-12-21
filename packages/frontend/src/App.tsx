@@ -12,7 +12,6 @@ import { FeatureSettings } from "./components/FeatureSettings";
 import {
 	InitializationErrorAlert,
 	LoadingIndicator,
-	NewVersionAlert,
 	UnsupportedVersionAlert,
 } from "./components/StatusComponents";
 import {
@@ -21,7 +20,6 @@ import {
 	useInfoProvider,
 	useNcmTheme,
 	useNcmVersion,
-	useVersionCheck,
 } from "./hooks";
 import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
 import {
@@ -31,8 +29,6 @@ import {
 	resolutionAtom,
 } from "./store";
 import logger, { setLogLevel } from "./utils/logger";
-
-const GITHUB_REPO = "apoint123/InfLink-rs";
 
 export default function App() {
 	const ncmThemeMode = useNcmTheme();
@@ -67,7 +63,6 @@ export default function App() {
 
 function Main() {
 	const ncmVersion = useNcmVersion();
-	const newVersionInfo = useVersionCheck(GITHUB_REPO);
 	const adapterState = useInfoProvider(ncmVersion);
 	const { adapter, status, error } = adapterState;
 
@@ -123,8 +118,6 @@ function Main() {
 
 	return (
 		<Box sx={{ pb: 4, pt: 1 }}>
-			{newVersionInfo && <NewVersionAlert newVersionInfo={newVersionInfo} />}
-
 			<Typography variant="h5" sx={{ mb: 3, fontWeight: "bold" }}>
 				InfLink-rs 设置
 			</Typography>

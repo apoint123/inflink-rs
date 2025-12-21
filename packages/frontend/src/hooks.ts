@@ -272,54 +272,6 @@ export function useBackendConnection(adapterState: AdapterState) {
 	]);
 }
 
-export interface NewVersionInfo {
-	version: string;
-	url: string;
-}
-
-export function useVersionCheck(repo: string): NewVersionInfo | null {
-	const [newVersionInfo, setNewVersionInfo] = useState<NewVersionInfo | null>(
-		null,
-	);
-
-	useEffect(() => {
-		const checkVersion = async () => {
-			try {
-				const res = await fetch(
-					`https://api.github.com/repos/${repo}/releases/latest`,
-				);
-				if (!res.ok) {
-					throw new Error(`GitHub API 请求失败, 错误码: ${res.status}`);
-				}
-				const latestRelease = await res.json();
-				const latestVersion = latestRelease.tag_name.replace(/^v/, "");
-				const currentVersion = __APP_VERSION__;
-
-				if (
-					(latestVersion as string).localeCompare(currentVersion, undefined, {
-						numeric: true,
-					}) > 0
-				) {
-					logger.info(
-						`发现新版本: ${latestRelease.tag_name}`,
-						"useVersionCheck",
-					);
-					setNewVersionInfo({
-						version: latestRelease.tag_name,
-						url: latestRelease.html_url,
-					});
-				}
-			} catch (error) {
-				logger.error("检查更新失败:", "useVersionCheck", error);
-			}
-		};
-
-		checkVersion();
-	}, [repo]);
-
-	return newVersionInfo;
-}
-
 function getNcmThemeMode(): PaletteMode {
 	const v3Theme = localStorage.getItem("currentTheme");
 	if (v3Theme) {
