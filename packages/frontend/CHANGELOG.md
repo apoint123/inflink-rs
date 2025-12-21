@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.2.7
+
+### Patch Changes
+
+- 0f8ae0e: feat: 允许设置 Discord RPC 显示选项
+- fea280f: refactor: 优化设置 UI
+
 ## 3.2.6
 
 ### Patch Changes
