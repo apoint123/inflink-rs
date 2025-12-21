@@ -210,7 +210,7 @@ fn cleanup_old_logs(log_dir: &PathBuf, max_files: usize) {
 }
 
 pub fn init() -> Result<()> {
-    let directive = "smtc_handler=trace"
+    let directive = "backend=trace"
         .parse()
         .context("硬编码的日志指令无效，这不应该发生")?;
     let default_filter = EnvFilter::builder()

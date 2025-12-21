@@ -54,19 +54,19 @@ async function copyAssets() {
 	const buildProfile = isDev ? "debug" : "release";
 	const dllSrcX86 = path.join(
 		PROJECT_ROOT,
-		`target/i686-pc-windows-msvc/${buildProfile}/smtc_handler.dll`,
+		`target/i686-pc-windows-msvc/${buildProfile}/backend.dll`,
 	);
 	const dllSrcX64 = path.join(
 		PROJECT_ROOT,
-		`target/x86_64-pc-windows-msvc/${buildProfile}/smtc_handler.dll`,
+		`target/x86_64-pc-windows-msvc/${buildProfile}/backend.dll`,
 	);
 
 	const safeCopy = async (src: string, dest: string) => {
 		if (await file(src).exists()) await cp(src, dest);
 	};
 
-	await safeCopy(dllSrcX86, path.join(DIST_DIR, "smtc_handler.dll"));
-	await safeCopy(dllSrcX64, path.join(DIST_DIR, "smtc_handler.dll.x64.dll"));
+	await safeCopy(dllSrcX86, path.join(DIST_DIR, "backend.dll"));
+	await safeCopy(dllSrcX64, path.join(DIST_DIR, "backend.dll.x64.dll"));
 	await safeCopy(MANIFEST_SRC, path.join(DIST_DIR, "manifest.json"));
 	await safeCopy(
 		path.join(PROJECT_ROOT, "preview.png"),

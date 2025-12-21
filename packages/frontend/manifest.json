@@ -27,5 +27,5 @@
 			]
 		}
 	},
-	"native_plugin": "smtc_handler.dll"
+	"native_plugin": "backend.dll"
 }
