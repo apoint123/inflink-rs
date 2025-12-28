@@ -9,7 +9,7 @@ use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, instrument, trace, warn};
 use windows::{
-    Foundation::{TimeSpan, TypedEventHandler},
+    Foundation::{TimeSpan, TypedEventHandler, Uri},
     Media::Playback::MediaPlayer,
     Media::{
         AutoRepeatModeChangeRequestedEventArgs, MediaPlaybackAutoRepeatMode, MediaPlaybackStatus,
@@ -32,13 +32,6 @@ const HNS_PER_MILLISECOND: f64 = 10_000.0;
 
 static TOKIO_RUNTIME: LazyLock<Runtime> =
     LazyLock::new(|| Runtime::new().expect("创建 Tokio 运行时失败"));
-
-static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
-    reqwest::Client::builder()
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36 Chrome/91.0.4472.164 NeteaseMusicDesktop/3.1.23.204750")
-        .build()
-        .expect("创建 HTTP 客户端失败")
-});
 
 struct SmtcCallback {
     v8_context: CefV8Context,
@@ -426,16 +419,16 @@ pub fn update_play_mode(is_shuffling: bool, repeat_mode: &RepeatMode) -> Result<
 }
 
 async fn get_cover_stream_ref(cover: Option<CoverSource>) -> Option<RandomAccessStreamReference> {
-    let bytes = match cover {
+    match cover {
         None => {
             warn!("未提供封面, 将清空现有封面");
-            return None;
+            None
         }
         Some(CoverSource::Base64(base64_data)) => {
             debug!("正在从 Base64 数据解码封面");
             let start_time = Instant::now();
 
-            match general_purpose::STANDARD.decode(base64_data) {
+            let bytes = match general_purpose::STANDARD.decode(base64_data) {
                 Ok(b) => {
                     let elapsed = start_time.elapsed();
                     debug!(duration = ?elapsed, "封面 Base64 解码完成");
@@ -445,50 +438,44 @@ async fn get_cover_stream_ref(cover: Option<CoverSource>) -> Option<RandomAccess
                     warn!("解码封面 Base64 失败: {e}");
                     return None;
                 }
-            }
-        }
-        Some(CoverSource::Url(url)) => {
-            debug!("正在从 URL 下载封面: {url}");
-            let start_time = Instant::now();
+            };
 
-            match HTTP_CLIENT.get(&url).send().await {
-                Ok(res) => match res.bytes().await {
-                    Ok(b) => {
-                        let elapsed = start_time.elapsed();
-                        debug!(duration = ?elapsed, "封面下载成功");
-                        b.to_vec()
-                    }
-                    Err(e) => {
-                        let elapsed = start_time.elapsed();
-                        warn!(duration = ?elapsed, "读取封面响应失败: {e}");
-                        return None;
-                    }
-                },
+            let stream_result: windows::core::Result<RandomAccessStreamReference> = (async {
+                let stream = InMemoryRandomAccessStream::new()?;
+                let writer = DataWriter::CreateDataWriter(&stream)?;
+                writer.WriteBytes(&bytes)?;
+                writer.StoreAsync()?.await?;
+                writer.DetachStream()?;
+                stream.Seek(0)?;
+                RandomAccessStreamReference::CreateFromStream(&stream)
+            })
+            .await;
+
+            match stream_result {
+                Ok(stream_ref) => Some(stream_ref),
                 Err(e) => {
-                    let elapsed = start_time.elapsed();
-                    warn!(duration = ?elapsed, "下载封面失败: {e}");
-                    return None;
+                    error!("创建封面内存流失败: {e:?}");
+                    None
                 }
             }
         }
-    };
+        Some(CoverSource::Url(url)) => {
+            debug!("正在从 URL 创建封面引用: {url}");
+            let uri = match Uri::CreateUri(&HSTRING::from(&url)) {
+                Ok(u) => u,
+                Err(e) => {
+                    warn!("创建 URI 失败 ({url}): {e}");
+                    return None;
+                }
+            };
 
-    let stream_result: windows::core::Result<RandomAccessStreamReference> = (async {
-        let stream = InMemoryRandomAccessStream::new()?;
-        let writer = DataWriter::CreateDataWriter(&stream)?;
-        writer.WriteBytes(&bytes)?;
-        writer.StoreAsync()?.await?;
-        writer.DetachStream()?;
-        stream.Seek(0)?;
-        RandomAccessStreamReference::CreateFromStream(&stream)
-    })
-    .await;
-
-    match stream_result {
-        Ok(stream_ref) => Some(stream_ref),
-        Err(e) => {
-            error!("创建封面内存流失败: {e:?}");
-            None
+            match RandomAccessStreamReference::CreateFromUri(&uri) {
+                Ok(stream_ref) => Some(stream_ref),
+                Err(e) => {
+                    warn!("从 URI 创建流引用失败: {e}");
+                    None
+                }
+            }
         }
     }
 }
