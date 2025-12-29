@@ -254,14 +254,15 @@ impl RpcWorker {
     fn calc_paused_timestamps(current_time: f64, duration: f64) -> (i64, i64) {
         // 来自 https://musicpresence.app/ 的 hack，通过将
         // 开始和结束时间戳向后平移一年以实现在暂停时进度静止的效果
-        const ONE_YEAR_S: i64 = 365 * 24 * 60 * 60;
+        const ONE_YEAR_MS: i64 = 365 * 24 * 60 * 60 * 1000;
+
         let now_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis() as i64;
 
         let current_progress_ms = current_time as i64;
-        let future_start = (now_ms - current_progress_ms) + ONE_YEAR_S;
+        let future_start = (now_ms - current_progress_ms) + ONE_YEAR_MS;
         let future_end = future_start + (duration as i64);
 
         (future_start, future_end)
