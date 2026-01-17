@@ -184,7 +184,7 @@ where
             ref_count: AtomicUsize::new(1),
         });
 
-        let task_ptr = Box::leak(rust_task) as *mut RustClosureTask;
+        let task_ptr = Box::into_raw(rust_task);
 
         let success = (*task_runner_ptr)
             .post_task
