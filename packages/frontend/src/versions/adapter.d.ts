@@ -8,6 +8,7 @@ import type {
 	VolumeInfo,
 } from "../types/backend";
 import type { NcmAdapterError } from "../types/errors";
+import type { TypedEventTarget } from "../utils/TypedEventTarget";
 
 export type NcmAdapterEventMap = {
 	songChange: CustomEvent<SongInfo>;
@@ -18,7 +19,7 @@ export type NcmAdapterEventMap = {
 	volumeChange: CustomEvent<VolumeInfo>;
 };
 
-export interface INcmAdapter extends EventTarget {
+export interface INcmAdapter extends TypedEventTarget<NcmAdapterEventMap> {
 	initialize(): Promise<Result<void, NcmAdapterError>>;
 	dispose(): void;
 	getCurrentSongInfo(): Result<SongInfo, NcmAdapterError>;
@@ -43,25 +44,4 @@ export interface INcmAdapter extends EventTarget {
 	toggleMute(): void;
 
 	setResolution(resolution: string): void;
-
-	addEventListener<K extends keyof NcmAdapterEventMap>(
-		type: K,
-		listener: (this: INcmAdapter, ev: NcmAdapterEventMap[K]) => unknown,
-		options?: boolean | AddEventListenerOptions,
-	): void;
-	addEventListener(
-		type: string,
-		listener: EventListenerOrEventListenerObject,
-		options?: boolean | AddEventListenerOptions,
-	): void;
-	removeEventListener<K extends keyof NcmAdapterEventMap>(
-		type: K,
-		listener: (this: INcmAdapter, ev: NcmAdapterEventMap[K]) => unknown,
-		options?: boolean | EventListenerOptions,
-	): void;
-	removeEventListener(
-		type: string,
-		listener: EventListenerOrEventListenerObject,
-		options?: boolean | EventListenerOptions,
-	): void;
 }

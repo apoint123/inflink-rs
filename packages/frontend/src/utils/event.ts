@@ -3,6 +3,8 @@ import type { OrpheusCommand } from "../types/global";
 import type { EventMap, EventName } from "../types/ncm";
 import logger from "./logger";
 
+import { TypedEventTarget } from "./TypedEventTarget";
+
 export interface ParsedEventMap {
 	playStateChange: CustomEvent<PlaybackStatus>;
 	progressUpdate: CustomEvent<number>;
@@ -17,8 +19,7 @@ const NcmPlayState = {
 	END: 4,
 } as const;
 
-export class NcmEventAdapter {
-	private readonly dispatcher = new EventTarget();
+export class NcmEventAdapter extends TypedEventTarget<ParsedEventMap> {
 	private readonly nativeCmder: OrpheusCommand;
 
 	private readonly registeredLegacyEvents = new Map<
@@ -31,6 +32,7 @@ export class NcmEventAdapter {
 	>();
 
 	constructor(cmder?: OrpheusCommand) {
+		super();
 		this.nativeCmder = cmder || window.legacyNativeCmder;
 		this._registerNativeEvents();
 	}
@@ -39,25 +41,14 @@ export class NcmEventAdapter {
 		this.unregisterNativeEvents();
 	}
 
-	public addEventListener<K extends keyof ParsedEventMap>(
-		type: K,
-		listener: (this: NcmEventAdapter, ev: ParsedEventMap[K]) => unknown,
-	): void {
-		this.dispatcher.addEventListener(type, listener as EventListener);
-	}
-
-	public removeEventListener<K extends keyof ParsedEventMap>(
-		type: K,
-		listener: (this: NcmEventAdapter, ev: ParsedEventMap[K]) => unknown,
-	): void {
-		this.dispatcher.removeEventListener(type, listener as EventListener);
-	}
-
 	private dispatch<K extends keyof ParsedEventMap>(
 		type: K,
 		detail: ParsedEventMap[K]["detail"],
 	): void {
-		this.dispatcher.dispatchEvent(new CustomEvent(type, { detail }));
+		this.dispatchTypedEvent(
+			type,
+			new CustomEvent(type, { detail }) as ParsedEventMap[K],
+		);
 	}
 
 	private _registerNativeEvents(): void {

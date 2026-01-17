@@ -8,7 +8,7 @@ import type {
 	SongInfo,
 	TimelineInfo,
 	VolumeInfo,
-} from "../../types/backend";
+} from "@/types/backend";
 import {
 	DomElementNotFoundError,
 	InconsistentStateError,
@@ -16,23 +16,25 @@ import {
 	ReduxStoreNotFoundError,
 	SongNotFoundError,
 	TimelineNotAvailableError,
-} from "../../types/errors";
-import type { OrpheusCommand } from "../../types/global";
-import type { v3 } from "../../types/ncm";
+} from "@/types/errors";
+import type { OrpheusCommand } from "@/types/global";
+import type { v3 } from "@/types/ncm";
 import {
 	CoverManager,
 	findModule,
 	getWebpackRequire,
 	NcmEventAdapter,
 	type ParsedEventMap,
+	TypedEventTarget,
 	throttle,
 	type WebpackRequire,
 	waitForElement,
-} from "../../utils";
-import logger from "../../utils/logger";
+} from "@/utils";
+import logger from "@/utils/logger";
 import type { INcmAdapter, NcmAdapterEventMap } from "../adapter";
 import { PlayModeController } from "../playModeController";
 import { type AudioPlayer, AudioPlayerWrapper } from "./audioPlayerWrapper";
+import { patchInternalLogger } from "./patchInternalLogger";
 
 const V3_PLAY_MODES = {
 	SHUFFLE: "playRandom",
@@ -167,97 +169,6 @@ async function waitForReduxStore(
 	);
 }
 
-function patchInternalLogger(
-	require: WebpackRequire,
-	checkLoggingEnabled: () => boolean,
-): void {
-	try {
-		type LoggerMethod = (...args: unknown[]) => void;
-		type PatchedLoggerMethod = LoggerMethod & { __isPatched?: boolean };
-		type LoggerModule = {
-			[level in
-				| "debug"
-				| "log"
-				| "info"
-				| "warn"
-				| "error"
-				| "crash"]: LoggerMethod;
-		};
-		type LoggerContainer = { b: LoggerModule };
-
-		type PatchableConsoleLevel = "debug" | "log" | "info" | "warn" | "error";
-
-		const loggerContainer = findModule<LoggerContainer>(
-			require,
-			(exports: unknown): exports is LoggerContainer =>
-				!!exports &&
-				typeof exports === "object" &&
-				"b" in exports &&
-				!!(exports as { b: unknown }).b &&
-				typeof (exports as { b: object }).b === "object" &&
-				"info" in (exports as { b: object }).b &&
-				typeof (exports as { b: { info: unknown } }).b.info === "function",
-		);
-
-		if (!loggerContainer) {
-			logger.warn("未找到内部日志模块，跳过补丁", "Adapter V3");
-			return;
-		}
-
-		const loggerModule = loggerContainer.b;
-		const levelsToPatch: PatchableConsoleLevel[] = [
-			"debug",
-			"log",
-			"info",
-			"warn",
-			"error",
-		];
-
-		for (const level of levelsToPatch) {
-			const originalMethod = loggerModule[level] as PatchedLoggerMethod;
-
-			if (originalMethod.__isPatched) {
-				continue;
-			}
-
-			const newMethod: PatchedLoggerMethod = (...args: unknown[]) => {
-				if (checkLoggingEnabled()) {
-					const [modName, ...restArgs] = args;
-
-					const pluginPart = "NCM Internal";
-					const sourcePart = String(modName);
-					const badgePluginCss = [
-						"color: white",
-						"background-color: #ff3f41",
-						"padding: 1px 4px",
-						"border-radius: 3px 0 0 3px",
-						"font-weight: bold",
-					].join(";");
-					const badgeSourceCss = [
-						"color: white",
-						"background-color: #5a6268",
-						"padding: 1px 4px",
-						"border-radius: 0 3px 3px 0",
-					].join(";");
-
-					console[level](
-						`%c${pluginPart}%c${sourcePart}`,
-						badgePluginCss,
-						badgeSourceCss,
-						...restArgs,
-					);
-				}
-				return originalMethod.apply(loggerModule, args);
-			};
-			newMethod.__isPatched = true;
-
-			loggerModule[level] = newMethod;
-		}
-	} catch (e) {
-		logger.error("给内部日志模块打补丁时发生错误:", "Adapter V3", e);
-	}
-}
-
 /**
  * CSS 选择器常量
  */
@@ -271,7 +182,10 @@ const CONSTANTS = {
 	TIMELINE_THROTTLE_INTERVAL_MS: 1000,
 };
 
-export class V3NcmAdapter extends EventTarget implements INcmAdapter {
+export class V3NcmAdapter
+	extends TypedEventTarget<NcmAdapterEventMap>
+	implements INcmAdapter
+{
 	private reduxStore: v3.NCMStore | null = null;
 	private unsubscribeStore: (() => void) | null = null;
 	private eventAdapter!: NcmEventAdapter;
@@ -368,11 +282,10 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 						!!exports &&
 						typeof exports === "object" &&
 						"a" in exports &&
-						!!(exports as { a: unknown }).a &&
-						typeof (exports as { a: object }).a === "object" &&
-						"getStore" in (exports as { a: object }).a &&
-						typeof (exports as { a: { getStore: unknown } }).a.getStore ===
-							"function"
+						!!exports.a &&
+						typeof exports.a === "object" &&
+						"getStore" in exports.a &&
+						typeof exports.a.getStore === "function"
 					);
 				},
 			);
@@ -404,15 +317,13 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 					if (!("AudioPlayer" in exports)) {
 						return false;
 					}
-					const audioPlayerProp = (exports as { AudioPlayer: unknown })
-						.AudioPlayer;
+					const audioPlayerProp = exports.AudioPlayer;
 					if (typeof audioPlayerProp !== "object" || audioPlayerProp === null) {
 						return false;
 					}
 					return (
 						"subscribePlayStatus" in audioPlayerProp &&
-						typeof (audioPlayerProp as { subscribePlayStatus: unknown })
-							.subscribePlayStatus === "function"
+						typeof audioPlayerProp.subscribePlayStatus === "function"
 					);
 				},
 			);
@@ -454,7 +365,7 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 				) {
 					return false;
 				}
-				const bridgeCandidate = (exports as { Bridge: unknown }).Bridge;
+				const bridgeCandidate = exports.Bridge;
 				return (
 					typeof bridgeCandidate === "object" &&
 					bridgeCandidate !== null &&
@@ -490,13 +401,13 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 				}
 				if (
 					!("b" in exports) ||
-					typeof (exports as { b: unknown }).b !== "object" ||
-					(exports as { b: unknown }).b === null
+					typeof exports.b !== "object" ||
+					exports.b === null
 				) {
 					return false;
 				}
 
-				const b = (exports as { b: Record<string, unknown> }).b;
+				const b = exports.b;
 
 				if (
 					!("lastPlaying" in b) ||
@@ -684,7 +595,8 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		if (this.playState !== "Paused") {
 			this.playState = "Paused";
 			this.lastIsPlaying = false;
-			this.dispatchEvent(
+			this.dispatchTypedEvent(
+				"playStateChange",
 				new CustomEvent<PlaybackStatus>("playStateChange", {
 					detail: "Paused",
 				}),
@@ -805,7 +717,8 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 			const songInfo = songInfoResult.value;
 
 			this.coverManager.getCover(songInfo, this.resolutionSetting, (result) => {
-				this.dispatchEvent(
+				this.dispatchTypedEvent(
+					"songChange",
 					new CustomEvent<SongInfo>("songChange", {
 						detail: { ...result.songInfo, cover: result.cover },
 					}),
@@ -833,7 +746,8 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 			const isPlaying = playingInfo.playingState === 2;
 			this.lastIsPlaying = isPlaying;
 			this.playState = isPlaying ? "Playing" : "Paused";
-			this.dispatchEvent(
+			this.dispatchTypedEvent(
+				"playStateChange",
 				new CustomEvent<PlaybackStatus>("playStateChange", {
 					detail: this.playState,
 				}),
@@ -843,7 +757,8 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 		const playMode = playingInfo?.playingMode;
 		if (playMode && playMode !== this.lastPlayMode) {
 			this.lastPlayMode = playMode;
-			this.dispatchEvent(
+			this.dispatchTypedEvent(
+				"playModeChange",
 				new CustomEvent<PlayMode>("playModeChange", {
 					detail: this.getPlayMode(),
 				}),
@@ -859,7 +774,8 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 				this.lastIsMuted = newIsMuted;
 			}
 
-			this.dispatchEvent(
+			this.dispatchTypedEvent(
+				"volumeChange",
 				new CustomEvent<VolumeInfo>("volumeChange", {
 					detail: { volume: newVolume, isMuted: newIsMuted },
 				}),
@@ -937,7 +853,8 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 
 		this.musicPlayProgress = e.detail;
 
-		this.dispatchEvent(
+		this.dispatchTypedEvent(
+			"rawTimelineUpdate",
 			new CustomEvent<TimelineInfo>("rawTimelineUpdate", {
 				detail: {
 					currentTime: this.musicPlayProgress,
@@ -964,7 +881,8 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 			this.playState = newPlayState;
 			this.lastIsPlaying = newPlayState === "Playing";
 
-			this.dispatchEvent(
+			this.dispatchTypedEvent(
+				"playStateChange",
 				new CustomEvent<PlaybackStatus>("playStateChange", {
 					detail: this.playState,
 				}),
@@ -973,7 +891,8 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 	};
 
 	private dispatchTimelineUpdateNow(): void {
-		this.dispatchEvent(
+		this.dispatchTypedEvent(
+			"timelineUpdate",
 			new CustomEvent<TimelineInfo>("timelineUpdate", {
 				detail: {
 					currentTime: this.musicPlayProgress,
@@ -981,11 +900,5 @@ export class V3NcmAdapter extends EventTarget implements INcmAdapter {
 				},
 			}),
 		);
-	}
-
-	public override dispatchEvent<K extends keyof NcmAdapterEventMap>(
-		event: NcmAdapterEventMap[K],
-	): boolean {
-		return super.dispatchEvent(event);
 	}
 }

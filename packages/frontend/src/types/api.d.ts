@@ -45,11 +45,11 @@ export interface IInfLinkApi {
 
 	addEventListener<K extends keyof InfLinkEventMap>(
 		type: K,
-		listener: (ev: InfLinkEventMap[K]) => unknown,
+		listener: (ev: InfLinkEventMap[K]) => void,
 	): void;
 
 	removeEventListener<K extends keyof InfLinkEventMap>(
 		type: K,
-		listener: (ev: InfLinkEventMap[K]) => unknown,
+		listener: (ev: InfLinkEventMap[K]) => void,
 	): void;
 }

@@ -284,19 +284,15 @@ export interface NCMChannel {
 	encryptId: (id: unknown) => Promise<unknown>;
 
 	/**
-	 * 序列化并加密 API 请求。
-	 * @param endpoint API 路径 (e.g., "/api/w/v1/user/bindings/...")
-	 * @param payload 请求负载，一个可以被 JSON 化的对象。
-	 * @returns 加密后的请求体字符串。
+	 * EAPI 加密函数
+	 * @param payloadTuple 一个包含两个元素的元组，第一个元素是 API 地址，例如 `/api/song/enhance/privilege`，第二个元素是 JSON 序列化后的请求体
+	 * @returns 加密后的 HEX 字符串
 	 */
-	serialData: (
-		endpoint: string,
-		payload: Record<string, unknown>,
-	) => Promise<string>;
-	serialData2: (
-		endpoint: string,
-		payload: Record<string, unknown>,
-	) => Promise<string>;
+	serialData: (payloadTuple: [string, string]) => Promise<string>;
+
+	/**
+	 * 未知作用，也许是用来解密返回的加密内容的，但原生 fetch 似乎已经帮前端解密好了
+	 */
 	deSerialData: (data: unknown) => Promise<unknown>;
 
 	/**

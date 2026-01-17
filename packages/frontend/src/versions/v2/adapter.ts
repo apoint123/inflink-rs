@@ -7,23 +7,24 @@ import type {
 	SongInfo,
 	TimelineInfo,
 	VolumeInfo,
-} from "../../types/backend";
+} from "@/types/backend";
 import {
 	DomElementNotFoundError,
 	type NcmAdapterError,
 	ReduxStoreNotFoundError,
 	SongNotFoundError,
 	TimelineNotAvailableError,
-} from "../../types/errors";
-import type { v2 } from "../../types/ncm";
+} from "@/types/errors";
+import type { v2 } from "@/types/ncm";
 import {
 	CoverManager,
 	NcmEventAdapter,
 	type ParsedEventMap,
+	TypedEventTarget,
 	throttle,
 	waitForElement,
-} from "../../utils";
-import logger from "../../utils/logger";
+} from "@/utils";
+import logger from "@/utils/logger";
 import type { INcmAdapter, NcmAdapterEventMap } from "../adapter";
 import { PlayModeController } from "../playModeController";
 
@@ -247,7 +248,10 @@ async function findReduxStore(
 	return findStoreInFiberTree(startNode);
 }
 
-export class V2NcmAdapter extends EventTarget implements INcmAdapter {
+export class V2NcmAdapter
+	extends TypedEventTarget<NcmAdapterEventMap>
+	implements INcmAdapter
+{
 	private reduxStore: v2.NCMStore | null = null;
 	private unsubscribeStore: (() => void) | null = null;
 	private readonly eventAdapter: NcmEventAdapter;
@@ -533,7 +537,8 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 				currentSongInfo,
 				this.resolutionSetting,
 				(result) => {
-					this.dispatchEvent(
+					this.dispatchTypedEvent(
+						"songChange",
 						new CustomEvent<SongInfo>("songChange", {
 							detail: {
 								...result.songInfo,
@@ -550,7 +555,8 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 				this.musicDuration = newDuration;
 			}
 			this.musicPlayProgress = 0;
-			this.dispatchEvent(
+			this.dispatchTypedEvent(
+				"timelineUpdate",
 				new CustomEvent<TimelineInfo>("timelineUpdate", {
 					detail: {
 						currentTime: 0,
@@ -567,7 +573,8 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 				currentSongInfo,
 				this.resolutionSetting,
 				(result) => {
-					this.dispatchEvent(
+					this.dispatchTypedEvent(
+						"songChange",
 						new CustomEvent<SongInfo>("songChange", {
 							detail: {
 								...result.songInfo,
@@ -590,7 +597,8 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 			newPlayMode !== this.lastPlayMode
 		) {
 			this.lastPlayMode = newPlayMode;
-			this.dispatchEvent(
+			this.dispatchTypedEvent(
+				"playModeChange",
 				new CustomEvent<PlayMode>("playModeChange", {
 					detail: this.getPlayMode(),
 				}),
@@ -611,7 +619,8 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 
 		if (this.playStatus !== newPlayStatus) {
 			this.playStatus = newPlayStatus;
-			this.dispatchEvent(
+			this.dispatchTypedEvent(
+				"playStateChange",
 				new CustomEvent<PlaybackStatus>("playStateChange", {
 					detail: this.playStatus,
 				}),
@@ -651,7 +660,8 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	): void => {
 		this.musicPlayProgress = e.detail;
 
-		this.dispatchEvent(
+		this.dispatchTypedEvent(
+			"rawTimelineUpdate",
 			new CustomEvent<TimelineInfo>("rawTimelineUpdate", {
 				detail: {
 					currentTime: this.musicPlayProgress,
@@ -669,7 +679,8 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	};
 
 	private dispatchTimelineUpdateNow(): void {
-		this.dispatchEvent(
+		this.dispatchTypedEvent(
+			"timelineUpdate",
 			new CustomEvent<TimelineInfo>("timelineUpdate", {
 				detail: {
 					currentTime: this.musicPlayProgress,
@@ -698,7 +709,8 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 	};
 
 	private dispatchVolumeChangeEvent(): void {
-		this.dispatchEvent(
+		this.dispatchTypedEvent(
+			"volumeChange",
 			new CustomEvent<VolumeInfo>("volumeChange", {
 				detail: {
 					volume: this.volume,
@@ -706,11 +718,5 @@ export class V2NcmAdapter extends EventTarget implements INcmAdapter {
 				},
 			}),
 		);
-	}
-
-	public override dispatchEvent<K extends keyof NcmAdapterEventMap>(
-		event: NcmAdapterEventMap[K],
-	): boolean {
-		return super.dispatchEvent(event);
 	}
 }

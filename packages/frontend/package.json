@@ -5,16 +5,16 @@
 	"dependencies": {
 		"@emotion/react": "^11.14.0",
 		"@emotion/styled": "^11.14.1",
-		"@mui/icons-material": "^7.3.6",
-		"@mui/material": "^7.3.6",
-		"jotai": "^2.16.0",
+		"@mui/icons-material": "^7.3.7",
+		"@mui/material": "^7.3.7",
+		"jotai": "^2.16.2",
 		"loglevel": "^1.9.2",
 		"neverthrow": "^8.2.0",
 		"react": "^19.2.3",
 		"react-dom": "^19.2.3"
 	},
 	"devDependencies": {
-		"@types/react": "^19.2.7",
+		"@types/react": "^19.2.8",
 		"@types/react-dom": "^19.2.3",
 		"redux": "^5.0.1"
 	}
