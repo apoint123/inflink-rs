@@ -34,24 +34,14 @@ export class NcmEventAdapter extends TypedEventTarget<ParsedEventMap> {
 	constructor(cmder?: OrpheusCommand) {
 		super();
 		this.nativeCmder = cmder || window.legacyNativeCmder;
-		this._registerNativeEvents();
+		this.registerNativeEvents();
 	}
 
 	public dispose(): void {
 		this.unregisterNativeEvents();
 	}
 
-	private dispatch<K extends keyof ParsedEventMap>(
-		type: K,
-		detail: ParsedEventMap[K]["detail"],
-	): void {
-		this.dispatchTypedEvent(
-			type,
-			new CustomEvent(type, { detail }) as ParsedEventMap[K],
-		);
-	}
-
-	private _registerNativeEvents(): void {
+	private registerNativeEvents(): void {
 		this.subscribe("PlayState", this.onRawPlayStateChanged);
 		this.subscribe("PlayProgress", this.onRawPlayProgress);
 		this.subscribe("Seek", this.onRawSeek);

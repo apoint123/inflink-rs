@@ -537,15 +537,10 @@ export class V2NcmAdapter
 				currentSongInfo,
 				this.resolutionSetting,
 				(result) => {
-					this.dispatchTypedEvent(
-						"songChange",
-						new CustomEvent<SongInfo>("songChange", {
-							detail: {
-								...result.songInfo,
-								cover: result.cover,
-							},
-						}),
-					);
+					this.dispatch("songChange", {
+						...result.songInfo,
+						cover: result.cover,
+					});
 				},
 			);
 
@@ -555,15 +550,10 @@ export class V2NcmAdapter
 				this.musicDuration = newDuration;
 			}
 			this.musicPlayProgress = 0;
-			this.dispatchTypedEvent(
-				"timelineUpdate",
-				new CustomEvent<TimelineInfo>("timelineUpdate", {
-					detail: {
-						currentTime: 0,
-						totalTime: this.musicDuration,
-					},
-				}),
-			);
+			this.dispatch("timelineUpdate", {
+				currentTime: 0,
+				totalTime: this.musicDuration,
+			});
 		} else if (
 			this.lastDispatchedSongInfo &&
 			!this.lastDispatchedSongInfo.cover &&
@@ -573,15 +563,10 @@ export class V2NcmAdapter
 				currentSongInfo,
 				this.resolutionSetting,
 				(result) => {
-					this.dispatchTypedEvent(
-						"songChange",
-						new CustomEvent<SongInfo>("songChange", {
-							detail: {
-								...result.songInfo,
-								cover: result.cover,
-							},
-						}),
-					);
+					this.dispatch("songChange", {
+						...result.songInfo,
+						cover: result.cover,
+					});
 					this.lastDispatchedSongInfo = {
 						...result.songInfo,
 						cover: result.cover,
@@ -597,12 +582,7 @@ export class V2NcmAdapter
 			newPlayMode !== this.lastPlayMode
 		) {
 			this.lastPlayMode = newPlayMode;
-			this.dispatchTypedEvent(
-				"playModeChange",
-				new CustomEvent<PlayMode>("playModeChange", {
-					detail: this.getPlayMode(),
-				}),
-			);
+			this.dispatch("playModeChange", this.getPlayMode());
 		}
 
 		const newReduxState = playingState.playingState;
@@ -619,12 +599,7 @@ export class V2NcmAdapter
 
 		if (this.playStatus !== newPlayStatus) {
 			this.playStatus = newPlayStatus;
-			this.dispatchTypedEvent(
-				"playStateChange",
-				new CustomEvent<PlaybackStatus>("playStateChange", {
-					detail: this.playStatus,
-				}),
-			);
+			this.dispatch("playStateChange", this.playStatus);
 		}
 	}
 
@@ -660,15 +635,10 @@ export class V2NcmAdapter
 	): void => {
 		this.musicPlayProgress = e.detail;
 
-		this.dispatchTypedEvent(
-			"rawTimelineUpdate",
-			new CustomEvent<TimelineInfo>("rawTimelineUpdate", {
-				detail: {
-					currentTime: this.musicPlayProgress,
-					totalTime: this.musicDuration,
-				},
-			}),
-		);
+		this.dispatch("rawTimelineUpdate", {
+			currentTime: this.musicPlayProgress,
+			totalTime: this.musicDuration,
+		});
 
 		this.dispatchTimelineThrottled();
 	};
@@ -679,15 +649,10 @@ export class V2NcmAdapter
 	};
 
 	private dispatchTimelineUpdateNow(): void {
-		this.dispatchTypedEvent(
-			"timelineUpdate",
-			new CustomEvent<TimelineInfo>("timelineUpdate", {
-				detail: {
-					currentTime: this.musicPlayProgress,
-					totalTime: this.musicDuration,
-				},
-			}),
-		);
+		this.dispatch("timelineUpdate", {
+			currentTime: this.musicPlayProgress,
+			totalTime: this.musicDuration,
+		});
 	}
 
 	private readonly onVolumeChanged = (
@@ -709,14 +674,9 @@ export class V2NcmAdapter
 	};
 
 	private dispatchVolumeChangeEvent(): void {
-		this.dispatchTypedEvent(
-			"volumeChange",
-			new CustomEvent<VolumeInfo>("volumeChange", {
-				detail: {
-					volume: this.volume,
-					isMuted: this.isMuted,
-				},
-			}),
-		);
+		this.dispatch("volumeChange", {
+			volume: this.volume,
+			isMuted: this.isMuted,
+		});
 	}
 }

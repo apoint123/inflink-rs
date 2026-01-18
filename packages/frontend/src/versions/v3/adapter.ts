@@ -595,12 +595,7 @@ export class V3NcmAdapter
 		if (this.playState !== "Paused") {
 			this.playState = "Paused";
 			this.lastIsPlaying = false;
-			this.dispatchTypedEvent(
-				"playStateChange",
-				new CustomEvent<PlaybackStatus>("playStateChange", {
-					detail: "Paused",
-				}),
-			);
+			this.dispatch("playStateChange", "Paused");
 		}
 		this.reduxStore?.dispatch({
 			type: "playing/pause",
@@ -717,12 +712,10 @@ export class V3NcmAdapter
 			const songInfo = songInfoResult.value;
 
 			this.coverManager.getCover(songInfo, this.resolutionSetting, (result) => {
-				this.dispatchTypedEvent(
-					"songChange",
-					new CustomEvent<SongInfo>("songChange", {
-						detail: { ...result.songInfo, cover: result.cover },
-					}),
-				);
+				this.dispatch("songChange", {
+					...result.songInfo,
+					cover: result.cover,
+				});
 			});
 
 			if (!this.hasRestoredInitialState) {
@@ -746,23 +739,13 @@ export class V3NcmAdapter
 			const isPlaying = playingInfo.playingState === 2;
 			this.lastIsPlaying = isPlaying;
 			this.playState = isPlaying ? "Playing" : "Paused";
-			this.dispatchTypedEvent(
-				"playStateChange",
-				new CustomEvent<PlaybackStatus>("playStateChange", {
-					detail: this.playState,
-				}),
-			);
+			this.dispatch("playStateChange", this.playState);
 		}
 
 		const playMode = playingInfo?.playingMode;
 		if (playMode && playMode !== this.lastPlayMode) {
 			this.lastPlayMode = playMode;
-			this.dispatchTypedEvent(
-				"playModeChange",
-				new CustomEvent<PlayMode>("playModeChange", {
-					detail: this.getPlayMode(),
-				}),
-			);
+			this.dispatch("playModeChange", this.getPlayMode());
 		}
 
 		const newVolume = playingInfo?.playingVolume;
@@ -774,12 +757,10 @@ export class V3NcmAdapter
 				this.lastIsMuted = newIsMuted;
 			}
 
-			this.dispatchTypedEvent(
-				"volumeChange",
-				new CustomEvent<VolumeInfo>("volumeChange", {
-					detail: { volume: newVolume, isMuted: newIsMuted },
-				}),
-			);
+			this.dispatch("volumeChange", {
+				volume: newVolume,
+				isMuted: newIsMuted,
+			});
 		}
 	}
 
@@ -853,15 +834,10 @@ export class V3NcmAdapter
 
 		this.musicPlayProgress = e.detail;
 
-		this.dispatchTypedEvent(
-			"rawTimelineUpdate",
-			new CustomEvent<TimelineInfo>("rawTimelineUpdate", {
-				detail: {
-					currentTime: this.musicPlayProgress,
-					totalTime: this.musicDuration,
-				},
-			}),
-		);
+		this.dispatch("rawTimelineUpdate", {
+			currentTime: this.musicPlayProgress,
+			totalTime: this.musicDuration,
+		});
 
 		this.dispatchTimelineThrottled();
 	};
@@ -881,24 +857,14 @@ export class V3NcmAdapter
 			this.playState = newPlayState;
 			this.lastIsPlaying = newPlayState === "Playing";
 
-			this.dispatchTypedEvent(
-				"playStateChange",
-				new CustomEvent<PlaybackStatus>("playStateChange", {
-					detail: this.playState,
-				}),
-			);
+			this.dispatch("playStateChange", this.playState);
 		}
 	};
 
 	private dispatchTimelineUpdateNow(): void {
-		this.dispatchTypedEvent(
-			"timelineUpdate",
-			new CustomEvent<TimelineInfo>("timelineUpdate", {
-				detail: {
-					currentTime: this.musicPlayProgress,
-					totalTime: this.musicDuration,
-				},
-			}),
-		);
+		this.dispatch("timelineUpdate", {
+			currentTime: this.musicPlayProgress,
+			totalTime: this.musicDuration,
+		});
 	}
 }

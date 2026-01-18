@@ -3,6 +3,8 @@
  * @see https://github.com/DerZade/typescript-event-target/blob/391fc2d6bd750f04eee8b3aa89fe69409b7533d4/src/TypedEventTarget.ts
  */
 
+type GetDetail<E> = E extends CustomEvent<infer D> ? D : never;
+
 /**
  * A function that can be passed to the `listener` parameter of
  * {@link TypedEventTarget.addEventListener} and {@link TypedEventTarget.removeEventListener}.
@@ -132,5 +134,22 @@ export class TypedEventTarget<M extends ValueIsEvent<M>> extends EventTarget {
 	 */
 	public dispatchTypedEvent<T extends keyof M>(_type: T, event: M[T]): boolean {
 		return super.dispatchEvent(event);
+	}
+
+	/**
+	 * 用于方便派发 CustomEvent 的辅助函数，只能用来派发 CustomEvent，要派发其他事件如
+	 * MouseEvent 请使用 {@link dispatchTypedEvent}
+	 */
+	public dispatch<T extends keyof M & string>(
+		type: T,
+		...args: GetDetail<M[T]> extends undefined
+			? [detail?: GetDetail<M[T]>]
+			: [detail: GetDetail<M[T]>]
+	): boolean {
+		const init: CustomEventInit = args.length > 0 ? { detail: args[0] } : {};
+
+		const event = new CustomEvent(type, init);
+
+		return this.dispatchTypedEvent(type, event as Event as M[T]);
 	}
 }
