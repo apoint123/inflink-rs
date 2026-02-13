@@ -159,8 +159,8 @@ export function FeatureSettings() {
 			<SettingItem
 				visible={discordEnabled}
 				icon={<StyleIcon />}
-				title="状态显示风格"
-				description={<span>自定义 "Listening to" 后面的文本内容</span>}
+				title="简略信息"
+				description={<span>向其他人展示的简略信息</span>}
 				action={
 					<FormControl size="small" sx={{ width: 140 }}>
 						<Select
