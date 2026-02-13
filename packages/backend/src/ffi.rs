@@ -152,10 +152,10 @@ pub unsafe extern "C" fn inflink_dispatch(args: *mut *mut c_void) -> *mut c_char
         }
 
         let command_json = unsafe { c_char_to_string(command_ptr.cast::<c_char>()) };
-        trace!(command = %command_json, "收到前端命令");
+        // trace!(command = %command_json, "收到前端命令");
 
         let result_json = smtc_core::handle_command(&command_json);
-        trace!(result = %result_json, "发送执行结果到前端");
+        // trace!(result = %result_json, "发送执行结果到前端");
 
         let mut buffer_guard = match RETURN_BUFFER.lock() {
             Ok(guard) => guard,

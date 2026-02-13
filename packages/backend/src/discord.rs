@@ -189,6 +189,7 @@ impl RpcWorker {
 
     fn disconnect(&mut self) {
         if let Some(mut client) = self.client.take() {
+            let _ = client.clear_activity();
             let _ = client.close();
         }
         self.last_sent_end_timestamp = None;
@@ -410,6 +411,15 @@ impl RpcWorker {
         }
 
         true
+    }
+}
+
+impl Drop for RpcWorker {
+    fn drop(&mut self) {
+        if let Some(mut client) = self.client.take() {
+            let _ = client.clear_activity();
+            let _ = client.close();
+        }
     }
 }
 
