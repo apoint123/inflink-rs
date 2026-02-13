@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.2.9
+
+### Patch Changes
+
+- 5cfef80: fix: 修正简略信息功能的描述
+- 3d7863e: feat: 优化不兼容的版本检测
+- 775482d: feat: 添加自定义应用名功能
+
 ## 3.2.8
 
 ### Patch Changes
