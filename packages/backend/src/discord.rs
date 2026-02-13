@@ -10,8 +10,8 @@ use discord_rich_presence::{DiscordIpc, DiscordIpcClient};
 use tracing::{debug, info, warn};
 
 use crate::model::{
-    DiscordConfigPayload, DiscordDisplayMode, MetadataPayload, PlayStatePayload, PlaybackStatus,
-    TimelinePayload,
+    DiscordAppNameMode, DiscordConfigPayload, DiscordDisplayMode, MetadataPayload,
+    PlayStatePayload, PlaybackStatus, TimelinePayload,
 };
 
 const APP_ID: &str = "1427186361827594375";
@@ -39,26 +39,41 @@ struct ActivityData {
     current_time: f64,
     cached_cover_url: String,
     cached_song_url: String,
+    cached_app_name: Option<String>,
 }
 
 impl ActivityData {
-    fn from_metadata(metadata: MetadataPayload) -> Self {
+    fn from_metadata(metadata: MetadataPayload, mode: &DiscordAppNameMode) -> Self {
         let cached_cover_url = Self::process_cover_url(metadata.original_cover_url.as_deref());
         let cached_song_url = Self::process_song_url(metadata.ncm_id);
+        let cached_app_name = Self::compute_app_name(mode, &metadata);
+
         Self {
             metadata,
             status: PlaybackStatus::Paused,
             current_time: 0.0,
             cached_cover_url,
             cached_song_url,
+            cached_app_name,
         }
     }
 
-    fn update_metadata(&mut self, metadata: MetadataPayload) {
+    fn update_metadata(&mut self, metadata: MetadataPayload, mode: &DiscordAppNameMode) {
         self.cached_cover_url = Self::process_cover_url(metadata.original_cover_url.as_deref());
         self.cached_song_url = Self::process_song_url(metadata.ncm_id);
+        self.cached_app_name = Self::compute_app_name(mode, &metadata);
         self.metadata = metadata;
         self.current_time = 0.0;
+    }
+
+    fn compute_app_name(mode: &DiscordAppNameMode, metadata: &MetadataPayload) -> Option<String> {
+        match mode {
+            DiscordAppNameMode::Default => None,
+            DiscordAppNameMode::Song => Some(metadata.song_name.clone()),
+            DiscordAppNameMode::Artist => Some(metadata.author_name.clone()),
+            DiscordAppNameMode::Album => Some(metadata.album_name.clone()),
+            DiscordAppNameMode::Custom(text) => Some(text.clone()),
+        }
     }
 
     fn process_cover_url(original_url: Option<&str>) -> String {
@@ -91,6 +106,7 @@ struct RpcWorker {
     last_sent_end_timestamp: Option<i64>,
     show_when_paused: bool,
     display_mode: DiscordDisplayMode,
+    app_name_mode: DiscordAppNameMode,
 }
 
 impl Default for RpcWorker {
@@ -103,6 +119,7 @@ impl Default for RpcWorker {
             last_sent_end_timestamp: None,
             show_when_paused: false,
             display_mode: DiscordDisplayMode::Name,
+            app_name_mode: DiscordAppNameMode::Default,
         }
     }
 }
@@ -124,12 +141,19 @@ impl RpcWorker {
                 info!(
                     show_when_paused = ?payload.show_when_paused,
                     display_mode = ?payload.display_mode,
+                    app_name_mode = ?payload.app_name_mode,
                     "更新 Discord 配置",
                 );
                 self.show_when_paused = payload.show_when_paused;
+                self.app_name_mode = payload.app_name_mode;
 
                 if let Some(mode) = payload.display_mode {
                     self.display_mode = mode;
+                }
+
+                if let Some(data) = &mut self.data {
+                    data.cached_app_name =
+                        ActivityData::compute_app_name(&self.app_name_mode, &data.metadata);
                 }
 
                 self.last_sent_end_timestamp = None;
@@ -137,10 +161,10 @@ impl RpcWorker {
             RpcMessage::Metadata(payload) => {
                 let new_data = match self.data.take() {
                     Some(mut d) => {
-                        d.update_metadata(payload);
+                        d.update_metadata(payload, &self.app_name_mode);
                         d
                     }
-                    None => ActivityData::from_metadata(payload),
+                    None => ActivityData::from_metadata(payload, &self.app_name_mode),
                 };
                 self.data = Some(new_data);
                 self.last_sent_end_timestamp = None;
@@ -242,13 +266,19 @@ impl RpcWorker {
             DiscordDisplayMode::Details => StatusDisplayType::Details,
         };
 
-        Activity::new()
+        let mut activity = Activity::new()
             .details(&data.metadata.song_name)
             .state(&data.metadata.author_name)
             .activity_type(ActivityType::Listening)
             .assets(assets)
             .buttons(buttons)
-            .status_display_type(status_type)
+            .status_display_type(status_type);
+
+        if let Some(name) = &data.cached_app_name {
+            activity = activity.name(name);
+        }
+
+        activity
     }
 
     fn calc_paused_timestamps(current_time: f64, duration: f64) -> (i64, i64) {

@@ -12,6 +12,8 @@ const STORE_KEY_INTERNAL_LOGGING_ENABLED = `${STORE_KEY_BASE}.internal_logging_e
 const STORE_KEY_DISCORD_ENABLED = `${STORE_KEY_BASE}.discord_enabled`;
 const STORE_KEY_DISCORD_SHOW_PAUSED = `${STORE_KEY_BASE}.discord_show_paused`;
 const STORE_KEY_DISCORD_DISPLAY_MODE = `${STORE_KEY_BASE}.discord_display_mode`;
+const STORE_KEY_DISCORD_APP_NAME_MODE_TYPE = `${STORE_KEY_BASE}.discord_app_name_mode_type`;
+const STORE_KEY_DISCORD_CUSTOM_APP_NAME_TEXT = `${STORE_KEY_BASE}.discord_custom_app_name_text`;
 
 export const smtcEnabledAtom = atomWithStorage<boolean>(
 	STORE_KEY_SMTC_ENABLED,
@@ -31,6 +33,15 @@ export const discordShowPausedAtom = atomWithStorage<boolean>(
 export const discordDisplayModeAtom = atomWithStorage<DiscordDisplayMode>(
 	STORE_KEY_DISCORD_DISPLAY_MODE,
 	"Name",
+);
+
+export const discordAppNameModeTypeAtom = atomWithStorage<
+	"Default" | "Song" | "Artist" | "Album" | "Custom"
+>(STORE_KEY_DISCORD_APP_NAME_MODE_TYPE, "Default");
+
+export const discordCustomAppNameTextAtom = atomWithStorage<string>(
+	STORE_KEY_DISCORD_CUSTOM_APP_NAME_TEXT,
+	"",
 );
 
 export const resolutionAtom = atomWithStorage<string>(
@@ -53,9 +64,20 @@ export const internalLoggingAtom = atomWithStorage<boolean>(
 	false,
 );
 
-export const appConfigAtom = atom((get) => ({
-	smtcEnabled: get(smtcEnabledAtom),
-	discordEnabled: get(discordEnabledAtom),
-	discordShowPaused: get(discordShowPausedAtom),
-	discordDisplayMode: get(discordDisplayModeAtom),
-}));
+export const appConfigAtom = atom((get) => {
+	const modeType = get(discordAppNameModeTypeAtom);
+	const customText = get(discordCustomAppNameTextAtom);
+
+	const appNameMode =
+		modeType === "Custom"
+			? { type: "Custom" as const, value: customText }
+			: { type: modeType };
+
+	return {
+		smtcEnabled: get(smtcEnabledAtom),
+		discordEnabled: get(discordEnabledAtom),
+		discordShowPaused: get(discordShowPausedAtom),
+		discordDisplayMode: get(discordDisplayModeAtom),
+		appNameMode,
+	};
+});

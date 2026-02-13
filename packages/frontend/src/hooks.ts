@@ -183,8 +183,13 @@ export function useBackendConnection(adapterState: AdapterState) {
 	const { adapter, status } = adapterState;
 
 	const config = useAtomValue(appConfigAtom);
-	const { smtcEnabled, discordEnabled, discordShowPaused, discordDisplayMode } =
-		config;
+	const {
+		smtcEnabled,
+		discordEnabled,
+		discordShowPaused,
+		discordDisplayMode,
+		appNameMode,
+	} = config;
 
 	const hasSentInitialMetadata = useRef(false);
 
@@ -262,6 +267,7 @@ export function useBackendConnection(adapterState: AdapterState) {
 		smtcImplObj.updateDiscordConfig({
 			showWhenPaused: discordShowPaused,
 			displayMode: discordDisplayMode,
+			appNameMode: appNameMode,
 		});
 	}, [
 		shouldConnect,
@@ -269,6 +275,7 @@ export function useBackendConnection(adapterState: AdapterState) {
 		discordEnabled,
 		discordShowPaused,
 		discordDisplayMode,
+		appNameMode,
 	]);
 }
 

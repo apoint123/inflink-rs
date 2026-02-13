@@ -83,6 +83,19 @@ pub struct PlayModePayload {
 pub struct DiscordConfigPayload {
     pub show_when_paused: bool,
     pub display_mode: Option<DiscordDisplayMode>,
+    #[serde(default)]
+    pub app_name_mode: DiscordAppNameMode,
+}
+
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq, Eq)]
+#[serde(tag = "type", content = "value")]
+pub enum DiscordAppNameMode {
+    #[default]
+    Default,
+    Song,
+    Artist,
+    Album,
+    Custom(String),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]

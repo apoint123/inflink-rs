@@ -98,7 +98,15 @@ export type DiscordDisplayMode = "Name" | "State" | "Details";
 export interface DiscordConfigPayload {
 	showWhenPaused: boolean;
 	displayMode: DiscordDisplayMode;
+	appNameMode: DiscordAppNameMode;
 }
+
+export type DiscordAppNameMode =
+	| { type: "Default" }
+	| { type: "Song" }
+	| { type: "Artist" }
+	| { type: "Album" }
+	| { type: "Custom"; value: string };
 
 export type CommandResult = {
 	status: "Success" | "Error";

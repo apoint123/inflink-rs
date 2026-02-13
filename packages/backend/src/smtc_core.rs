@@ -295,20 +295,8 @@ pub fn shutdown() -> Result<()> {
     }
 
     discord::disable();
-    clear_callback();
     debug!("SMTC 已关闭");
     Ok(())
-}
-
-pub fn clear_callback() {
-    if let Ok(mut guard) = SMTC_CONTEXT.lock()
-        && let Some(ctx) = guard.as_mut()
-    {
-        ctx.callback = None;
-        debug!("SMTC 事件回调已清理");
-    } else {
-        error!("清理 SMTC 回调时锁中毒");
-    }
 }
 
 fn with_smtc_ctx<F>(action_name: &str, f: F) -> Result<()>

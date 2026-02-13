@@ -3,6 +3,7 @@
  * SMTC 和 Discord 的设置
  */
 
+import EditIcon from "@mui/icons-material/Edit";
 import GraphicEqIcon from "@mui/icons-material/GraphicEq";
 import HeadsetIcon from "@mui/icons-material/Headset";
 import HighQualityIcon from "@mui/icons-material/HighQuality";
@@ -20,7 +21,10 @@ import {
 	Typography,
 } from "@mui/material";
 import { useAtom } from "jotai";
+import { useEffect, useState } from "react";
 import {
+	discordAppNameModeTypeAtom,
+	discordCustomAppNameTextAtom,
 	discordDisplayModeAtom,
 	discordEnabledAtom,
 	discordShowPausedAtom,
@@ -40,6 +44,33 @@ export function FeatureSettings() {
 	const [discordDisplayMode, setDiscordDisplayMode] = useAtom(
 		discordDisplayModeAtom,
 	);
+	const [appNameModeType, setAppNameModeType] = useAtom(
+		discordAppNameModeTypeAtom,
+	);
+	const [customAppNameText, setCustomAppNameText] = useAtom(
+		discordCustomAppNameTextAtom,
+	);
+
+	const [localCustomText, setLocalCustomText] = useState(customAppNameText);
+
+	useEffect(() => {
+		setLocalCustomText(customAppNameText);
+	}, [customAppNameText]);
+
+	const handleCustomTextCommit = () => {
+		if (localCustomText !== customAppNameText) {
+			setCustomAppNameText(localCustomText);
+		}
+	};
+
+	const handleCustomTextKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+		if (e.key === "Enter") {
+			handleCustomTextCommit();
+			if (e.target instanceof HTMLElement) {
+				e.target.blur();
+			}
+		}
+	};
 
 	const predefinedResolutions = ["300", "500", "1024", "max"];
 	const handleResChange = (_event: unknown, newValue: string | null) => {
@@ -173,6 +204,42 @@ export function FeatureSettings() {
 							<MenuItem value="Details">歌曲名</MenuItem>
 						</Select>
 					</FormControl>
+				}
+			/>
+
+			<SettingItem
+				visible={discordEnabled}
+				icon={<EditIcon />}
+				title="自定义应用名称"
+				description="会显示在 “Listening to” 后面。同时如果在 “简略信息” 选择了 “应用名称”，简略信息也会显示此应用名称"
+				action={
+					<Box sx={{ display: "flex", gap: 1 }}>
+						<FormControl size="small" sx={{ width: 140 }}>
+							<Select
+								value={appNameModeType}
+								onChange={(e) => setAppNameModeType(e.target.value)}
+								variant="outlined"
+							>
+								<MenuItem value="Default">应用名称</MenuItem>
+								<MenuItem value="Song">歌曲名</MenuItem>
+								<MenuItem value="Artist">歌手名</MenuItem>
+								<MenuItem value="Album">专辑名</MenuItem>
+								<MenuItem value="Custom">自定义文本</MenuItem>
+							</Select>
+						</FormControl>
+						{appNameModeType === "Custom" && (
+							<TextField
+								size="small"
+								variant="outlined"
+								placeholder="自定义名称..."
+								value={localCustomText}
+								onChange={(e) => setLocalCustomText(e.target.value)}
+								onBlur={handleCustomTextCommit}
+								onKeyDown={handleCustomTextKeyDown}
+								sx={{ width: 140 }}
+							/>
+						)}
+					</Box>
 				}
 			/>
 		</Box>
