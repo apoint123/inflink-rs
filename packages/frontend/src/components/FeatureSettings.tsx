@@ -177,8 +177,14 @@ export function FeatureSettings() {
 			<SettingItem
 				visible={discordEnabled}
 				icon={<PauseCircleIcon />}
-				title="暂停时保持状态"
-				description="暂停时保留 Discord 状态显示 (注：由于 Discord 的限制，已播放时间将变为 00:00)"
+				title="暂停时显示状态"
+				description={
+					<span>
+						暂停时保留 Discord 状态的显示
+						<br />
+						注：由于 Discord 的限制，已播放时间将变为 00:00
+					</span>
+				}
 				action={
 					<Switch
 						checked={discordShowPaused}
@@ -191,7 +197,7 @@ export function FeatureSettings() {
 				visible={discordEnabled}
 				icon={<StyleIcon />}
 				title="简略信息"
-				description={<span>向其他人展示的简略信息</span>}
+				description="向其他人展示的简略信息"
 				action={
 					<FormControl size="small" sx={{ width: 140 }}>
 						<Select
@@ -211,7 +217,13 @@ export function FeatureSettings() {
 				visible={discordEnabled}
 				icon={<EditIcon />}
 				title="自定义应用名称"
-				description="会显示在 “Listening to” 后面。同时如果在 “简略信息” 选择了 “应用名称”，简略信息也会显示此应用名称"
+				description={
+					<span>
+						会显示在 “Listening to” 后面
+						<br />
+						如果在 “简略信息” 设置中选择了 “应用名称”，简略信息也会显示此名称
+					</span>
+				}
 				action={
 					<Box sx={{ display: "flex", gap: 1 }}>
 						<FormControl size="small" sx={{ width: 140 }}>
