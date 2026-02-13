@@ -12,14 +12,15 @@ import { FeatureSettings } from "./components/FeatureSettings";
 import {
 	InitializationErrorAlert,
 	LoadingIndicator,
-	UnsupportedVersionAlert,
 } from "./components/StatusComponents";
+import { VersionWarningAlert } from "./components/VersionWarningAlert";
 import {
 	useBackendConnection,
 	useGlobalApi,
 	useInfoProvider,
 	useNcmTheme,
 	useNcmVersion,
+	useVersionWarning,
 } from "./hooks";
 import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
 import {
@@ -74,6 +75,8 @@ function Main() {
 	useBackendConnection(adapterState);
 	useGlobalApi(adapter);
 
+	const showVersionWarning = useVersionWarning(ncmVersion);
+
 	useEffect(() => {
 		if (status === "ready" && adapter) {
 			const hasSupport = adapter.hasNativeSmtcSupport();
@@ -108,10 +111,6 @@ function Main() {
 		return <LoadingIndicator />;
 	}
 
-	if (ncmVersion === "unsupported") {
-		return <UnsupportedVersionAlert />;
-	}
-
 	if (status === "error") {
 		return <InitializationErrorAlert error={error} />;
 	}
@@ -121,6 +120,8 @@ function Main() {
 			<Typography variant="h5" sx={{ mb: 3, fontWeight: "bold" }}>
 				InfLink-rs 设置
 			</Typography>
+
+			<VersionWarningAlert version={ncmVersion} show={showVersionWarning} />
 
 			<FeatureSettings />
 

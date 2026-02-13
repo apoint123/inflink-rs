@@ -64,6 +64,11 @@ export const internalLoggingAtom = atomWithStorage<boolean>(
 	false,
 );
 
+export const ignoredVersionAtom = atomWithStorage<string>(
+	`${STORE_KEY_BASE}.ignored_version`,
+	"",
+);
+
 export const appConfigAtom = atom((get) => {
 	const modeType = get(discordAppNameModeTypeAtom);
 	const customText = get(discordCustomAppNameTextAtom);

@@ -9,35 +9,68 @@ import type { NcmAdapterError } from "./types/errors";
 import logger from "./utils/logger";
 import type { INcmAdapter, NcmAdapterEventMap } from "./versions/adapter";
 
-type NcmVersion = "v3" | "v2" | "unsupported";
+export interface NcmVersionInfo {
+	major: number;
+	minor: number;
+	patch: number;
+	raw: string;
+	adapterVersion: "v3" | "v2";
+}
 
 /**
  * 检测当前网易云音乐客户端的版本
- * @returns 'v3', 'v2', 'unsupported', 或 null (检测中)
+ * @returns NcmVersionInfo | null (检测中)
  */
-export function useNcmVersion(): NcmVersion | null {
-	const [version, setVersion] = useState<NcmVersion | null>(null);
+export function useNcmVersion(): NcmVersionInfo | null {
+	const [version, setVersion] = useState<NcmVersionInfo | null>(null);
 
 	useEffect(() => {
 		try {
 			const versionStr = betterncm.ncm.getNCMVersion();
-			const majorVersion = parseInt(versionStr?.split(".")[0] ?? "", 10);
+			const parts = versionStr?.split(".").map((p) => parseInt(p, 10)) ?? [];
+			const major = parts[0] || 0;
+			const minor = parts[1] || 0;
+			const patch = parts[2] || 0;
 
-			if (majorVersion >= 3) {
-				setVersion("v3");
-			} else if (majorVersion === 2) {
-				setVersion("v2");
-			} else {
-				logger.warn(`不支持的网易云音乐版本: ${versionStr}`);
-				setVersion("unsupported");
-			}
+			const adapterVersion = major >= 3 ? "v3" : "v2";
+
+			setVersion({
+				major,
+				minor,
+				patch,
+				raw: versionStr,
+				adapterVersion,
+			});
 		} catch (e) {
 			logger.error("无法检测网易云音乐版本", "useNcmVersion", e);
-			setVersion("unsupported");
+			setVersion({
+				major: 0,
+				minor: 0,
+				patch: 0,
+				raw: "0.0.0",
+				adapterVersion: "v3",
+			});
 		}
 	}, []);
 
 	return version;
+}
+
+export function useVersionWarning(version: NcmVersionInfo | null): boolean {
+	if (!version) return false;
+
+	const { major, minor, patch, raw } = version;
+
+	if (major !== 2 && major !== 3) return true;
+	if (major === 3 && minor !== 1) return true;
+
+	// 这里的检查比 README.md 要宽松一点，因为 README.md 中的支持的版本是
+	// 真的只在那个范围里测试了，但实际上插件应该也能在这个范围之外的一些版本工作
+	if (major === 3 && minor === 1 && patch <= 15) return true;
+
+	if (major === 2 && raw !== "2.12.13") return true;
+
+	return false;
 }
 
 export interface AdapterState {
@@ -52,7 +85,7 @@ const INITIAL_ADAPTER_STATE: AdapterState = {
 	error: null,
 };
 
-export function useInfoProvider(version: NcmVersion | null): AdapterState {
+export function useInfoProvider(version: NcmVersionInfo | null): AdapterState {
 	const [adapterState, setAdapterState] = useState<AdapterState>(
 		INITIAL_ADAPTER_STATE,
 	);
@@ -61,7 +94,7 @@ export function useInfoProvider(version: NcmVersion | null): AdapterState {
 		let didUnmount = false;
 
 		const initializeProvider = async () => {
-			if (!version || version === "unsupported") {
+			if (!version) {
 				if (!didUnmount) {
 					setAdapterState(INITIAL_ADAPTER_STATE);
 				}
@@ -69,7 +102,7 @@ export function useInfoProvider(version: NcmVersion | null): AdapterState {
 			}
 
 			let adapter: INcmAdapter | null = null;
-			switch (version) {
+			switch (version.adapterVersion) {
 				case "v3": {
 					const { V3NcmAdapter } = await import("./versions/v3/adapter");
 					adapter = new V3NcmAdapter();
