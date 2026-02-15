@@ -1,31 +1,79 @@
-use anyhow::{Context, Result};
-use base64::Engine;
-use base64::engine::general_purpose;
-use cef_safe::{CefResult, CefV8Context, CefV8Value, renderer_post_task_in_v8_ctx};
-use serde::Serialize;
-use std::sync::{LazyLock, Mutex};
-use std::time::Instant;
-use tokio::runtime::Runtime;
-use tokio::task::JoinHandle;
-use tracing::{debug, error, info, instrument, trace, warn};
-use windows::{
-    Foundation::{TimeSpan, TypedEventHandler, Uri},
-    Media::Playback::MediaPlayer,
-    Media::{
-        AutoRepeatModeChangeRequestedEventArgs, MediaPlaybackAutoRepeatMode, MediaPlaybackStatus,
-        MediaPlaybackType, PlaybackPositionChangeRequestedEventArgs,
-        ShuffleEnabledChangeRequestedEventArgs, SystemMediaTransportControls,
-        SystemMediaTransportControlsButton, SystemMediaTransportControlsButtonPressedEventArgs,
-        SystemMediaTransportControlsTimelineProperties,
+use std::{
+    sync::{
+        LazyLock,
+        Mutex,
     },
-    Storage::Streams::{DataWriter, InMemoryRandomAccessStream, RandomAccessStreamReference},
-    core::{HSTRING, Ref},
+    time::Instant,
 };
 
-use crate::discord;
-use crate::model::{
-    CommandResult, CommandStatus, CoverSource, MetadataPayload, PlaybackStatus, RepeatMode,
-    SmtcCommand,
+use anyhow::{
+    Context,
+    Result,
+};
+use base64::{
+    Engine,
+    engine::general_purpose,
+};
+use cef_safe::{
+    CefResult,
+    CefV8Context,
+    CefV8Value,
+    renderer_post_task_in_v8_ctx,
+};
+use serde::Serialize;
+use tokio::{
+    runtime::Runtime,
+    task::JoinHandle,
+};
+use tracing::{
+    debug,
+    error,
+    info,
+    instrument,
+    trace,
+    warn,
+};
+use windows::{
+    Foundation::{
+        TimeSpan,
+        TypedEventHandler,
+        Uri,
+    },
+    Media::{
+        AutoRepeatModeChangeRequestedEventArgs,
+        MediaPlaybackAutoRepeatMode,
+        MediaPlaybackStatus,
+        MediaPlaybackType,
+        Playback::MediaPlayer,
+        PlaybackPositionChangeRequestedEventArgs,
+        ShuffleEnabledChangeRequestedEventArgs,
+        SystemMediaTransportControls,
+        SystemMediaTransportControlsButton,
+        SystemMediaTransportControlsButtonPressedEventArgs,
+        SystemMediaTransportControlsTimelineProperties,
+    },
+    Storage::Streams::{
+        DataWriter,
+        InMemoryRandomAccessStream,
+        RandomAccessStreamReference,
+    },
+    core::{
+        HSTRING,
+        Ref,
+    },
+};
+
+use crate::{
+    discord,
+    model::{
+        CommandResult,
+        CommandStatus,
+        CoverSource,
+        MetadataPayload,
+        PlaybackStatus,
+        RepeatMode,
+        SmtcCommand,
+    },
 };
 
 const HNS_PER_MILLISECOND: f64 = 10_000.0;

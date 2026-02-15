@@ -1,8 +1,31 @@
-use crate::{logger, smtc_core};
-use std::ffi::{CStr, CString, c_char, c_int, c_void};
-use std::sync::{LazyLock, Mutex, Once};
-use std::{panic, ptr};
-use tracing::{debug, error, instrument, trace};
+use std::{
+    ffi::{
+        CStr,
+        CString,
+        c_char,
+        c_int,
+        c_void,
+    },
+    panic,
+    ptr,
+    sync::{
+        LazyLock,
+        Mutex,
+        Once,
+    },
+};
+
+use tracing::{
+    debug,
+    error,
+    instrument,
+    trace,
+};
+
+use crate::{
+    logger,
+    smtc_core,
+};
 
 fn safe_call<F, T>(func: F) -> T
 where

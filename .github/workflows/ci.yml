@@ -18,10 +18,10 @@ jobs:
         uses: oven-sh/setup-bun@v2
 
       - name: 安装 Rust 工具链
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: stable
-          components: clippy
+          toolchain: nightly
+          components: clippy, rustfmt
 
       - name: 缓存 Rust 依赖
         uses: Swatinem/rust-cache@v2
@@ -34,6 +34,9 @@ jobs:
 
       - name: 检查类型
         run: bun typecheck
+
+      - name: 检查 Rustfmt 格式
+        run: cargo fmt --all -- --check
 
       - name: 检查 Clippy
         run: cargo clippy --workspace -- -D warnings

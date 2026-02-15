@@ -1,5 +1,7 @@
-use std::env;
-use std::path::PathBuf;
+use std::{
+    env,
+    path::PathBuf,
+};
 
 fn main() {
     println!("cargo:rerun-if-changed=wrapper.h");

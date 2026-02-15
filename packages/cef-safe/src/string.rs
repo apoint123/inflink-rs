@@ -1,6 +1,15 @@
-use crate::error::{CefError, CefResult};
-use cef_sys::{cef_string_t, cef_string_userfree_utf16_free, cef_string_utf16_set};
 use std::ops::Deref;
+
+use cef_sys::{
+    cef_string_t,
+    cef_string_userfree_utf16_free,
+    cef_string_utf16_set,
+};
+
+use crate::error::{
+    CefError,
+    CefResult,
+};
 
 pub struct CefString16 {
     cef_string: cef_string_t,

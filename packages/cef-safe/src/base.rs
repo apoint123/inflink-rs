@@ -1,8 +1,13 @@
-use crate::error::{CefError, CefResult};
-use cef_sys;
-use std::marker::PhantomData;
-use std::ops::Deref;
-use std::ptr::NonNull;
+use std::{
+    marker::PhantomData,
+    ops::Deref,
+    ptr::NonNull,
+};
+
+use crate::error::{
+    CefError,
+    CefResult,
+};
 
 /// 一个 `unsafe trait`，用于抽象所有 CEF 的引用计数结构体
 ///

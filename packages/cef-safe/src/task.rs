@@ -1,10 +1,29 @@
-use crate::error::{CefError, CefResult};
-use crate::v8::CefV8Context;
-use cef_sys::{_cef_base_ref_counted_t, _cef_task_t, cef_thread_id_t_TID_RENDERER};
-use std::mem::size_of;
-use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::ptr::NonNull;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    mem::size_of,
+    panic::{
+        AssertUnwindSafe,
+        catch_unwind,
+    },
+    ptr::NonNull,
+    sync::atomic::{
+        AtomicUsize,
+        Ordering,
+    },
+};
+
+use cef_sys::{
+    _cef_base_ref_counted_t,
+    _cef_task_t,
+    cef_thread_id_t_TID_RENDERER,
+};
+
+use crate::{
+    error::{
+        CefError,
+        CefResult,
+    },
+    v8::CefV8Context,
+};
 
 /// 一个将 Rust 闭包封装成 CEF 任务的结构体，用于在 Rust 和 CEF 之间传递
 #[repr(C)]
@@ -20,7 +39,12 @@ struct RustClosureTask {
 
 mod internal_logic {
     use super::{
-        _cef_base_ref_counted_t, _cef_task_t, AssertUnwindSafe, NonNull, Ordering, RustClosureTask,
+        _cef_base_ref_counted_t,
+        _cef_task_t,
+        AssertUnwindSafe,
+        NonNull,
+        Ordering,
+        RustClosureTask,
         catch_unwind,
     };
 
@@ -79,7 +103,8 @@ mod internal_logic {
 use internal_logic::{
     base_add_ref as extern_base_add_ref,
     base_has_at_least_one_ref as extern_base_has_at_least_one_ref,
-    base_has_one_ref as extern_base_has_one_ref, base_release as extern_base_release,
+    base_has_one_ref as extern_base_has_one_ref,
+    base_release as extern_base_release,
     execute_rust_closure as extern_execute_rust_closure,
 };
 
@@ -108,7 +133,8 @@ unsafe extern "C" fn base_has_at_least_one_ref(base: *mut _cef_base_ref_counted_
 use internal_logic::{
     base_add_ref as extern_base_add_ref,
     base_has_at_least_one_ref as extern_base_has_at_least_one_ref,
-    base_has_one_ref as extern_base_has_one_ref, base_release as extern_base_release,
+    base_has_one_ref as extern_base_has_one_ref,
+    base_release as extern_base_release,
     execute_rust_closure as extern_execute_rust_closure,
 };
 
@@ -145,7 +171,10 @@ unsafe extern "stdcall" fn base_has_at_least_one_ref(base: *mut _cef_base_ref_co
 ///
 /// # Example
 /// ```no_run
-/// use cef_safe::{CefV8Context, renderer_post_task_in_v8_ctx};
+/// use cef_safe::{
+///     CefV8Context,
+///     renderer_post_task_in_v8_ctx,
+/// };
 ///
 /// if let Ok(context) = CefV8Context::current() {
 ///     let task_result = renderer_post_task_in_v8_ctx(context, || {

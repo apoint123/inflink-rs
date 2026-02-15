@@ -1,8 +1,18 @@
-use crate::base::CefRefPtr;
-use crate::error::{CefError, CefResult};
-use crate::string::{CefString16, string_from_cef_userfree};
-use cef_sys::_cef_v8exception_t;
 use std::ptr;
+
+use cef_sys::_cef_v8exception_t;
+
+use crate::{
+    base::CefRefPtr,
+    error::{
+        CefError,
+        CefResult,
+    },
+    string::{
+        CefString16,
+        string_from_cef_userfree,
+    },
+};
 
 pub type CefV8Value = CefRefPtr<cef_sys::_cef_v8value_t>;
 pub type CefV8Context = CefRefPtr<cef_sys::_cef_v8context_t>;

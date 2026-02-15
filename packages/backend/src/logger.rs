@@ -1,16 +1,35 @@
-use anyhow::{Context, Result};
+use std::{
+    fmt::Write,
+    fs,
+    path::PathBuf,
+    str::FromStr,
+    sync::{
+        LazyLock,
+        Mutex,
+        OnceLock,
+    },
+};
+
+use anyhow::{
+    Context,
+    Result,
+};
 use serde::Serialize;
-use std::fmt::Write;
-use std::fs;
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::sync::OnceLock;
-use std::sync::{LazyLock, Mutex};
-use tracing::{Subscriber, error, trace};
-use tracing_appender::non_blocking::WorkerGuard;
-use tracing_appender::rolling::RollingFileAppender;
+use tracing::{
+    Subscriber,
+    error,
+    trace,
+};
+use tracing_appender::{
+    non_blocking::WorkerGuard,
+    rolling::RollingFileAppender,
+};
 use tracing_subscriber::{
-    EnvFilter, Layer, filter::LevelFilter, layer::SubscriberExt, util::SubscriberInitExt,
+    EnvFilter,
+    Layer,
+    filter::LevelFilter,
+    layer::SubscriberExt,
+    util::SubscriberInitExt,
 };
 
 #[derive(Serialize)]
