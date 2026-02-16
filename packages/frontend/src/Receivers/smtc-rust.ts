@@ -16,10 +16,10 @@ const NATIVE_API_PREFIX = "inflink.";
 
 type NativeApiFunction =
 	| "initialize"
-	| "register_logger"
-	| "set_log_level"
-	| "shutdown"
-	| "register_event_callback"
+	| "registerLogger"
+	| "setLogLevel"
+	| "terminate"
+	| "registerEventCallback"
 	| "dispatch";
 
 const ALL_LOG_LEVELS: Readonly<LogLevel[]> = [
@@ -78,7 +78,7 @@ class SMTCNativeBackend {
 
 	public initialize(control_handler: (msg: ControlMessage) => void) {
 		if (this.isActive) return;
-		this.call("shutdown");
+		this.call("terminate");
 
 		this.isActive = true;
 		this.registerLogger();
@@ -88,7 +88,7 @@ class SMTCNativeBackend {
 			if (this.isActive) {
 				this.disableDiscordRpc();
 				this.disableSmtcSession();
-				this.call("shutdown");
+				this.call("terminate");
 			}
 		});
 
@@ -101,11 +101,11 @@ class SMTCNativeBackend {
 			}
 		};
 
-		this.call("register_event_callback", [eventCallback]);
+		this.call("registerEventCallback", [eventCallback]);
 	}
 
 	public setBackendLogLevel(level: LogLevel) {
-		this.call("set_log_level", [level]);
+		this.call("setLogLevel", [level]);
 		logger.info(`设置后端日志级别为: ${level}`, "Native Bridge");
 	}
 
@@ -149,14 +149,14 @@ class SMTCNativeBackend {
 				logger.error("解析后端日志失败:", "Native Bridge", e);
 			}
 		};
-		this.call("register_logger", [logCallback]);
+		this.call("registerLogger", [logCallback]);
 	}
 
 	public disable() {
 		if (!this.isActive) return;
 		this.isActive = false;
 
-		this.call("shutdown");
+		this.call("terminate");
 		logger.info("SMTC 已禁用", "Native Bridge");
 	}
 

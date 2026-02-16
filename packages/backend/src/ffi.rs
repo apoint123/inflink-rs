@@ -117,7 +117,7 @@ unsafe fn c_char_to_string(s: *const c_char) -> String {
 
 #[instrument(skip(_args))]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn inflink_initialize(_args: *mut *mut c_void) -> *mut c_char {
+pub unsafe extern "C" fn initialize(_args: *mut *mut c_void) -> *mut c_char {
     safe_call(|| {
         if let Err(e) = smtc_core::initialize() {
             error!("初始化失败: {e}");
@@ -128,7 +128,7 @@ pub unsafe extern "C" fn inflink_initialize(_args: *mut *mut c_void) -> *mut c_c
 
 #[instrument(skip(_args))]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn inflink_shutdown(_args: *mut *mut c_void) -> *mut c_char {
+pub unsafe extern "C" fn terminate(_args: *mut *mut c_void) -> *mut c_char {
     safe_call(|| {
         logger::clear_callback();
         if let Err(e) = smtc_core::shutdown() {
@@ -140,7 +140,7 @@ pub unsafe extern "C" fn inflink_shutdown(_args: *mut *mut c_void) -> *mut c_cha
 
 #[instrument(skip(args))]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn inflink_register_event_callback(args: *mut *mut c_void) -> *mut c_char {
+pub unsafe extern "C" fn registerEventCallback(args: *mut *mut c_void) -> *mut c_char {
     safe_call(|| {
         let v8_func = unsafe { *args.cast::<*mut cef_safe::cef_sys::_cef_v8value_t>() };
         if !v8_func.is_null() {
@@ -154,7 +154,7 @@ pub unsafe extern "C" fn inflink_register_event_callback(args: *mut *mut c_void)
 /// 用来存放返回值的缓冲区
 ///
 /// betterncm 复制完我们的返回值后就直接丢弃了，完全没有释放内存，
-/// 所以我们在 `inflink_dispatch` 直接返回一个缓冲区
+/// 所以我们在 `dispatch` 直接返回一个缓冲区
 ///
 /// 如果 betterncm 未来更新了他们的代码，
 /// 又尝试保留之前的指针，这里需要修正
@@ -162,15 +162,15 @@ static RETURN_BUFFER: LazyLock<Mutex<CString>> = LazyLock::new(|| Mutex::new(CSt
 
 #[instrument(skip(args))]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn inflink_dispatch(args: *mut *mut c_void) -> *mut c_char {
+pub unsafe extern "C" fn dispatch(args: *mut *mut c_void) -> *mut c_char {
     safe_call(|| {
         if args.is_null() {
-            error!("inflink_dispatch 收到了空指针");
+            error!("dispatch 收到了空指针");
             return ptr::null_mut();
         }
         let command_ptr = unsafe { *args.add(0) };
         if command_ptr.is_null() {
-            error!("inflink_dispatch 收到了空命令指针");
+            error!("dispatch 收到了空命令指针");
             return ptr::null_mut();
         }
 
@@ -201,7 +201,7 @@ pub unsafe extern "C" fn inflink_dispatch(args: *mut *mut c_void) -> *mut c_char
 
 #[instrument(skip(args))]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn inflink_register_logger(args: *mut *mut c_void) -> *mut c_char {
+pub unsafe extern "C" fn registerLogger(args: *mut *mut c_void) -> *mut c_char {
     safe_call(|| {
         let v8_func = unsafe { *args.cast::<*mut cef_safe::cef_sys::_cef_v8value_t>() };
         if !v8_func.is_null() {
@@ -214,15 +214,15 @@ pub unsafe extern "C" fn inflink_register_logger(args: *mut *mut c_void) -> *mut
 
 #[instrument(skip(args))]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn inflink_set_log_level(args: *mut *mut c_void) -> *mut c_char {
+pub unsafe extern "C" fn setLogLevel(args: *mut *mut c_void) -> *mut c_char {
     safe_call(|| {
         if args.is_null() {
-            error!("inflink_set_log_level 收到了空指针");
+            error!("setLogLevel 收到了空指针");
             return ptr::null_mut();
         }
         let level_pointer = unsafe { *args.add(0) };
         if level_pointer.is_null() {
-            error!("inflink_set_log_level 收到了空日志级别指针");
+            error!("setLogLevel 收到了空日志级别指针");
             return ptr::null_mut();
         }
 
@@ -258,34 +258,29 @@ pub unsafe extern "C" fn BetterNCMPluginMain(api: *mut PluginAPI) -> c_int {
                 trace!(process_type = ?api_ref.process_type, "正在注册 API");
                 let add_api = api_ref.add_native_api;
 
+                macro_rules! reg {
+                    ($func:ident, $args:expr) => {
+                        register_api(
+                            add_api,
+                            concat!("inflink.", stringify!($func)),
+                            $args,
+                            $func,
+                        )
+                    };
+                    ($func:ident) => {
+                        reg!($func, None)
+                    };
+                }
+
                 let registrations = [
-                    register_api(add_api, "inflink.initialize", None, inflink_initialize),
-                    register_api(
-                        add_api,
-                        "inflink.register_logger",
-                        Some(&CALLBACK_ARGS),
-                        inflink_register_logger,
-                    ),
-                    register_api(
-                        add_api,
-                        "inflink.set_log_level",
-                        Some(&DISPATCH_ARGS),
-                        inflink_set_log_level,
-                    ),
-                    register_api(add_api, "inflink.shutdown", None, inflink_shutdown),
-                    register_api(
-                        add_api,
-                        "inflink.register_event_callback",
-                        Some(&CALLBACK_ARGS),
-                        inflink_register_event_callback,
-                    ),
-                    register_api(
-                        add_api,
-                        "inflink.dispatch",
-                        Some(&DISPATCH_ARGS),
-                        inflink_dispatch,
-                    ),
+                    reg!(initialize),
+                    reg!(registerLogger, Some(&CALLBACK_ARGS)),
+                    reg!(setLogLevel, Some(&DISPATCH_ARGS)),
+                    reg!(terminate),
+                    reg!(registerEventCallback, Some(&CALLBACK_ARGS)),
+                    reg!(dispatch, Some(&DISPATCH_ARGS)),
                 ];
+
                 for result in registrations {
                     if let Err(code) = result {
                         return code;
