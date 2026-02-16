@@ -153,11 +153,12 @@ pub unsafe extern "C" fn registerEventCallback(args: *mut *mut c_void) -> *mut c
 
 /// 用来存放返回值的缓冲区
 ///
-/// betterncm 复制完我们的返回值后就直接丢弃了，完全没有释放内存，
-/// 所以我们在 `dispatch` 直接返回一个缓冲区
+/// betterncm 复制完我们的返回值后就直接丢弃了，完全没有释放内存，所以我们在 `dispatch`
+/// 直接返回一个缓冲区
 ///
-/// 如果 betterncm 未来更新了他们的代码，
-/// 又尝试保留之前的指针，这里需要修正
+/// 如果 betterncm 未来更新了他们的代码，又尝试保留之前的指针，这里需要修正
+///
+/// 参见 <https://github.com/std-microblock/chromatic/blob/1b7eb7fdaa08de15e579c86dadb6ef848a72b6f1/src/v8NativeCalls.cpp#L585-L590>
 static RETURN_BUFFER: LazyLock<Mutex<CString>> = LazyLock::new(|| Mutex::new(CString::default()));
 
 #[instrument(skip(args))]
