@@ -22,7 +22,7 @@ import {
 	useNcmVersion,
 	useVersionWarning,
 } from "./hooks";
-import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
+import { NativeBackendInstance } from "./services/NativeBackend";
 import {
 	backendLogLevelAtom,
 	frontendLogLevelAtom,
@@ -98,7 +98,7 @@ function Main() {
 	}, [frontendLogLevel]);
 
 	useEffect(() => {
-		SMTCNativeBackendInstance.setBackendLogLevel(backendLogLevel);
+		NativeBackendInstance.setBackendLogLevel(backendLogLevel);
 	}, [backendLogLevel]);
 
 	useEffect(() => {

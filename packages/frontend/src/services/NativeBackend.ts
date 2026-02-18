@@ -1,4 +1,5 @@
 import type {
+	AppMessage,
 	CommandResult,
 	ControlMessage,
 	DiscordConfigPayload,
@@ -6,7 +7,6 @@ import type {
 	MetadataPayload,
 	PlaybackStatus,
 	RepeatMode,
-	SmtcCommandPayloads,
 	SmtcEvent,
 } from "../types/backend";
 import type { LogLevel } from "../utils/logger";
@@ -34,7 +34,7 @@ function isLogLevel(level: string): level is LogLevel {
 	return ALL_LOG_LEVELS.some((l) => l === level);
 }
 
-class SMTCNativeBackend {
+class NativeBackend {
 	private isActive = false;
 
 	private call<T>(func: NativeApiFunction, args: unknown[] = []): T {
@@ -44,9 +44,9 @@ class SMTCNativeBackend {
 		);
 	}
 
-	private dispatch<T extends keyof SmtcCommandPayloads>(
+	private dispatch<T extends keyof AppMessage>(
 		type: T,
-		payload: SmtcCommandPayloads[T],
+		payload: AppMessage[T],
 	) {
 		const command = JSON.stringify({ type, payload });
 		const resultJson = this.call<string>("dispatch", [command]);
@@ -157,7 +157,7 @@ class SMTCNativeBackend {
 		this.isActive = false;
 
 		this.call("terminate");
-		logger.info("SMTC 已禁用", "Native Bridge");
+		logger.info("已终止后端", "Native Bridge");
 	}
 
 	public enableSmtcSession() {
@@ -174,43 +174,40 @@ class SMTCNativeBackend {
 
 	public enableDiscordRpc() {
 		if (!this.isActive) return;
-		this.dispatch("EnableDiscordRpc", undefined);
+		this.dispatch("EnableDiscord", undefined);
 		logger.info("启用 Discord RPC", "Native Bridge");
 	}
 
 	public disableDiscordRpc() {
 		if (!this.isActive) return;
-		this.dispatch("DisableDiscordRpc", undefined);
+		this.dispatch("DisableDiscord", undefined);
 		logger.info("禁用 Discord RPC", "Native Bridge");
 	}
 
 	public updateDiscordConfig(config: DiscordConfigPayload) {
 		if (!this.isActive) return;
 		this.dispatch("DiscordConfig", config);
-		logger.debug(
-			`更新 Discord 配置: showWhenPaused=${config.showWhenPaused}`,
-			"Native Bridge",
-		);
+		logger.debug(`更新 Discord 配置`, "Native Bridge", config);
 	}
 
 	public update(songInfo: MetadataPayload) {
-		this.dispatch("Metadata", songInfo);
+		this.dispatch("UpdateMetadata", songInfo);
 	}
 
 	public updatePlayState(status: PlaybackStatus) {
-		this.dispatch("PlayState", { status });
+		this.dispatch("UpdatePlayState", { status });
 	}
 
 	public updateTimeline(timeline: { currentTime: number; totalTime: number }) {
-		this.dispatch("Timeline", timeline);
+		this.dispatch("UpdateTimeline", timeline);
 	}
 
 	public updatePlayMode(playMode: {
 		isShuffling: boolean;
 		repeatMode: RepeatMode;
 	}) {
-		this.dispatch("PlayMode", playMode);
+		this.dispatch("UpdatePlayMode", playMode);
 	}
 }
 
-export const SMTCNativeBackendInstance = new SMTCNativeBackend();
+export const NativeBackendInstance = new NativeBackend();

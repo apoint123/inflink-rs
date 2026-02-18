@@ -1,23 +1,48 @@
-use std::fmt;
+use std::{
+    fmt,
+    ops::Deref,
+    sync::Arc,
+};
 
 use serde::{
     Deserialize,
     Serialize,
 };
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Clone, PartialEq)]
+pub struct SharedMetadata(pub Arc<MetadataPayload>);
+
+impl Deref for SharedMetadata {
+    type Target = MetadataPayload;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl AsRef<MetadataPayload> for SharedMetadata {
+    fn as_ref(&self) -> &MetadataPayload {
+        &self.0
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "type", content = "payload")]
-pub enum SmtcCommand {
-    Metadata(MetadataPayload),
-    PlayState(PlayStatePayload),
-    Timeline(TimelinePayload),
-    PlayMode(PlayModePayload),
+pub enum AppMessage {
+    UpdateMetadata(MetadataPayload),
+
+    UpdatePlayState(PlayStatePayload),
+    UpdateTimeline(TimelinePayload),
+    UpdatePlayMode(PlayModePayload),
+
     EnableSmtc,
     DisableSmtc,
 
-    EnableDiscordRpc,
-    DisableDiscordRpc,
+    EnableDiscord,
+    DisableDiscord,
     DiscordConfig(DiscordConfigPayload),
+
+    Shutdown,
 }
 
 #[derive(Deserialize, Serialize, Clone, PartialEq, Eq)]
@@ -48,7 +73,7 @@ pub struct MetadataPayload {
     pub duration: Option<f64>,
 }
 
-#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlaybackStatus {
     Playing,
     Paused,
@@ -62,26 +87,26 @@ pub enum RepeatMode {
     AI,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PlayStatePayload {
     pub status: PlaybackStatus,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TimelinePayload {
     pub current_time: f64,
     pub total_time: f64,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayModePayload {
     pub is_shuffling: bool,
     pub repeat_mode: RepeatMode,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscordConfigPayload {
     pub show_when_paused: bool,

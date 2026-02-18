@@ -79,17 +79,17 @@ export interface PlayMode {
 export interface PlayModePayload extends PlayMode {}
 export interface VolumePayload extends VolumeInfo {}
 
-export type SmtcCommandPayloads = {
-	Metadata: MetadataPayload;
-	PlayState: PlayStatePayload;
-	Timeline: TimelinePayload;
-	PlayMode: PlayModePayload;
-	Volume: VolumePayload;
+export type AppMessage = {
+	UpdateMetadata: MetadataPayload;
+	UpdatePlayState: PlayStatePayload;
+	UpdateTimeline: TimelinePayload;
+	UpdatePlayMode: PlayModePayload;
+
 	EnableSmtc: undefined;
 	DisableSmtc: undefined;
 
-	EnableDiscordRpc: undefined;
-	DisableDiscordRpc: undefined;
+	EnableDiscord: undefined;
+	DisableDiscord: undefined;
 	DiscordConfig: DiscordConfigPayload;
 };
 

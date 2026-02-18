@@ -23,6 +23,7 @@ use tracing::{
 };
 
 use crate::{
+    dispatcher,
     logger,
     smtc_core,
 };
@@ -119,9 +120,7 @@ unsafe fn c_char_to_string(s: *const c_char) -> String {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn initialize(_args: *mut *mut c_void) -> *mut c_char {
     safe_call(|| {
-        if let Err(e) = smtc_core::initialize() {
-            error!("初始化失败: {e}");
-        }
+        dispatcher::init();
         ptr::null_mut()
     })
 }
@@ -131,9 +130,7 @@ pub unsafe extern "C" fn initialize(_args: *mut *mut c_void) -> *mut c_char {
 pub unsafe extern "C" fn terminate(_args: *mut *mut c_void) -> *mut c_char {
     safe_call(|| {
         logger::clear_callback();
-        if let Err(e) = smtc_core::shutdown() {
-            error!("关闭失败: {e}");
-        }
+        dispatcher::shutdown();
         ptr::null_mut()
     })
 }
@@ -178,7 +175,7 @@ pub unsafe extern "C" fn dispatch(args: *mut *mut c_void) -> *mut c_char {
         let command_json = unsafe { c_char_to_string(command_ptr.cast::<c_char>()) };
         // trace!(command = %command_json, "收到前端命令");
 
-        let result_json = smtc_core::handle_command(&command_json);
+        let result_json = dispatcher::send_command(&command_json);
         // trace!(result = %result_json, "发送执行结果到前端");
 
         let mut buffer_guard = match RETURN_BUFFER.lock() {

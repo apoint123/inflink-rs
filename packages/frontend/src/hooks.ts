@@ -1,7 +1,7 @@
 import type { PaletteMode } from "@mui/material";
 import { useAtomValue } from "jotai";
 import { useEffect, useRef, useState } from "react";
-import { SMTCNativeBackendInstance } from "./Receivers/smtc-rust";
+import { NativeBackendInstance } from "./services/NativeBackend";
 import { appConfigAtom } from "./store";
 import type { IInfLinkApi } from "./types/api";
 import type { ControlMessage } from "./types/backend";
@@ -236,28 +236,28 @@ export function useBackendConnection(adapterState: AdapterState) {
 
 	useEffect(() => {
 		if (!shouldConnect || !adapter) {
-			SMTCNativeBackendInstance.disable();
+			NativeBackendInstance.disable();
 			hasSentInitialMetadata.current = false;
 			return;
 		}
 
-		const smtcImplObj = SMTCNativeBackendInstance;
+		const nativeBackend = NativeBackendInstance;
 
 		const onSongChange = (e: NcmAdapterEventMap["songChange"]) => {
-			smtcImplObj.update(e.detail);
+			nativeBackend.update(e.detail);
 			if (!hasSentInitialMetadata.current) {
 				hasSentInitialMetadata.current = true;
 				if (configRef.current.smtcEnabled) {
-					smtcImplObj.enableSmtcSession();
+					nativeBackend.enableSmtcSession();
 				}
 			}
 		};
 		const onPlayStateChange = (e: NcmAdapterEventMap["playStateChange"]) =>
-			smtcImplObj.updatePlayState(e.detail);
+			nativeBackend.updatePlayState(e.detail);
 		const onTimelineUpdate = (e: NcmAdapterEventMap["timelineUpdate"]) =>
-			smtcImplObj.updateTimeline(e.detail);
+			nativeBackend.updateTimeline(e.detail);
 		const onPlayModeChange = (e: NcmAdapterEventMap["playModeChange"]) =>
-			smtcImplObj.updatePlayMode(e.detail);
+			nativeBackend.updatePlayMode(e.detail);
 
 		const onControl = (msg: ControlMessage) => {
 			handleAdapterCommand(adapter, msg);
@@ -268,14 +268,14 @@ export function useBackendConnection(adapterState: AdapterState) {
 		adapter.addEventListener("timelineUpdate", onTimelineUpdate);
 		adapter.addEventListener("playModeChange", onPlayModeChange);
 
-		smtcImplObj.initialize(onControl);
+		nativeBackend.initialize(onControl);
 
 		return () => {
 			adapter.removeEventListener("songChange", onSongChange);
 			adapter.removeEventListener("playStateChange", onPlayStateChange);
 			adapter.removeEventListener("timelineUpdate", onTimelineUpdate);
 			adapter.removeEventListener("playModeChange", onPlayModeChange);
-			smtcImplObj.disable();
+			nativeBackend.disable();
 			hasSentInitialMetadata.current = false;
 		};
 	}, [shouldConnect, adapter]);
@@ -283,21 +283,21 @@ export function useBackendConnection(adapterState: AdapterState) {
 	useEffect(() => {
 		if (!shouldConnect) return;
 
-		const smtcImplObj = SMTCNativeBackendInstance;
+		const nativeBackend = NativeBackendInstance;
 
 		if (smtcEnabled) {
-			smtcImplObj.enableSmtcSession();
+			nativeBackend.enableSmtcSession();
 		} else {
-			smtcImplObj.disableSmtcSession();
+			nativeBackend.disableSmtcSession();
 		}
 
 		if (discordEnabled) {
-			smtcImplObj.enableDiscordRpc();
+			nativeBackend.enableDiscordRpc();
 		} else {
-			smtcImplObj.disableDiscordRpc();
+			nativeBackend.disableDiscordRpc();
 		}
 
-		smtcImplObj.updateDiscordConfig({
+		nativeBackend.updateDiscordConfig({
 			showWhenPaused: discordShowPaused,
 			displayMode: discordDisplayMode,
 			appNameMode: appNameMode,

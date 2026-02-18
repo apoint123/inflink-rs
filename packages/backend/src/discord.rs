@@ -41,6 +41,7 @@ use crate::model::{
     MetadataPayload,
     PlayStatePayload,
     PlaybackStatus,
+    SharedMetadata,
     TimelinePayload,
 };
 
@@ -52,7 +53,7 @@ const TIMESTAMP_UPDATE_THRESHOLD_MS: i64 = 100;
 const RECONNECT_COOLDOWN_SECONDS: u8 = 5;
 
 enum RpcMessage {
-    Metadata(MetadataPayload),
+    Metadata(SharedMetadata),
     PlayState(PlayStatePayload),
     Timeline(TimelinePayload),
     Enable,
@@ -64,7 +65,7 @@ static SENDER: LazyLock<Mutex<Option<Sender<RpcMessage>>>> = LazyLock::new(|| Mu
 
 #[derive(Debug, Clone, PartialEq)]
 struct ActivityData {
-    metadata: MetadataPayload,
+    metadata: SharedMetadata,
     status: PlaybackStatus,
     current_time: f64,
     cached_cover_url: String,
@@ -73,7 +74,7 @@ struct ActivityData {
 }
 
 impl ActivityData {
-    fn from_metadata(metadata: MetadataPayload, mode: &DiscordAppNameMode) -> Self {
+    fn from_metadata(metadata: SharedMetadata, mode: &DiscordAppNameMode) -> Self {
         let cached_cover_url = Self::process_cover_url(metadata.original_cover_url.as_deref());
         let cached_song_url = Self::process_song_url(metadata.ncm_id);
         let cached_app_name = Self::compute_app_name(mode, &metadata);
@@ -88,7 +89,7 @@ impl ActivityData {
         }
     }
 
-    fn update_metadata(&mut self, metadata: MetadataPayload, mode: &DiscordAppNameMode) {
+    fn update_metadata(&mut self, metadata: SharedMetadata, mode: &DiscordAppNameMode) {
         self.cached_cover_url = Self::process_cover_url(metadata.original_cover_url.as_deref());
         self.cached_song_url = Self::process_song_url(metadata.ncm_id);
         self.cached_app_name = Self::compute_app_name(mode, &metadata);
@@ -500,7 +501,7 @@ pub fn disable() {
 pub fn update_config(payload: DiscordConfigPayload) {
     send(RpcMessage::Config(payload));
 }
-pub fn update_metadata(payload: MetadataPayload) {
+pub fn update_metadata(payload: SharedMetadata) {
     send(RpcMessage::Metadata(payload));
 }
 pub fn update_play_state(payload: PlayStatePayload) {

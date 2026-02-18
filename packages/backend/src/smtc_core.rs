@@ -6,10 +6,7 @@ use std::{
     time::Instant,
 };
 
-use anyhow::{
-    Context,
-    Result,
-};
+use anyhow::Result;
 use base64::{
     Engine,
     engine::general_purpose,
@@ -21,16 +18,12 @@ use cef_safe::{
     renderer_post_task_in_v8_ctx,
 };
 use serde::Serialize;
-use tokio::{
-    runtime::Runtime,
-    task::JoinHandle,
-};
+use tokio::runtime::Runtime;
 use tracing::{
     debug,
     error,
     info,
     instrument,
-    trace,
     warn,
 };
 use windows::{
@@ -63,23 +56,19 @@ use windows::{
     },
 };
 
-use crate::{
-    discord,
-    model::{
-        CommandResult,
-        CommandStatus,
-        CoverSource,
-        MetadataPayload,
-        PlaybackStatus,
-        RepeatMode,
-        SmtcCommand,
-    },
+use crate::model::{
+    CoverSource,
+    MetadataPayload,
+    PlaybackStatus,
+    RepeatMode,
 };
 
 const HNS_PER_MILLISECOND: f64 = 10_000.0;
 
 static TOKIO_RUNTIME: LazyLock<Runtime> =
     LazyLock::new(|| Runtime::new().expect("创建 Tokio 运行时失败"));
+
+static GLOBAL_CALLBACK: LazyLock<Mutex<Option<SmtcCallback>>> = LazyLock::new(|| Mutex::new(None));
 
 struct SmtcCallback {
     v8_context: CefV8Context,
@@ -92,6 +81,7 @@ struct SmtcCallback {
 )]
 unsafe impl Send for SmtcCallback {}
 
+#[derive(Debug)]
 struct SmtcHandlerTokens {
     button_pressed: i64,
     shuffle_changed: i64,
@@ -112,11 +102,10 @@ enum SmtcEvent {
     Seek { position_ms: f64 },
 }
 
-struct SmtcContext {
+#[derive(Debug)]
+pub struct SmtcContext {
     player: MediaPlayer,
     tokens: SmtcHandlerTokens,
-    callback: Option<SmtcCallback>,
-    cover_task: Option<JoinHandle<()>>,
     is_enabled: bool,
 }
 
@@ -137,10 +126,6 @@ impl SmtcContext {
 
 impl Drop for SmtcContext {
     fn drop(&mut self) {
-        if let Some(handle) = self.cover_task.take() {
-            handle.abort();
-        }
-
         if let Err(e) = self.remove_handlers() {
             warn!("销毁 SmtcContext 时移除处理器失败: {e:?}");
         }
@@ -150,8 +135,6 @@ impl Drop for SmtcContext {
         }
     }
 }
-
-static SMTC_CONTEXT: LazyLock<Mutex<Option<SmtcContext>>> = LazyLock::new(|| Mutex::new(None));
 
 pub fn register_event_callback(v8_func_ptr: *mut cef_safe::cef_sys::_cef_v8value_t) {
     let callback_result: CefResult<SmtcCallback> = (|| {
@@ -163,20 +146,14 @@ pub fn register_event_callback(v8_func_ptr: *mut cef_safe::cef_sys::_cef_v8value
         })
     })();
 
-    match SMTC_CONTEXT.lock() {
-        Ok(mut guard) => {
-            if let Some(ctx) = guard.as_mut() {
-                match callback_result {
-                    Ok(cb) => {
-                        ctx.callback = Some(cb);
-                        debug!("SMTC 事件回调已成功注册");
-                    }
-                    Err(e) => error!("创建回调对象失败: {e:?}"),
-                }
-            } else {
-                warn!("尝试注册回调，但 SMTC 未初始化");
+    match GLOBAL_CALLBACK.lock() {
+        Ok(mut guard) => match callback_result {
+            Ok(cb) => {
+                *guard = Some(cb);
+                debug!("SMTC 事件回调已成功注册");
             }
-        }
+            Err(e) => error!("创建回调对象失败: {e:?}"),
+        },
         Err(e) => error!("注册回调时锁中毒: {e:?}"),
     }
 }
@@ -193,10 +170,8 @@ fn dispatch_event(event: &SmtcEvent) {
         }
     };
 
-    let maybe_v8_ctx = if let Ok(guard) = SMTC_CONTEXT.lock() {
-        guard
-            .as_ref()
-            .and_then(|ctx| ctx.callback.as_ref().map(|cb| cb.v8_context.clone()))
+    let maybe_v8_ctx = if let Ok(guard) = GLOBAL_CALLBACK.lock() {
+        guard.as_ref().map(|cb| cb.v8_context.clone())
     } else {
         error!("SMTC 事件回调锁毒化");
         return;
@@ -204,14 +179,12 @@ fn dispatch_event(event: &SmtcEvent) {
 
     if let Some(v8_ctx) = maybe_v8_ctx {
         let post_result = renderer_post_task_in_v8_ctx(v8_ctx, move || {
-            let Ok(guard) = SMTC_CONTEXT.lock() else {
+            let Ok(guard) = GLOBAL_CALLBACK.lock() else {
                 error!("SMTC 事件回调锁在任务中毒化");
                 return;
             };
 
-            if let Some(ctx) = guard.as_ref()
-                && let Some(cb) = ctx.callback.as_ref()
-            {
+            if let Some(cb) = guard.as_ref() {
                 match CefV8Value::try_from_str(&event_json) {
                     Ok(arg) => {
                         if let Err(e) = cb.v8_function.execute_function(None, vec![arg]) {
@@ -236,10 +209,7 @@ fn dispatch_event(event: &SmtcEvent) {
 }
 
 #[instrument]
-pub fn initialize() -> Result<()> {
-    info!("正在初始化 SMTC...");
-    discord::init();
-
+pub fn initialize() -> Result<SmtcContext> {
     let player = MediaPlayer::new()?;
     let smtc = player.SystemMediaTransportControls()?;
 
@@ -318,143 +288,75 @@ pub fn initialize() -> Result<()> {
             repeat_changed,
             seek_requested,
         },
-        callback: None,
-        cover_task: None,
         is_enabled: false,
     };
 
-    {
-        let mut guard = SMTC_CONTEXT
-            .lock()
-            .map_err(|e| anyhow::anyhow!("SmtcContext 锁中毒: {e}"))?;
-        *guard = Some(context);
-    }
-
     debug!("SMTC 已初始化");
-    Ok(())
+    Ok(context)
 }
 
 #[instrument]
-pub fn shutdown() -> Result<()> {
-    if let Ok(mut guard) = SMTC_CONTEXT.lock() {
-        *guard = None;
-    } else {
-        error!("关闭时锁中毒");
+pub fn update_play_state(ctx: &SmtcContext, status: PlaybackStatus) -> Result<()> {
+    if !ctx.is_enabled {
+        return Ok(());
     }
 
-    discord::disable();
-    debug!("SMTC 已关闭");
-    Ok(())
-}
-
-fn with_smtc_ctx<F>(action_name: &str, f: F) -> Result<()>
-where
-    F: FnOnce(&mut SmtcContext) -> Result<()>,
-{
-    let mut guard = SMTC_CONTEXT
-        .lock()
-        .map_err(|e| anyhow::anyhow!("获取 SMTC 锁失败 ({action_name}): {e}"))?;
-
-    guard.as_mut().map_or_else(
-        || {
-            warn!("尝试执行 {action_name}，但 SMTCContext 未初始化");
-            Ok(())
-        },
-        f,
-    )
-}
-
-#[instrument]
-pub fn update_play_state(status: PlaybackStatus) -> Result<()> {
     let win_status = match status {
         PlaybackStatus::Playing => MediaPlaybackStatus::Playing,
         PlaybackStatus::Paused => MediaPlaybackStatus::Paused,
     };
-    debug!(new_status = ?status, "正在更新 SMTC 播放状态");
 
-    TOKIO_RUNTIME.spawn(async move {
-        let result = with_smtc_ctx("更新播放状态", |ctx| {
-            if !ctx.is_enabled {
-                return Ok(());
-            }
-            let smtc = ctx.smtc()?;
-            smtc.SetPlaybackStatus(win_status)?;
-            debug!("更新 SMTC 播放状态成功");
-            Ok(())
-        });
-        if let Err(e) = result {
-            error!("更新播放状态失败: {e:?}");
-        }
-    });
+    let smtc = ctx.smtc()?;
+    smtc.SetPlaybackStatus(win_status)?;
+    debug!(?status, "SMTC 播放状态已更新");
     Ok(())
 }
 
 #[instrument]
-pub fn update_timeline(current_ms: f64, total_ms: f64) -> Result<()> {
-    trace!(current_ms, total_ms, "正在更新 SMTC 时间线");
+pub fn update_timeline(ctx: &SmtcContext, current_ms: f64, total_ms: f64) -> Result<()> {
+    if !ctx.is_enabled {
+        return Ok(());
+    }
 
-    TOKIO_RUNTIME.spawn(async move {
-        let result = (|| -> Result<()> {
-            let props = SystemMediaTransportControlsTimelineProperties::new()?;
-            props.SetStartTime(TimeSpan { Duration: 0 })?;
-            props.SetPosition(TimeSpan {
-                Duration: (current_ms * HNS_PER_MILLISECOND) as i64,
-            })?;
-            props.SetEndTime(TimeSpan {
-                Duration: (total_ms * HNS_PER_MILLISECOND) as i64,
-            })?;
+    let props = SystemMediaTransportControlsTimelineProperties::new()?;
+    props.SetStartTime(TimeSpan { Duration: 0 })?;
+    props.SetPosition(TimeSpan {
+        Duration: (current_ms * HNS_PER_MILLISECOND) as i64,
+    })?;
+    props.SetEndTime(TimeSpan {
+        Duration: (total_ms * HNS_PER_MILLISECOND) as i64,
+    })?;
 
-            with_smtc_ctx("更新时间线", |ctx| {
-                if !ctx.is_enabled {
-                    return Ok(());
-                }
-                let smtc = ctx.smtc()?;
-                smtc.UpdateTimelineProperties(&props)?;
-                Ok(())
-            })
-        })();
-
-        if let Err(e) = result {
-            error!("更新时间线失败: {e:?}");
-        }
-    });
-
+    let smtc = ctx.smtc()?;
+    smtc.UpdateTimelineProperties(&props)?;
     Ok(())
 }
 
 #[instrument]
-pub fn update_play_mode(is_shuffling: bool, repeat_mode: &RepeatMode) -> Result<()> {
-    let repeat_mode_clone = repeat_mode.clone();
+pub fn update_play_mode(
+    ctx: &SmtcContext,
+    is_shuffling: bool,
+    repeat_mode: &RepeatMode,
+) -> Result<()> {
+    if !ctx.is_enabled {
+        return Ok(());
+    }
 
-    debug!(is_shuffling, ?repeat_mode, "正在更新 SMTC 播放模式");
+    let smtc = ctx.smtc()?;
+    smtc.SetShuffleEnabled(is_shuffling)?;
 
-    TOKIO_RUNTIME.spawn(async move {
-        let result = with_smtc_ctx("更新播放模式", |ctx| {
-            if !ctx.is_enabled {
-                return Ok(());
-            }
-            let smtc = ctx.smtc()?;
-            smtc.SetShuffleEnabled(is_shuffling)?;
-
-            let repeat_mode_win = match repeat_mode_clone {
-                RepeatMode::Track => MediaPlaybackAutoRepeatMode::Track,
-                RepeatMode::List => MediaPlaybackAutoRepeatMode::List,
-                RepeatMode::None | RepeatMode::AI => MediaPlaybackAutoRepeatMode::None,
-            };
-            smtc.SetAutoRepeatMode(repeat_mode_win)?;
-            debug!("更新 SMTC 播放模式成功");
-            Ok(())
-        });
-
-        if let Err(e) = result {
-            error!("更新播放模式失败: {e:?}");
-        }
-    });
-
+    let repeat_mode_win = match repeat_mode {
+        RepeatMode::Track => MediaPlaybackAutoRepeatMode::Track,
+        RepeatMode::List => MediaPlaybackAutoRepeatMode::List,
+        RepeatMode::None | RepeatMode::AI => MediaPlaybackAutoRepeatMode::None,
+    };
+    smtc.SetAutoRepeatMode(repeat_mode_win)?;
     Ok(())
 }
 
-async fn get_cover_stream_ref(cover: Option<CoverSource>) -> Option<RandomAccessStreamReference> {
+async fn create_cover_stream_ref(
+    cover: Option<&CoverSource>,
+) -> Option<RandomAccessStreamReference> {
     match cover {
         None => {
             warn!("未提供封面, 将清空现有封面");
@@ -497,7 +399,7 @@ async fn get_cover_stream_ref(cover: Option<CoverSource>) -> Option<RandomAccess
         }
         Some(CoverSource::Url(url)) => {
             debug!("正在从 URL 创建封面引用: {url}");
-            let uri = match Uri::CreateUri(&HSTRING::from(&url)) {
+            let uri = match Uri::CreateUri(&HSTRING::from(url)) {
                 Ok(u) => u,
                 Err(e) => {
                     warn!("创建 URI 失败 ({url}): {e}");
@@ -517,22 +419,9 @@ async fn get_cover_stream_ref(cover: Option<CoverSource>) -> Option<RandomAccess
 }
 
 #[instrument]
-pub fn update_metadata(payload: MetadataPayload) {
-    let Ok(mut guard) = SMTC_CONTEXT.lock() else {
-        error!("SmtcContext 锁中毒");
-        return;
-    };
-
-    let Some(ctx) = guard.as_mut() else {
-        return;
-    };
-
+pub fn update_metadata(ctx: &SmtcContext, payload: &MetadataPayload) -> Result<()> {
     if !ctx.is_enabled {
-        return;
-    }
-
-    if let Some(old_handle) = ctx.cover_task.take() {
-        old_handle.abort();
+        return Ok(());
     }
 
     info!(
@@ -543,117 +432,42 @@ pub fn update_metadata(payload: MetadataPayload) {
         "正在更新 SMTC 歌曲元数据"
     );
 
-    let new_handle = TOKIO_RUNTIME.spawn(async move {
-        let thumbnail_stream_ref = get_cover_stream_ref(payload.cover).await;
+    let thumbnail_stream_ref =
+        TOKIO_RUNTIME.block_on(async { create_cover_stream_ref(payload.cover.as_ref()).await });
 
-        let result = with_smtc_ctx("更新元数据", |inner_ctx| {
-            if !inner_ctx.is_enabled {
-                return Ok(());
-            }
+    let smtc = ctx.smtc()?;
+    let updater = smtc.DisplayUpdater()?;
+    updater.SetType(MediaPlaybackType::Music)?;
 
-            let smtc = inner_ctx.smtc()?;
-            let updater = smtc.DisplayUpdater()?;
-            updater.SetType(MediaPlaybackType::Music)?;
+    let props = updater.MusicProperties()?;
+    props.SetTitle(&HSTRING::from(&payload.song_name))?;
+    props.SetArtist(&HSTRING::from(&payload.author_name))?;
+    props.SetAlbumTitle(&HSTRING::from(&payload.album_name))?;
 
-            let props = updater.MusicProperties()?;
-            props.SetTitle(&HSTRING::from(&payload.song_name))?;
-            props.SetArtist(&HSTRING::from(&payload.author_name))?;
-            props.SetAlbumTitle(&HSTRING::from(&payload.album_name))?;
+    let genres_collection = props.Genres()?;
+    genres_collection.Clear()?;
 
-            let genres_collection = props.Genres()?;
-            genres_collection.Clear()?;
-
-            // 让部分应用可以精确匹配歌曲
-            if let Some(ncm_id) = payload.ncm_id
-                && ncm_id > 0
-            {
-                genres_collection.Append(&HSTRING::from(format!("NCM-{ncm_id}")))?;
-            }
-
-            if let Some(stream_ref) = thumbnail_stream_ref.as_ref() {
-                updater.SetThumbnail(stream_ref)?;
-            } else {
-                updater.SetThumbnail(None)?;
-                debug!("SMTC 封面已清空");
-            }
-
-            updater.Update()?;
-            Ok(())
-        });
-
-        if let Err(e) = result {
-            error!("更新SMTC元数据失败: {e:?}");
-        }
-    });
-
-    ctx.cover_task = Some(new_handle);
-}
-
-fn handle_command_inner(command_json: &str) -> Result<()> {
-    let command: SmtcCommand = serde_json::from_str(command_json).context("解析命令 JSON 失败")?;
-
-    debug!(?command, "正在处理命令");
-
-    match command {
-        SmtcCommand::Metadata(payload) => {
-            discord::update_metadata(payload.clone());
-            update_metadata(payload);
-        }
-        SmtcCommand::PlayState(payload) => {
-            discord::update_play_state(payload.clone());
-            update_play_state(payload.status).context("更新播放状态失败")?;
-        }
-        SmtcCommand::Timeline(payload) => {
-            discord::update_timeline(payload.clone());
-            update_timeline(payload.current_time, payload.total_time).context("更新时间线失败")?;
-        }
-        SmtcCommand::PlayMode(payload) => {
-            update_play_mode(payload.is_shuffling, &payload.repeat_mode)
-                .context("更新播放模式失败")?;
-        }
-        SmtcCommand::EnableSmtc => {
-            with_smtc_ctx("启用 SMTC", |ctx| {
-                ctx.is_enabled = true;
-                Ok(ctx.smtc()?.SetIsEnabled(true)?)
-            })?;
-        }
-        SmtcCommand::DisableSmtc => {
-            with_smtc_ctx("禁用 SMTC", |ctx| {
-                ctx.is_enabled = false;
-                Ok(ctx.smtc()?.SetIsEnabled(false)?)
-            })?;
-        }
-        SmtcCommand::EnableDiscordRpc => {
-            discord::enable();
-        }
-        SmtcCommand::DisableDiscordRpc => {
-            discord::disable();
-        }
-        SmtcCommand::DiscordConfig(payload) => {
-            discord::update_config(payload);
-        }
+    // 让部分应用可以精确匹配歌曲
+    if let Some(ncm_id) = payload.ncm_id
+        && ncm_id > 0
+    {
+        genres_collection.Append(&HSTRING::from(format!("NCM-{ncm_id}")))?;
     }
 
+    if let Some(stream_ref) = thumbnail_stream_ref.as_ref() {
+        updater.SetThumbnail(stream_ref)?;
+    } else {
+        updater.SetThumbnail(None)?;
+        debug!("SMTC 封面已清空");
+    }
+
+    updater.Update()?;
     Ok(())
 }
 
-#[instrument(skip(command_json))]
-pub fn handle_command(command_json: &str) -> String {
-    let result = match handle_command_inner(command_json) {
-        Ok(()) => CommandResult {
-            status: CommandStatus::Success,
-            message: None,
-        },
-        Err(e) => {
-            let error_msg = format!("处理命令失败: {e:?}");
-            error!("{error_msg}");
-            CommandResult {
-                status: CommandStatus::Error,
-                message: Some(error_msg),
-            }
-        }
-    };
-
-    serde_json::to_string(&result)
-        .unwrap_or_else(|e| format!("{{\"status\":\"Error\",\"message\":\"序列化结果失败: {e}\"}}"))
+pub fn set_enabled(ctx: &mut SmtcContext, enabled: bool) -> Result<()> {
+    ctx.is_enabled = enabled;
+    let smtc = ctx.smtc()?;
+    smtc.SetIsEnabled(enabled)?;
+    Ok(())
 }
