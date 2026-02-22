@@ -68,7 +68,7 @@ export function useVersionWarning(version: NcmVersionInfo | null): boolean {
 	// 真的只在那个范围里测试了，但实际上插件应该也能在这个范围之外的一些版本工作
 	if (major === 3 && minor === 1 && patch <= 15) return true;
 
-	if (major === 2 && raw !== "2.12.13") return true;
+	if (major === 2 && raw !== "2.10.13") return true;
 
 	return false;
 }
