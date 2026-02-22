@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.2.10
+
+### Patch Changes
+
+- 3d06936: fix: 修复一个在最新的网易云 v2 版本上意外提示不支持版本的 bug
+
 ## 3.2.9
 
 ### Patch Changes

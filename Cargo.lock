@@ -19,7 +19,7 @@ checksum = "5f0e0fee31ef5ed1ba1316088939cea399010ed7731dba877ed44aeb407a75ea"
 
 [[package]]
 name = "backend"
-version = "3.2.9"
+version = "3.2.10"
 dependencies = [
  "anyhow",
  "base64",
