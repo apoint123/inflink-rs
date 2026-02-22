@@ -18,7 +18,6 @@ use cef_safe::{
     renderer_post_task_in_v8_ctx,
 };
 use serde::Serialize;
-use tokio::runtime::Runtime;
 use tracing::{
     debug,
     error,
@@ -64,9 +63,6 @@ use crate::model::{
 };
 
 const HNS_PER_MILLISECOND: f64 = 10_000.0;
-
-static TOKIO_RUNTIME: LazyLock<Runtime> =
-    LazyLock::new(|| Runtime::new().expect("创建 Tokio 运行时失败"));
 
 static GLOBAL_CALLBACK: LazyLock<Mutex<Option<SmtcCallback>>> = LazyLock::new(|| Mutex::new(None));
 
@@ -159,6 +155,20 @@ pub fn register_event_callback(v8_func_ptr: *mut cef_safe::cef_sys::_cef_v8value
 }
 
 #[instrument]
+pub fn unregister_event_callback() {
+    match GLOBAL_CALLBACK.lock() {
+        Ok(mut guard) => {
+            *guard = None;
+        }
+        Err(e) => {
+            warn!("清理 SMTC 回调时锁中毒");
+            let mut guard = e.into_inner();
+            *guard = None;
+        }
+    }
+}
+
+#[instrument]
 fn dispatch_event(event: &SmtcEvent) {
     debug!(?event, "分发 SMTC 事件");
 
@@ -185,6 +195,11 @@ fn dispatch_event(event: &SmtcEvent) {
             };
 
             if let Some(cb) = guard.as_ref() {
+                if !cb.v8_context.is_valid() || !cb.v8_function.is_valid() {
+                    warn!("试图派发 SMTC 事件，但 V8 上下文或回调函数已失效");
+                    return;
+                }
+
                 match CefV8Value::try_from_str(&event_json) {
                     Ok(arg) => {
                         if let Err(e) = cb.v8_function.execute_function(None, vec![arg]) {
@@ -354,9 +369,7 @@ pub fn update_play_mode(
     Ok(())
 }
 
-async fn create_cover_stream_ref(
-    cover: Option<&CoverSource>,
-) -> Option<RandomAccessStreamReference> {
+fn create_cover_stream_ref(cover: Option<&CoverSource>) -> Option<RandomAccessStreamReference> {
     match cover {
         None => {
             warn!("未提供封面, 将清空现有封面");
@@ -378,16 +391,16 @@ async fn create_cover_stream_ref(
                 }
             };
 
-            let stream_result: windows::core::Result<RandomAccessStreamReference> = (async {
+            let stream_result: windows::core::Result<RandomAccessStreamReference> = (|| {
                 let stream = InMemoryRandomAccessStream::new()?;
                 let writer = DataWriter::CreateDataWriter(&stream)?;
                 writer.WriteBytes(&bytes)?;
-                writer.StoreAsync()?.await?;
+                writer.StoreAsync()?.join()?;
                 writer.DetachStream()?;
                 stream.Seek(0)?;
                 RandomAccessStreamReference::CreateFromStream(&stream)
-            })
-            .await;
+            })(
+            );
 
             match stream_result {
                 Ok(stream_ref) => Some(stream_ref),
@@ -432,8 +445,7 @@ pub fn update_metadata(ctx: &SmtcContext, payload: &MetadataPayload) -> Result<(
         "正在更新 SMTC 歌曲元数据"
     );
 
-    let thumbnail_stream_ref =
-        TOKIO_RUNTIME.block_on(async { create_cover_stream_ref(payload.cover.as_ref()).await });
+    let thumbnail_stream_ref = create_cover_stream_ref(payload.cover.as_ref());
 
     let smtc = ctx.smtc()?;
     let updater = smtc.DisplayUpdater()?;
@@ -469,5 +481,10 @@ pub fn set_enabled(ctx: &mut SmtcContext, enabled: bool) -> Result<()> {
     ctx.is_enabled = enabled;
     let smtc = ctx.smtc()?;
     smtc.SetIsEnabled(enabled)?;
+
+    if !enabled {
+        unregister_event_callback();
+    }
+
     Ok(())
 }

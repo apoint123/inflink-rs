@@ -18,6 +18,12 @@ pub type CefV8Value = CefRefPtr<cef_sys::_cef_v8value_t>;
 pub type CefV8Context = CefRefPtr<cef_sys::_cef_v8context_t>;
 
 impl CefV8Context {
+    /// 检查该 V8 上下文是否仍然有效
+    #[must_use]
+    pub fn is_valid(&self) -> bool {
+        unsafe { self.is_valid.is_some_and(|func| func(self.as_raw()) == 1) }
+    }
+
     /// 获取当前 V8 的上下文
     #[must_use = "不使用它的返回值你调用它干嘛?"]
     pub fn current() -> CefResult<Self> {
@@ -26,6 +32,12 @@ impl CefV8Context {
 }
 
 impl CefV8Value {
+    /// 检查该 V8 上下文是否仍然有效
+    #[must_use]
+    pub fn is_valid(&self) -> bool {
+        unsafe { self.is_valid.is_some_and(|func| func(self.as_raw()) == 1) }
+    }
+
     /// 从`&str` 创建一个新的 JavaScript 字符串值
     ///
     /// # Errors
