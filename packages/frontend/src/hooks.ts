@@ -1,12 +1,12 @@
 import type { PaletteMode } from "@mui/material";
 import { useAtomValue } from "jotai";
 import { useEffect, useRef, useState } from "react";
+import type { INcmAdapter, NcmAdapterEventMap } from "./adapters/adapter";
 import { NativeBackendInstance } from "./services/NativeBackend";
 import { appConfigAtom } from "./store";
 import type { IInfLinkApi } from "./types/api";
 import type { ControlMessage } from "./types/backend";
 import logger from "./utils/logger";
-import type { INcmAdapter, NcmAdapterEventMap } from "./versions/adapter";
 
 export interface NcmVersionInfo {
 	major: number;
@@ -103,12 +103,12 @@ export function useInfoProvider(version: NcmVersionInfo | null): AdapterState {
 			let adapter: INcmAdapter | null = null;
 			switch (version.adapterVersion) {
 				case "v3": {
-					const { V3NcmAdapter } = await import("./versions/v3/adapter");
+					const { V3NcmAdapter } = await import("./adapters/v3/adapter");
 					adapter = new V3NcmAdapter();
 					break;
 				}
 				case "v2": {
-					const { V2NcmAdapter } = await import("./versions/v2/adapter");
+					const { V2NcmAdapter } = await import("./adapters/v2/adapter");
 					adapter = new V2NcmAdapter();
 					break;
 				}
