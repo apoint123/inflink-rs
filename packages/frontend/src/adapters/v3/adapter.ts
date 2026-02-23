@@ -1,13 +1,6 @@
 /** biome-ignore-all lint/complexity/useLiteralKeys: 和 ts 配置 noPropertyAccessFromIndexSignature 冲突 */
 import { feature } from "bun:bundle";
-import type {
-	PlaybackStatus,
-	PlayMode,
-	RepeatMode,
-	SongInfo,
-	TimelineInfo,
-	VolumeInfo,
-} from "@/types/backend";
+import type { PlayMode, SongInfo } from "@/types/backend";
 import {
 	DomElementNotFoundError,
 	InconsistentStateError,
@@ -16,19 +9,15 @@ import {
 import type { OrpheusCommand } from "@/types/global";
 import type { v3 } from "@/types/ncm";
 import {
-	CoverManager,
 	findModule,
 	getWebpackRequire,
 	NcmEventAdapter,
 	type ParsedEventMap,
-	TypedEventTarget,
-	throttle,
 	type WebpackRequire,
 	waitForElement,
 } from "@/utils";
 import logger from "@/utils/logger";
-import type { INcmAdapter, NcmAdapterEventMap } from "../adapter";
-import { PlayModeController } from "../playModeController";
+import { BaseNcmAdapter } from "../baseAdapter";
 import { type AudioPlayer, AudioPlayerWrapper } from "./audioPlayerWrapper";
 import { patchInternalLogger } from "./patchInternalLogger";
 
@@ -165,15 +154,7 @@ const SELECTORS = {
 	REACT_ROOT: "#root",
 };
 
-const CONSTANTS = {
-	// 时间线更新节流间隔
-	TIMELINE_THROTTLE_INTERVAL_MS: 1000,
-};
-
-export class V3NcmAdapter
-	extends TypedEventTarget<NcmAdapterEventMap>
-	implements INcmAdapter
-{
+export class V3NcmAdapter extends BaseNcmAdapter {
 	private reduxStore: v3.NCMStore | null = null;
 	private unsubscribeStore: (() => void) | null = null;
 	private eventAdapter!: NcmEventAdapter;
@@ -182,31 +163,10 @@ export class V3NcmAdapter
 	private isInternalLoggingEnabled = false;
 	private hasRestoredInitialState = false;
 	private ignoreNextZeroProgressEvent = false;
-	private readonly coverManager = new CoverManager();
-	private resolutionSetting: string = "500";
 
-	private musicDuration = 0;
-	private musicPlayProgress = 0;
-	private playState: PlaybackStatus = "Paused";
 	private lastTrackId: string | null = null;
 	private lastIsPlaying: boolean | null = null;
 	private lastPlayMode: string | undefined = undefined;
-
-	private lastVolume: number | null = null;
-	private lastIsMuted: boolean | null = null;
-
-	private readonly dispatchTimelineThrottled: () => void;
-	private readonly resetTimelineThrottle: () => void;
-
-	private readonly playModeController = new PlayModeController();
-
-	constructor() {
-		super();
-		[this.dispatchTimelineThrottled, , this.resetTimelineThrottle] = throttle(
-			() => this.dispatchTimelineUpdateNow(),
-			CONSTANTS.TIMELINE_THROTTLE_INTERVAL_MS,
-		);
-	}
 
 	public async initialize(): Promise<void> {
 		const require = await getWebpackRequire();
@@ -529,33 +489,12 @@ export class V3NcmAdapter
 		};
 	}
 
-	public getPlaybackStatus(): PlaybackStatus {
-		return this.playState;
-	}
-
-	public getTimelineInfo(): TimelineInfo | null {
-		if (this.musicDuration > 0) {
-			return {
-				currentTime: this.musicPlayProgress,
-				totalTime: this.musicDuration,
-			};
-		}
-		return null;
-	}
-
 	public getPlayMode(): PlayMode {
 		const newNcmMode = this.reduxStore?.getState().playing?.playingMode;
 		if (newNcmMode) {
 			return toCanonicalPlayMode(newNcmMode);
 		}
 		return { isShuffling: false, repeatMode: "None" };
-	}
-
-	public getVolumeInfo(): VolumeInfo {
-		const playingInfo = this.reduxStore?.getState().playing;
-		const volume = playingInfo?.playingVolume ?? 1.0;
-		const isMuted = volume === 0;
-		return { volume, isMuted };
 	}
 
 	public play(): void {
@@ -575,11 +514,6 @@ export class V3NcmAdapter
 			type: "playing/pause",
 			payload: { triggerScene: "desktopLyric" },
 		});
-	}
-
-	public stop(): void {
-		this.pause();
-		this.seekTo(0);
 	}
 
 	public nextSong(): void {
@@ -604,37 +538,9 @@ export class V3NcmAdapter
 		});
 	}
 
-	public toggleShuffle(): void {
+	protected applyInternalPlayMode(mode: PlayMode): void {
 		if (!this.reduxStore) return;
-		const currentMode = this.getPlayMode();
-		const nextMode = this.playModeController.getNextShuffleMode(currentMode);
-		const targetNcmMode = fromCanonicalPlayMode(nextMode);
-
-		this.reduxStore.dispatch({
-			type: "playing/switchPlayingMode",
-			payload: { playingMode: targetNcmMode, triggerScene: "sysTray" },
-		});
-	}
-
-	public toggleRepeat(): void {
-		if (!this.reduxStore) return;
-		const currentMode = this.getPlayMode();
-		const nextMode = this.playModeController.getNextRepeatMode(currentMode);
-		const targetNcmMode = fromCanonicalPlayMode(nextMode);
-
-		this.reduxStore.dispatch({
-			type: "playing/switchPlayingMode",
-			// 这里的 triggerScene 用来确保在所有模式切换中都能工作
-			// 尤其是心动模式 (虽然我们当前不会切换到心动模式)
-			payload: { playingMode: targetNcmMode, triggerScene: "sysTray" },
-		});
-	}
-
-	public setRepeatMode(mode: RepeatMode): void {
-		if (!this.reduxStore) return;
-		const currentMode = this.getPlayMode();
-		const nextMode = this.playModeController.getRepeatMode(mode, currentMode);
-		const targetNcmMode = fromCanonicalPlayMode(nextMode);
+		const targetNcmMode = fromCanonicalPlayMode(mode);
 
 		this.reduxStore.dispatch({
 			type: "playing/switchPlayingMode",
@@ -654,10 +560,6 @@ export class V3NcmAdapter
 		this.reduxStore?.dispatch({ type: "playing/switchMute" });
 	}
 
-	public setResolution(resolution: string): void {
-		this.resolutionSetting = resolution;
-	}
-
 	private onStateChanged(): void {
 		if (!this.reduxStore) return;
 		const state = this.reduxStore.getState();
@@ -675,44 +577,20 @@ export class V3NcmAdapter
 				throw e;
 			}
 
-			if (!songInfo) {
-				logger.warn("获取歌曲信息失败，但 trackId 已变更:", "Adapter V3");
-				this.lastTrackId = currentRawTrackId;
-				this.musicDuration = 0;
-				return;
-			}
-
 			this.lastTrackId = currentRawTrackId;
 
-			this.coverManager.getCover(songInfo, this.resolutionSetting, (result) => {
-				this.dispatch("songChange", {
-					...result.songInfo,
-					cover: result.cover,
-				});
-			});
+			this.processSongInfoChange(songInfo);
 
 			if (!this.hasRestoredInitialState) {
 				this.hasRestoredInitialState = true;
 				this.restoreLastPlaybackState();
-			}
-
-			if (playingInfo?.resourceType === "voice") {
-				const duration = state["page:vinylPage"]?.currentVoice?.duration;
-				if (typeof duration === "number") {
-					this.musicDuration = duration;
-				}
-			} else {
-				if (playingInfo?.curTrack?.duration) {
-					this.musicDuration = playingInfo.curTrack.duration;
-				}
 			}
 		}
 
 		if (this.lastIsPlaying === null) {
 			const isPlaying = playingInfo.playingState === 2;
 			this.lastIsPlaying = isPlaying;
-			this.playState = isPlaying ? "Playing" : "Paused";
-			this.dispatch("playStateChange", this.playState);
+			this.updatePlayState(isPlaying ? "Playing" : "Paused");
 		}
 
 		const playMode = playingInfo?.playingMode;
@@ -722,18 +600,8 @@ export class V3NcmAdapter
 		}
 
 		const newVolume = playingInfo?.playingVolume;
-		if (typeof newVolume === "number" && newVolume !== this.lastVolume) {
-			this.lastVolume = newVolume;
-			const newIsMuted = newVolume === 0;
-
-			if (newIsMuted !== this.lastIsMuted) {
-				this.lastIsMuted = newIsMuted;
-			}
-
-			this.dispatch("volumeChange", {
-				volume: newVolume,
-				isMuted: newIsMuted,
-			});
+		if (typeof newVolume === "number" && newVolume !== this.volume) {
+			this.updateVolume(newVolume, newVolume === 0);
 		}
 	}
 
@@ -805,14 +673,7 @@ export class V3NcmAdapter
 			this.ignoreNextZeroProgressEvent = false;
 		}
 
-		this.musicPlayProgress = e.detail;
-
-		this.dispatch("rawTimelineUpdate", {
-			currentTime: this.musicPlayProgress,
-			totalTime: this.musicDuration,
-		});
-
-		this.dispatchTimelineThrottled();
+		this.updateTimeline(e.detail);
 	};
 
 	private readonly onSeekUpdate = (e: ParsedEventMap["seekUpdate"]): void => {
@@ -826,18 +687,7 @@ export class V3NcmAdapter
 		e: ParsedEventMap["playStateChange"],
 	): void => {
 		const newPlayState = e.detail;
-		if (this.playState !== newPlayState) {
-			this.playState = newPlayState;
-			this.lastIsPlaying = newPlayState === "Playing";
-
-			this.dispatch("playStateChange", this.playState);
-		}
+		this.lastIsPlaying = newPlayState === "Playing";
+		this.updatePlayState(newPlayState);
 	};
-
-	private dispatchTimelineUpdateNow(): void {
-		this.dispatch("timelineUpdate", {
-			currentTime: this.musicPlayProgress,
-			totalTime: this.musicDuration,
-		});
-	}
 }

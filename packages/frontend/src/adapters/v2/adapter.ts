@@ -1,28 +1,13 @@
 import { feature } from "bun:bundle";
-import type {
-	PlaybackStatus,
-	PlayMode,
-	RepeatMode,
-	SongInfo,
-	TimelineInfo,
-	VolumeInfo,
-} from "@/types/backend";
+import type { PlaybackStatus, PlayMode, SongInfo } from "@/types/backend";
 import {
 	DomElementNotFoundError,
 	ReduxStoreNotFoundError,
 } from "@/types/errors";
 import type { v2 } from "@/types/ncm";
-import {
-	CoverManager,
-	NcmEventAdapter,
-	type ParsedEventMap,
-	TypedEventTarget,
-	throttle,
-	waitForElement,
-} from "@/utils";
+import { NcmEventAdapter, type ParsedEventMap, waitForElement } from "@/utils";
 import logger from "@/utils/logger";
-import type { INcmAdapter, NcmAdapterEventMap } from "../adapter";
-import { PlayModeController } from "../playModeController";
+import { BaseNcmAdapter } from "../baseAdapter";
 
 const Controller = typeof ctl !== "undefined" ? ctl : null;
 const DataController = typeof dc !== "undefined" ? dc : null;
@@ -242,41 +227,17 @@ async function findReduxStore(selector: string): Promise<v2.NCMStore> {
 	return store;
 }
 
-export class V2NcmAdapter
-	extends TypedEventTarget<NcmAdapterEventMap>
-	implements INcmAdapter
-{
+export class V2NcmAdapter extends BaseNcmAdapter {
 	private reduxStore: v2.NCMStore | null = null;
 	private unsubscribeStore: (() => void) | null = null;
 	private readonly eventAdapter: NcmEventAdapter;
 	private readonly apiClient = new NcmV2ApiClient();
-	private readonly coverManager = new CoverManager();
-	private resolutionSetting: string = "500";
 
-	private musicDuration = 0;
-	private musicPlayProgress = 0;
-	private playStatus: PlaybackStatus = "Paused";
 	private lastPlayMode: NcmV2PlayMode | undefined = undefined;
-
-	private lastDispatchedSongInfo: SongInfo | null = null;
-
-	private volume = 1.0;
-	private isMuted = false;
-
-	private readonly playModeController = new PlayModeController();
-
-	private readonly dispatchTimelineThrottled: () => void;
-	private readonly resetTimelineThrottle: () => void;
 
 	constructor() {
 		super();
 		this.eventAdapter = new NcmEventAdapter();
-		[this.dispatchTimelineThrottled, , this.resetTimelineThrottle] = throttle(
-			() => {
-				this.dispatchTimelineUpdateNow();
-			},
-			1000,
-		);
 	}
 
 	private get activePlayerApi(): NcmV2PlayerApi | null {
@@ -418,20 +379,6 @@ export class V2NcmAdapter
 		};
 	}
 
-	public getPlaybackStatus(): PlaybackStatus {
-		return this.playStatus;
-	}
-
-	public getTimelineInfo(): TimelineInfo | null {
-		if (this.musicDuration > 0) {
-			return {
-				currentTime: this.musicPlayProgress,
-				totalTime: this.musicDuration,
-			};
-		}
-		return null;
-	}
-
 	public getPlayMode(): PlayMode {
 		const currentNcmMode = this.reduxStore?.getState().playing?.playMode;
 		if (isValidNcmPlayMode(currentNcmMode) && currentNcmMode) {
@@ -440,21 +387,12 @@ export class V2NcmAdapter
 		return { isShuffling: false, repeatMode: "None" };
 	}
 
-	public getVolumeInfo(): VolumeInfo {
-		return { volume: this.volume, isMuted: this.isMuted };
-	}
-
 	public play(): void {
 		this.activePlayerApi?.resume();
 	}
 
 	public pause(): void {
 		this.activePlayerApi?.pause();
-	}
-
-	public stop(): void {
-		this.pause();
-		this.seekTo(0);
 	}
 
 	public nextSong(): void {
@@ -472,24 +410,8 @@ export class V2NcmAdapter
 		}
 	}
 
-	public toggleShuffle(): void {
-		const currentMode = this.getPlayMode();
-		const nextMode = this.playModeController.getNextShuffleMode(currentMode);
-		const targetNcmMode = fromCanonicalPlayMode(nextMode);
-		this.activePlayerApi?.switchMode(targetNcmMode);
-	}
-
-	public toggleRepeat(): void {
-		const currentMode = this.getPlayMode();
-		const nextMode = this.playModeController.getNextRepeatMode(currentMode);
-		const targetNcmMode = fromCanonicalPlayMode(nextMode);
-		this.activePlayerApi?.switchMode(targetNcmMode);
-	}
-
-	public setRepeatMode(mode: RepeatMode): void {
-		const currentMode = this.getPlayMode();
-		const nextMode = this.playModeController.getRepeatMode(mode, currentMode);
-		const targetNcmMode = fromCanonicalPlayMode(nextMode);
+	protected applyInternalPlayMode(mode: PlayMode): void {
+		const targetNcmMode = fromCanonicalPlayMode(mode);
 		this.activePlayerApi?.switchMode(targetNcmMode);
 	}
 
@@ -501,64 +423,19 @@ export class V2NcmAdapter
 		this.apiClient.setMuted(!this.isMuted);
 	}
 
-	public setResolution(resolution: string): void {
-		this.resolutionSetting = resolution;
-	}
-
 	private onStateChanged(): void {
 		if (!this.reduxStore) return;
 		const playingState = this.reduxStore.getState()?.playing;
 		if (!playingState) return;
 
 		const currentSongInfo = this.getCurrentSongInfo();
-		if (!currentSongInfo) {
-			this.lastDispatchedSongInfo = null;
-			return;
-		}
 
-		if (currentSongInfo.ncmId !== this.lastDispatchedSongInfo?.ncmId) {
-			this.lastDispatchedSongInfo = currentSongInfo;
+		this.processSongInfoChange(currentSongInfo);
 
-			this.coverManager.getCover(
-				currentSongInfo,
-				this.resolutionSetting,
-				(result) => {
-					this.dispatch("songChange", {
-						...result.songInfo,
-						cover: result.cover,
-					});
-				},
-			);
-
-			const trackObject = this.activePlayerApi?.getCurrentTrackObject();
-			const newDuration = trackObject?.data?.duration || 0;
-			if (newDuration > 0) {
-				this.musicDuration = newDuration;
-			}
-			this.musicPlayProgress = 0;
-			this.dispatch("timelineUpdate", {
-				currentTime: 0,
-				totalTime: this.musicDuration,
-			});
-		} else if (
-			this.lastDispatchedSongInfo &&
-			!this.lastDispatchedSongInfo.cover &&
-			currentSongInfo.cover
-		) {
-			this.coverManager.getCover(
-				currentSongInfo,
-				this.resolutionSetting,
-				(result) => {
-					this.dispatch("songChange", {
-						...result.songInfo,
-						cover: result.cover,
-					});
-					this.lastDispatchedSongInfo = {
-						...result.songInfo,
-						cover: result.cover,
-					};
-				},
-			);
+		const trackObject = this.activePlayerApi?.getCurrentTrackObject();
+		const newDuration = trackObject?.data?.duration || 0;
+		if (newDuration > 0) {
+			this.musicDuration = newDuration;
 		}
 
 		const newPlayMode = playingState.playMode;
@@ -583,10 +460,7 @@ export class V2NcmAdapter
 				break;
 		}
 
-		if (this.playStatus !== newPlayStatus) {
-			this.playStatus = newPlayStatus;
-			this.dispatch("playStateChange", this.playStatus);
-		}
+		this.updatePlayState(newPlayStatus);
 	}
 
 	private registerNcmEvents(): void {
@@ -619,14 +493,7 @@ export class V2NcmAdapter
 	private readonly onProgressUpdate = (
 		e: ParsedEventMap["progressUpdate"],
 	): void => {
-		this.musicPlayProgress = e.detail;
-
-		this.dispatch("rawTimelineUpdate", {
-			currentTime: this.musicPlayProgress,
-			totalTime: this.musicDuration,
-		});
-
-		this.dispatchTimelineThrottled();
+		this.updateTimeline(e.detail);
 	};
 
 	private readonly onSeekUpdate = (e: ParsedEventMap["seekUpdate"]): void => {
@@ -634,35 +501,13 @@ export class V2NcmAdapter
 		this.resetTimelineThrottle();
 	};
 
-	private dispatchTimelineUpdateNow(): void {
-		this.dispatch("timelineUpdate", {
-			currentTime: this.musicPlayProgress,
-			totalTime: this.musicDuration,
-		});
-	}
-
 	private readonly onVolumeChanged = (
 		payload: v2.CefPlayerVolumePayload,
 	): void => {
-		const newVolume = payload.volume;
-		if (this.volume !== newVolume) {
-			this.volume = newVolume;
-			this.dispatchVolumeChangeEvent();
-		}
+		this.updateVolume(payload.volume, this.isMuted);
 	};
 
 	private readonly onMuteChanged = (payload: v2.CefPlayerMutePayload): void => {
-		const newMuteState = payload.mute;
-		if (this.isMuted !== newMuteState) {
-			this.isMuted = newMuteState;
-			this.dispatchVolumeChangeEvent();
-		}
+		this.updateVolume(this.volume, payload.mute);
 	};
-
-	private dispatchVolumeChangeEvent(): void {
-		this.dispatch("volumeChange", {
-			volume: this.volume,
-			isMuted: this.isMuted,
-		});
-	}
 }
