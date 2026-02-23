@@ -1,5 +1,4 @@
 import { feature } from "bun:bundle";
-import { err, ok, type Result } from "neverthrow";
 import type {
 	PlaybackStatus,
 	PlayMode,
@@ -10,10 +9,7 @@ import type {
 } from "@/types/backend";
 import {
 	DomElementNotFoundError,
-	type NcmAdapterError,
 	ReduxStoreNotFoundError,
-	SongNotFoundError,
-	TimelineNotAvailableError,
 } from "@/types/errors";
 import type { v2 } from "@/types/ncm";
 import {
@@ -203,32 +199,26 @@ interface FiberNode {
 }
 
 // 网易云v2的store路径包含每次启动都变化的哈希，所以得每次都寻找它
-async function findReduxStore(
-	selector: string,
-): Promise<
-	Result<v2.NCMStore, DomElementNotFoundError | ReduxStoreNotFoundError>
-> {
+async function findReduxStore(selector: string): Promise<v2.NCMStore> {
 	const rootEl = await waitForElement(selector);
 	if (!rootEl) {
-		return err(new DomElementNotFoundError(selector));
+		throw new DomElementNotFoundError(selector);
 	}
 
-	const findStoreInFiberTree = (
-		node: FiberNode | null,
-	): Result<v2.NCMStore, ReduxStoreNotFoundError> => {
+	const findStoreInFiberTree = (node: FiberNode | null): v2.NCMStore | null => {
 		let currentNode = node;
 		while (currentNode) {
 			if (currentNode.memoizedProps?.store) {
-				return ok(currentNode.memoizedProps.store);
+				return currentNode.memoizedProps.store;
 			}
 			currentNode = currentNode.return;
 		}
-		return err(new ReduxStoreNotFoundError("找不到 redux store"));
+		return null;
 	};
 
 	const appEl = rootEl.firstElementChild as HTMLElement;
 	if (!appEl) {
-		return err(new ReduxStoreNotFoundError("根元素没有子元素"));
+		throw new ReduxStoreNotFoundError("根元素没有子元素");
 	}
 
 	const fiberKey = Object.keys(appEl).find(
@@ -237,15 +227,19 @@ async function findReduxStore(
 			key.startsWith("__reactInternalInstance$"),
 	);
 	if (!fiberKey) {
-		return err(new ReduxStoreNotFoundError("找不到 Fiber key"));
+		throw new ReduxStoreNotFoundError("找不到 Fiber key");
 	}
 
 	const startNode = (appEl as unknown as Record<string, FiberNode>)[fiberKey];
 	if (!startNode) {
-		return err(new ReduxStoreNotFoundError("找不到起始 Fiber 节点"));
+		throw new ReduxStoreNotFoundError("找不到起始 Fiber 节点");
 	}
 
-	return findStoreInFiberTree(startNode);
+	const store = findStoreInFiberTree(startNode);
+	if (!store) {
+		throw new ReduxStoreNotFoundError("找不到 redux store");
+	}
+	return store;
 }
 
 export class V2NcmAdapter
@@ -293,13 +287,8 @@ export class V2NcmAdapter
 		return null;
 	}
 
-	public async initialize(): Promise<Result<void, NcmAdapterError>> {
-		const storeResult = await findReduxStore("#portal_root");
-		if (storeResult.isErr()) {
-			logger.error("初始化 Redux store 失败:", "Adapter V2", storeResult.error);
-			return err(storeResult.error);
-		}
-		this.reduxStore = storeResult.value;
+	public async initialize(): Promise<void> {
+		this.reduxStore = await findReduxStore("#portal_root");
 
 		if (feature("DEV")) {
 			window.infstore = this.reduxStore;
@@ -318,8 +307,6 @@ export class V2NcmAdapter
 
 		this.registerNcmEvents();
 		this.onStateChanged();
-
-		return ok(undefined);
 	}
 
 	public hasNativeSmtcSupport(): boolean {
@@ -351,13 +338,13 @@ export class V2NcmAdapter
 		logger.debug("Disposed.", "Adapter V2");
 	}
 
-	public getCurrentSongInfo(): Result<SongInfo, NcmAdapterError> {
+	public getCurrentSongInfo(): SongInfo | null {
 		const playerApi = this.activePlayerApi;
 		const trackObject = playerApi?.getCurrentTrackObject() ?? null;
 		const songData = trackObject?.data;
 
 		if (!songData) {
-			return err(new SongNotFoundError("找不到 trackObject.data"));
+			return null;
 		}
 
 		const getDuration = () => {
@@ -371,7 +358,7 @@ export class V2NcmAdapter
 			const lrcid = trackObject?.from?.lrcid;
 			const ncmId = typeof lrcid === "number" && lrcid > 0 ? lrcid : 0;
 
-			return ok({
+			return {
 				songName: songData.name || "未知歌曲",
 				authorName:
 					songData.artists?.map((v) => v.name).join(" / ") || "未知作者",
@@ -382,7 +369,7 @@ export class V2NcmAdapter
 				originalCoverUrl: songData.album.picUrl || undefined,
 				ncmId: ncmId,
 				duration: getDuration(),
-			});
+			};
 		}
 
 		if (typeof songData.programId === "number") {
@@ -391,7 +378,7 @@ export class V2NcmAdapter
 			);
 
 			if (programCache) {
-				return ok({
+				return {
 					songName: programCache.name || "未知播客",
 					authorName: programCache.dj?.nickname || "未知主播",
 					albumName: programCache.radio?.name || "未知播单",
@@ -401,11 +388,11 @@ export class V2NcmAdapter
 					originalCoverUrl: programCache.coverUrl || undefined,
 					ncmId: programCache.id,
 					duration: getDuration(),
-				});
+				};
 			}
 
 			const radioPic = songData.radio?.picUrl ?? songData.album?.picUrl;
-			return ok({
+			return {
 				songName: songData.name || "未知播客",
 				authorName:
 					songData.artists?.map((v) => v.name).join(" / ") || "未知主播",
@@ -414,10 +401,10 @@ export class V2NcmAdapter
 				originalCoverUrl: radioPic || undefined,
 				ncmId: songData.programId,
 				duration: getDuration(),
-			});
+			};
 		}
 
-		return ok({
+		return {
 			songName: songData.name || "未知歌名",
 			authorName:
 				songData.artists?.map((v) => v.name).join(" / ") || "未知艺术家",
@@ -428,21 +415,21 @@ export class V2NcmAdapter
 			originalCoverUrl: songData.album?.picUrl || undefined,
 			ncmId: songData.id,
 			duration: getDuration(),
-		});
+		};
 	}
 
 	public getPlaybackStatus(): PlaybackStatus {
 		return this.playStatus;
 	}
 
-	public getTimelineInfo(): Result<TimelineInfo, NcmAdapterError> {
+	public getTimelineInfo(): TimelineInfo | null {
 		if (this.musicDuration > 0) {
-			return ok({
+			return {
 				currentTime: this.musicPlayProgress,
 				totalTime: this.musicDuration,
-			});
+			};
 		}
-		return err(new TimelineNotAvailableError());
+		return null;
 	}
 
 	public getPlayMode(): PlayMode {
@@ -523,12 +510,11 @@ export class V2NcmAdapter
 		const playingState = this.reduxStore.getState()?.playing;
 		if (!playingState) return;
 
-		const songInfoResult = this.getCurrentSongInfo();
-		if (songInfoResult.isErr()) {
+		const currentSongInfo = this.getCurrentSongInfo();
+		if (!currentSongInfo) {
 			this.lastDispatchedSongInfo = null;
 			return;
 		}
-		const currentSongInfo = songInfoResult.value;
 
 		if (currentSongInfo.ncmId !== this.lastDispatchedSongInfo?.ncmId) {
 			this.lastDispatchedSongInfo = currentSongInfo;

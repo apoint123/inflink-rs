@@ -12,20 +12,6 @@ export class ReduxStoreNotFoundError extends Error {
 	}
 }
 
-export class SongNotFoundError extends Error {
-	constructor(message = "无法获取当前歌曲信息") {
-		super(message);
-		this.name = "SongNotFoundError";
-	}
-}
-
-export class TimelineNotAvailableError extends Error {
-	constructor(message = "时间轴信息不可用") {
-		super(message);
-		this.name = "TimelineNotAvailableError";
-	}
-}
-
 export class InconsistentStateError extends Error {
 	constructor(message = "Redux store 状态不一致") {
 		super(message);
@@ -36,6 +22,4 @@ export class InconsistentStateError extends Error {
 export type NcmAdapterError =
 	| DomElementNotFoundError
 	| ReduxStoreNotFoundError
-	| SongNotFoundError
-	| TimelineNotAvailableError
-	| ReduxStoreNotFoundError;
+	| InconsistentStateError;

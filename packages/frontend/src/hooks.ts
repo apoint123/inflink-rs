@@ -5,7 +5,6 @@ import { NativeBackendInstance } from "./services/NativeBackend";
 import { appConfigAtom } from "./store";
 import type { IInfLinkApi } from "./types/api";
 import type { ControlMessage } from "./types/backend";
-import type { NcmAdapterError } from "./types/errors";
 import logger from "./utils/logger";
 import type { INcmAdapter, NcmAdapterEventMap } from "./versions/adapter";
 
@@ -76,7 +75,7 @@ export function useVersionWarning(version: NcmVersionInfo | null): boolean {
 export interface AdapterState {
 	adapter: INcmAdapter | null;
 	status: "loading" | "ready" | "error";
-	error: NcmAdapterError | null;
+	error: Error | null;
 }
 
 const INITIAL_ADAPTER_STATE: AdapterState = {
@@ -116,35 +115,34 @@ export function useInfoProvider(version: NcmVersionInfo | null): AdapterState {
 			}
 
 			if (adapter) {
-				const initResult = await adapter.initialize();
+				try {
+					await adapter.initialize();
+				} catch (e) {
+					if (didUnmount) {
+						return;
+					}
 
-				if (didUnmount) {
-					return;
-				}
-
-				if (initResult.isErr()) {
-					logger.error(
-						`Adapter 初始化失败:`,
-						"useInfoProvider",
-						initResult.error,
-					);
+					const error = e instanceof Error ? e : new Error(String(e));
+					logger.error(`Adapter 初始化失败:`, "useInfoProvider", error);
 					setAdapterState({
 						adapter: null,
 						status: "error",
-						error: initResult.error,
+						error: error,
 					});
 					return;
-				} else {
-					setAdapterState({
-						adapter: adapter,
-						status: "ready",
-						error: null,
-					});
-
-					return () => {
-						adapter?.dispose();
-					};
 				}
+
+				if (didUnmount) return;
+
+				setAdapterState({
+					adapter: adapter,
+					status: "ready",
+					error: null,
+				});
+
+				return () => {
+					adapter?.dispose();
+				};
 			} else {
 				if (!didUnmount) {
 					setAdapterState(INITIAL_ADAPTER_STATE);
@@ -358,9 +356,9 @@ export function useGlobalApi(adapter: INcmAdapter | null) {
 	useEffect(() => {
 		if (adapter) {
 			const api: IInfLinkApi = {
-				getCurrentSong: () => adapter.getCurrentSongInfo().unwrapOr(null),
+				getCurrentSong: () => adapter.getCurrentSongInfo(),
 				getPlaybackStatus: () => adapter.getPlaybackStatus(),
-				getTimeline: () => adapter.getTimelineInfo().unwrapOr(null),
+				getTimeline: () => adapter.getTimelineInfo(),
 				getPlayMode: () => adapter.getPlayMode(),
 				getVolume: () => adapter.getVolumeInfo(),
 

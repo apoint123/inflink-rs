@@ -1,4 +1,3 @@
-import type { Result } from "neverthrow";
 import type {
 	PlaybackStatus,
 	PlayMode,
@@ -7,7 +6,6 @@ import type {
 	TimelineInfo,
 	VolumeInfo,
 } from "../types/backend";
-import type { NcmAdapterError } from "../types/errors";
 import type { TypedEventTarget } from "../utils/TypedEventTarget";
 
 export type NcmAdapterEventMap = {
@@ -20,11 +18,11 @@ export type NcmAdapterEventMap = {
 };
 
 export interface INcmAdapter extends TypedEventTarget<NcmAdapterEventMap> {
-	initialize(): Promise<Result<void, NcmAdapterError>>;
+	initialize(): Promise<void>;
 	dispose(): void;
-	getCurrentSongInfo(): Result<SongInfo, NcmAdapterError>;
+	getCurrentSongInfo(): SongInfo | null;
 	getPlaybackStatus(): PlaybackStatus;
-	getTimelineInfo(): Result<TimelineInfo, NcmAdapterError>;
+	getTimelineInfo(): TimelineInfo | null;
 	getPlayMode(): PlayMode;
 	getVolumeInfo(): VolumeInfo;
 

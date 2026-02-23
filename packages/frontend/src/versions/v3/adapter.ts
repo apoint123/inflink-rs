@@ -1,6 +1,5 @@
 /** biome-ignore-all lint/complexity/useLiteralKeys: 和 ts 配置 noPropertyAccessFromIndexSignature 冲突 */
 import { feature } from "bun:bundle";
-import { err, ok, type Result } from "neverthrow";
 import type {
 	PlaybackStatus,
 	PlayMode,
@@ -12,10 +11,7 @@ import type {
 import {
 	DomElementNotFoundError,
 	InconsistentStateError,
-	type NcmAdapterError,
 	ReduxStoreNotFoundError,
-	SongNotFoundError,
-	TimelineNotAvailableError,
 } from "@/types/errors";
 import type { OrpheusCommand } from "@/types/global";
 import type { v3 } from "@/types/ncm";
@@ -128,19 +124,13 @@ function findStoreFromRootElement(rootEl: HTMLElement): v3.NCMStore | null {
 	return findReduxStoreInFiberTree(startNode);
 }
 
-async function waitForReduxStore(
-	timeoutMs = 10000,
-): Promise<
-	Result<v3.NCMStore, DomElementNotFoundError | ReduxStoreNotFoundError>
-> {
+async function waitForReduxStore(timeoutMs = 10000): Promise<v3.NCMStore> {
 	const rootEl = (await waitForElement(
 		SELECTORS.REACT_ROOT,
 	)) as v3.ReactRootElement;
 	if (!rootEl) {
-		return err(
-			new DomElementNotFoundError(
-				`找不到 React 根元素 (${SELECTORS.REACT_ROOT})`,
-			),
+		throw new DomElementNotFoundError(
+			`找不到 React 根元素 (${SELECTORS.REACT_ROOT})`,
 		);
 	}
 
@@ -154,7 +144,7 @@ async function waitForReduxStore(
 					?.memoizedProps?.store ?? findStoreFromRootElement(rootEl);
 
 			if (store) {
-				return ok(store);
+				return store;
 			}
 		} catch (e) {
 			logger.info("Polling for Redux store failed once:", "Adapter V3", e);
@@ -164,9 +154,7 @@ async function waitForReduxStore(
 		elapsedTime += interval;
 	}
 
-	return err(
-		new ReduxStoreNotFoundError(`在 ${timeoutMs}ms 后仍未找到 Redux Store`),
-	);
+	throw new ReduxStoreNotFoundError(`在 ${timeoutMs}ms 后仍未找到 Redux Store`);
 }
 
 /**
@@ -220,7 +208,7 @@ export class V3NcmAdapter
 		);
 	}
 
-	public async initialize(): Promise<Result<void, NcmAdapterError>> {
+	public async initialize(): Promise<void> {
 		const require = await getWebpackRequire();
 
 		if (feature("DEV")) {
@@ -237,11 +225,7 @@ export class V3NcmAdapter
 			logger.debug("通过 dva-tool 获取到 Redux Store", "Adapter V3");
 		} else {
 			logger.warn("回退到 Fiber Tree 遍历方案来寻找 Redux Store", "Adapter V3");
-			const storeResult = await waitForReduxStore();
-			if (storeResult.isErr()) {
-				return err(storeResult.error);
-			}
-			this.reduxStore = storeResult.value;
+			this.reduxStore = await waitForReduxStore();
 		}
 
 		if (feature("DEV")) {
@@ -254,8 +238,6 @@ export class V3NcmAdapter
 
 		this.registerNcmEvents();
 		this.onStateChanged();
-
-		return ok(undefined);
 	}
 
 	/**
@@ -454,7 +436,7 @@ export class V3NcmAdapter
 		}
 	}
 
-	public getCurrentSongInfo(): Result<SongInfo, NcmAdapterError> {
+	public getCurrentSongInfo(): SongInfo | null {
 		const state = this.reduxStore?.getState();
 		const playingInfo = state?.playing;
 
@@ -466,16 +448,14 @@ export class V3NcmAdapter
 				!currentVoice ||
 				String(currentVoice.id) !== String(playingInfo.onlineResourceId)
 			) {
-				return err(
-					new InconsistentStateError(
-						"播客信息尚未同步 (page:vinylPage 与 playing state 不一致)",
-					),
+				throw new InconsistentStateError(
+					"播客信息尚未同步 (page:vinylPage 与 playing state 不一致)",
 				);
 			}
 
 			const voiceId = parseInt(currentVoice.id, 10);
 			if (Number.isNaN(voiceId) || voiceId === 0) {
-				return err(new SongNotFoundError("当前播客 voiceId 无效"));
+				return null;
 			}
 
 			let duration = 0;
@@ -483,7 +463,7 @@ export class V3NcmAdapter
 				duration = currentVoice.duration;
 			}
 
-			return ok({
+			return {
 				songName: currentVoice.name || "未知播客",
 				authorName:
 					currentVoice.track?.artists?.map((v) => v.name).join(" / ") ||
@@ -495,11 +475,11 @@ export class V3NcmAdapter
 				originalCoverUrl: currentVoice.coverUrl || undefined,
 				ncmId: voiceId,
 				duration: duration > 0 ? duration : undefined,
-			});
+			};
 		}
 
 		if (!playingInfo?.resourceTrackId) {
-			return err(new SongNotFoundError("Redux state 中找不到 resourceTrackId"));
+			return null;
 		}
 
 		const albumName =
@@ -513,11 +493,7 @@ export class V3NcmAdapter
 			playingInfo.resourceTrackId;
 
 		if (!trackIdSource) {
-			return err(
-				new SongNotFoundError(
-					"Redux state 中找不到有效的 resourceTrackId 或 onlineResourceId",
-				),
-			);
+			return null;
 		}
 
 		let currentTrackId: number;
@@ -530,9 +506,7 @@ export class V3NcmAdapter
 		}
 
 		if (Number.isNaN(currentTrackId)) {
-			return err(
-				new SongNotFoundError(`解析 trackId 失败: "${trackIdSource}"`),
-			);
+			return null;
 		}
 
 		const coverUrl = playingInfo.resourceCoverUrl || "";
@@ -542,7 +516,7 @@ export class V3NcmAdapter
 			duration = playingInfo.curTrack.duration;
 		}
 
-		return ok({
+		return {
 			songName: playingInfo.resourceName || "未知歌名",
 			authorName:
 				playingInfo.resourceArtists?.map((v) => v.name).join(" / ") ||
@@ -552,21 +526,21 @@ export class V3NcmAdapter
 			originalCoverUrl: coverUrl || undefined,
 			ncmId: currentTrackId,
 			duration: duration > 0 ? duration : undefined,
-		});
+		};
 	}
 
 	public getPlaybackStatus(): PlaybackStatus {
 		return this.playState;
 	}
 
-	public getTimelineInfo(): Result<TimelineInfo, NcmAdapterError> {
+	public getTimelineInfo(): TimelineInfo | null {
 		if (this.musicDuration > 0) {
-			return ok({
+			return {
 				currentTime: this.musicPlayProgress,
 				totalTime: this.musicDuration,
-			});
+			};
 		}
-		return err(new TimelineNotAvailableError());
+		return null;
 	}
 
 	public getPlayMode(): PlayMode {
@@ -691,25 +665,24 @@ export class V3NcmAdapter
 
 		const currentRawTrackId = playingInfo.resourceTrackId;
 		if (currentRawTrackId && currentRawTrackId !== this.lastTrackId) {
-			const songInfoResult = this.getCurrentSongInfo();
-
-			if (songInfoResult.isErr()) {
-				if (songInfoResult.error instanceof InconsistentStateError) {
+			let songInfo: SongInfo | null;
+			try {
+				songInfo = this.getCurrentSongInfo();
+			} catch (e) {
+				if (e instanceof InconsistentStateError) {
 					return;
 				}
+				throw e;
+			}
 
-				logger.warn(
-					"获取歌曲信息失败，但 trackId 已变更:",
-					"Adapter V3",
-					songInfoResult.error,
-				);
+			if (!songInfo) {
+				logger.warn("获取歌曲信息失败，但 trackId 已变更:", "Adapter V3");
 				this.lastTrackId = currentRawTrackId;
 				this.musicDuration = 0;
 				return;
 			}
 
 			this.lastTrackId = currentRawTrackId;
-			const songInfo = songInfoResult.value;
 
 			this.coverManager.getCover(songInfo, this.resolutionSetting, (result) => {
 				this.dispatch("songChange", {
