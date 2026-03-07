@@ -14,13 +14,16 @@ import logger from "../utils/logger";
 
 const NATIVE_API_PREFIX = "inflink.";
 
-type NativeApiFunction =
-	| "initialize"
-	| "registerLogger"
-	| "setLogLevel"
-	| "terminate"
-	| "registerEventCallback"
-	| "dispatch";
+interface NativeApiMap {
+	initialize: (args?: []) => void;
+	terminate: (args?: []) => void;
+	registerLogger: (args: [callback: (logJson: string) => void]) => void;
+	registerEventCallback: (
+		args: [callback: (eventJson: string) => void],
+	) => void;
+	setLogLevel: (args: [level: LogLevel]) => void;
+	dispatch: (args: [commandJson: string]) => string;
+}
 
 const ALL_LOG_LEVELS: Readonly<LogLevel[]> = [
 	"error",
@@ -37,10 +40,14 @@ function isLogLevel(level: string): level is LogLevel {
 class NativeBackend {
 	private isActive = false;
 
-	private call<T>(func: NativeApiFunction, args: unknown[] = []): T {
-		return betterncm_native.native_plugin.call<T>(
+	private call<K extends keyof NativeApiMap>(
+		func: K,
+		...args: Parameters<NativeApiMap[K]>
+	): ReturnType<NativeApiMap[K]> {
+		const nativeArgs = args[0] ?? [];
+		return betterncm_native.native_plugin.call<ReturnType<NativeApiMap[K]>>(
 			`${NATIVE_API_PREFIX}${func}`,
-			args,
+			nativeArgs,
 		);
 	}
 
@@ -49,7 +56,7 @@ class NativeBackend {
 		payload: AppMessage[T],
 	) {
 		const command = JSON.stringify({ type, payload });
-		const resultJson = this.call<string>("dispatch", [command]);
+		const resultJson = this.call("dispatch", [command]);
 
 		if (!resultJson) {
 			logger.error(`命令 '${type}' 未收到任何返回结果。`, "Native Bridge");
