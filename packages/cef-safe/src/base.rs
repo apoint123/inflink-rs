@@ -9,13 +9,6 @@ use crate::error::{
     CefResult,
 };
 
-/// 一个 `unsafe trait`，用于抽象所有 CEF 的引用计数结构体
-///
-/// # Safety
-///
-/// 实现此 trait 的类型必须保证它在内存布局上与一个以 `_cef_base_ref_counted_t`
-/// 为首成员的 CEF 结构体兼容。`get_base` 方法的实现必须返回一个
-/// 指向这个 `base` 成员的有效指针
 pub unsafe trait CefStruct {
     fn get_base(&self) -> *mut cef_sys::_cef_base_ref_counted_t;
 }
@@ -76,7 +69,7 @@ impl<T: CefStruct> CefRefPtr<T> {
     /// 可能会变为悬垂指针
     ///
     /// 通常用于将指针传递给不取得所有权的 C API 函数
-    #[must_use = "不使用它的返回值你调用它干嘛?"]
+    #[must_use]
     pub const fn as_raw(&self) -> *mut T {
         self.ptr.as_ptr()
     }

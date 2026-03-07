@@ -132,10 +132,9 @@ impl Drop for SmtcContext {
     }
 }
 
-pub fn register_event_callback(v8_func_ptr: *mut cef_safe::cef_sys::_cef_v8value_t) {
+pub fn register_event_callback(v8_function: CefV8Value) {
     let callback_result: CefResult<SmtcCallback> = (|| {
         let v8_context = CefV8Context::current()?;
-        let v8_function = unsafe { CefV8Value::from_raw(v8_func_ptr)? };
         Ok(SmtcCallback {
             v8_context,
             v8_function,

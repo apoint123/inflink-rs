@@ -51,16 +51,13 @@ unsafe impl Send for LoggingCallback {}
 static LOGGING_CALLBACK: LazyLock<Mutex<Option<LoggingCallback>>> =
     LazyLock::new(|| Mutex::new(None));
 
-pub fn register_callback(v8_func_ptr: *mut cef_safe::cef_sys::_cef_v8value_t) {
+pub fn register_callback(v8_function: cef_safe::CefV8Value) {
     clear_callback();
 
-    let callback_result =
-        unsafe { cef_safe::CefV8Value::from_raw(v8_func_ptr) }.and_then(|v8_function| {
-            cef_safe::CefV8Context::current().map(|v8_context| LoggingCallback {
-                v8_function: v8_function.clone(),
-                v8_context,
-            })
-        });
+    let callback_result = cef_safe::CefV8Context::current().map(|v8_context| LoggingCallback {
+        v8_context,
+        v8_function,
+    });
 
     let mut guard = match LOGGING_CALLBACK.lock() {
         Ok(guard) => guard,

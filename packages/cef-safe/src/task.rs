@@ -186,7 +186,6 @@ unsafe extern "stdcall" fn base_has_at_least_one_ref(base: *mut _cef_base_ref_co
 ///     }
 /// }
 /// ```
-#[must_use = "忽略返回值你就无法知道任务是否成功提交了"]
 pub fn renderer_post_task_in_v8_ctx<F>(v8_context: CefV8Context, f: F) -> CefResult<()>
 where
     F: FnOnce() + Send + 'static,

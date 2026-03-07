@@ -25,7 +25,6 @@ impl CefV8Context {
     }
 
     /// 获取当前 V8 的上下文
-    #[must_use = "不使用它的返回值你调用它干嘛?"]
     pub fn current() -> CefResult<Self> {
         unsafe { Self::from_raw(cef_sys::cef_v8context_get_current_context()) }
     }
@@ -43,7 +42,6 @@ impl CefV8Value {
     /// # Errors
     ///
     /// 如果 CEF 内部无法创建字符串对象，将返回错误
-    #[must_use = "不使用它的返回值你调用它干嘛?"]
     pub fn try_from_str(s: &str) -> CefResult<Self> {
         let cef_str = CefString16::from_str(s)?;
         let raw_ptr = unsafe { cef_sys::cef_v8value_create_string(&raw const *cef_str) };
@@ -51,14 +49,13 @@ impl CefV8Value {
     }
 
     /// 执行JS函数并返回其结果或错误
-    #[must_use = "不处理这个Result, 你就无法知道JS端是否执行成功, 可能会错过一个关键的错误"]
     pub fn execute_function(&self, this: Option<&Self>, args: Vec<Self>) -> CefResult<Self> {
         let this_ptr = this.map_or(ptr::null_mut(), Self::as_raw);
 
-        // 这里必须使用 into_raw 而不是 as_row
+        // 这里必须使用 into_raw 而不是 as_raw
         // 经过反复测试，网易云提供的 execute_function 似乎在内部帮我们调用了 release，
-        // 错误地取得了所有权，在这里调用 as_row，会造成双重释放并导致网易云音乐崩溃
-        // 这很不同寻常，但千万不要改成 as_row，它真的会崩溃！
+        // 错误地取得了所有权，在这里调用 as_raw，会造成双重释放并导致网易云音乐崩溃
+        // 这很不同寻常，但千万不要改成 as_raw，它真的会崩溃！
         let args_vec: Vec<*mut cef_sys::_cef_v8value_t> =
             args.into_iter().map(Self::into_raw).collect();
 
@@ -72,7 +69,6 @@ impl CefV8Value {
             return unsafe { Self::from_raw(raw_retval) };
         }
 
-        // --- 异常处理路径 ---
         let has_exception =
             unsafe { self.has_exception.map_or(0, |func| func(self.as_raw())) == 1 };
 

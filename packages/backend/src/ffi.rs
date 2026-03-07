@@ -139,10 +139,15 @@ pub unsafe extern "C" fn terminate(_args: *mut *mut c_void) -> *mut c_char {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn registerEventCallback(args: *mut *mut c_void) -> *mut c_char {
     safe_call(|| {
-        let v8_func = unsafe { *args.cast::<*mut cef_safe::cef_sys::_cef_v8value_t>() };
-        if !v8_func.is_null() {
-            debug!("已注册事件回调");
-            smtc_core::register_event_callback(v8_func);
+        let v8_func_ptr = unsafe { *args.cast::<*mut cef_safe::cef_sys::_cef_v8value_t>() };
+        if !v8_func_ptr.is_null() {
+            match unsafe { cef_safe::CefV8Value::from_raw(v8_func_ptr) } {
+                Ok(v8_func) => {
+                    debug!("已注册事件回调");
+                    smtc_core::register_event_callback(v8_func);
+                }
+                Err(e) => error!("无法转换 V8 指针 {e:?}"),
+            }
         }
         ptr::null_mut()
     })
@@ -201,10 +206,15 @@ pub unsafe extern "C" fn dispatch(args: *mut *mut c_void) -> *mut c_char {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn registerLogger(args: *mut *mut c_void) -> *mut c_char {
     safe_call(|| {
-        let v8_func = unsafe { *args.cast::<*mut cef_safe::cef_sys::_cef_v8value_t>() };
-        if !v8_func.is_null() {
-            debug!("已注册日志回调");
-            logger::register_callback(v8_func);
+        let v8_func_ptr = unsafe { *args.cast::<*mut cef_safe::cef_sys::_cef_v8value_t>() };
+        if !v8_func_ptr.is_null() {
+            match unsafe { cef_safe::CefV8Value::from_raw(v8_func_ptr) } {
+                Ok(v8_func) => {
+                    debug!("已注册日志回调");
+                    logger::register_callback(v8_func);
+                }
+                Err(e) => error!("无法转换 V8 指针: {e:?}"),
+            }
         }
         ptr::null_mut()
     })

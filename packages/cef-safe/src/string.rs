@@ -21,7 +21,6 @@ impl CefString16 {
     /// # Errors
     ///
     /// 如果底层的 `cef_string_utf16_set` 调用失败，返回 `CefError::StringConversionFailed`
-    #[must_use = "不使用它的返回值你调用它干嘛?"]
     pub fn from_str(s: &str) -> CefResult<Self> {
         let utf16_data: Vec<u16> = s.encode_utf16().collect();
         let utf16_len = utf16_data.len();
