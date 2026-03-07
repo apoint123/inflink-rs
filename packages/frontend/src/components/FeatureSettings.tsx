@@ -147,7 +147,6 @@ export function FeatureSettings() {
 						onBlur={handleResBlur}
 						sx={{ width: 140 }}
 						renderInput={(params) => (
-							// @ts-expect-error MUI 自己的类型问题
 							<TextField {...params} size="small" variant="outlined" />
 						)}
 					/>

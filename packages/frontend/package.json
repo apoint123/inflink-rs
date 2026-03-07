@@ -5,8 +5,8 @@
 	"dependencies": {
 		"@emotion/react": "^11.14.0",
 		"@emotion/styled": "^11.14.1",
-		"@mui/icons-material": "^7.3.8",
-		"@mui/material": "^7.3.8",
+		"@mui/icons-material": "^7.3.9",
+		"@mui/material": "^7.3.9",
 		"jotai": "^2.18.0",
 		"loglevel": "^1.9.2",
 		"react": "^19.2.4",
