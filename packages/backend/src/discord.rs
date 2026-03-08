@@ -75,7 +75,8 @@ struct ActivityData {
 
 impl ActivityData {
     fn from_metadata(metadata: SharedMetadata, mode: &DiscordAppNameMode) -> Self {
-        let cached_cover_url = Self::process_cover_url(metadata.original_cover_url.as_deref());
+        let cached_cover_url =
+            Self::process_cover_url(metadata.cover.as_ref().and_then(|c| c.url.as_deref()));
         let cached_song_url = Self::process_song_url(metadata.ncm_id);
         let cached_app_name = Self::compute_app_name(mode, &metadata);
 
@@ -90,7 +91,8 @@ impl ActivityData {
     }
 
     fn update_metadata(&mut self, metadata: SharedMetadata, mode: &DiscordAppNameMode) {
-        self.cached_cover_url = Self::process_cover_url(metadata.original_cover_url.as_deref());
+        self.cached_cover_url =
+            Self::process_cover_url(metadata.cover.as_ref().and_then(|c| c.url.as_deref()));
         self.cached_song_url = Self::process_song_url(metadata.ncm_id);
         self.cached_app_name = Self::compute_app_name(mode, &metadata);
         self.metadata = metadata;

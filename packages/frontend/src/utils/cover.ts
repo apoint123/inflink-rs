@@ -1,4 +1,4 @@
-import type { CoverSource, SongInfo } from "../types/backend";
+import type { CoverInfo, SongInfo } from "../types/backend";
 import logger from "./logger";
 
 export class CoverManager {
@@ -10,7 +10,7 @@ export class CoverManager {
 		resolution: string,
 		onComplete: (result: {
 			songInfo: SongInfo;
-			cover: CoverSource | null;
+			cover: CoverInfo | null;
 		}) => void,
 	): void {
 		this.fetchController?.abort();
@@ -19,12 +19,12 @@ export class CoverManager {
 		const generation = this.fetchGeneration;
 		const currentCover = songInfo.cover;
 
-		if (!currentCover || currentCover.type !== "Url") {
+		if (!currentCover?.url) {
 			onComplete({ songInfo, cover: currentCover });
 			return;
 		}
 
-		const thumbnailUrl = this.createImageUrl(currentCover.value, resolution);
+		const thumbnailUrl = this.createImageUrl(currentCover.url, resolution);
 
 		if (!thumbnailUrl) {
 			onComplete({ songInfo, cover: null });
@@ -51,22 +51,9 @@ export class CoverManager {
 
 				const blob = await response.blob();
 
-				const encodeStart = performance.now();
-				const dataUri = await this.convertBlobToDataUri(blob);
-				const encodeEnd = performance.now();
-				logger.debug(
-					`封面 Base64 编码用时: ${Math.round(encodeEnd - encodeStart)}ms`,
-					"CoverManager",
-				);
-
-				const base64Data = dataUri.split(",")[1];
-				if (!base64Data) {
-					throw new Error("生成的 Data URI 格式无效");
-				}
-
 				onComplete({
 					songInfo,
-					cover: { type: "Base64", value: base64Data },
+					cover: { blob, url: currentCover.url },
 				});
 			} catch (e) {
 				if ((e as Error).name !== "AbortError") {
@@ -109,14 +96,5 @@ export class CoverManager {
 		const processedUrl = `${baseUrl}?imageView&${imageParams.toString()}`;
 
 		return `orpheus://cache/?${processedUrl}`;
-	}
-
-	private async convertBlobToDataUri(blob: Blob): Promise<string> {
-		return new Promise((resolve, reject) => {
-			const reader = new FileReader();
-			reader.onload = () => resolve(reader.result as string);
-			reader.onerror = (error) => reject(error);
-			reader.readAsDataURL(blob);
-		});
 	}
 }

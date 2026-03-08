@@ -46,18 +46,17 @@ pub enum AppMessage {
 }
 
 #[derive(Deserialize, Serialize, Clone, PartialEq, Eq)]
-#[serde(tag = "type", content = "value")]
-pub enum CoverSource {
-    Url(String),
-    Base64(String),
+pub struct CoverPayload {
+    pub base64: Option<String>,
+    pub url: Option<String>,
 }
 
-impl fmt::Debug for CoverSource {
+impl fmt::Debug for CoverPayload {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Url(url) => f.debug_tuple("Url").field(url).finish(),
-            Self::Base64(_) => f.debug_tuple("Base64").field(&"<...omitted...>").finish(),
-        }
+        f.debug_struct("CoverPayload")
+            .field("base64", &self.base64.as_ref().map(|_| "<...omitted...>"))
+            .field("url", &self.url)
+            .finish()
     }
 }
 
@@ -67,8 +66,7 @@ pub struct MetadataPayload {
     pub song_name: String,
     pub author_name: String,
     pub album_name: String,
-    pub cover: Option<CoverSource>,
-    pub original_cover_url: Option<String>,
+    pub cover: Option<CoverPayload>,
     pub ncm_id: Option<u64>,
     pub duration: Option<f64>,
 }

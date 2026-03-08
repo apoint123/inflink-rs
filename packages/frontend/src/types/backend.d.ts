@@ -1,20 +1,15 @@
 export type PlaybackStatus = "Playing" | "Paused";
 
-export type CoverSource =
-	| { type: "Url"; value: string }
-	| { type: "Base64"; value: string };
+export interface CoverInfo {
+	blob?: Blob | undefined;
+	url?: string | undefined;
+}
 
 export interface SongInfo {
 	songName: string;
 	albumName: string;
 	authorName: string;
-	cover: CoverSource | null;
-	/**
-	 * 原始封面 URL
-	 *
-	 * 用于 Discord RPC 等场景
-	 */
-	originalCoverUrl?: string | undefined;
+	cover: CoverInfo | null;
 	/**
 	 * 歌曲ID，可用于精确匹配歌曲
 	 *
@@ -60,7 +55,22 @@ export type SmtcEvent =
 	| { type: "ToggleRepeat" }
 	| { type: "Seek"; position_ms: number };
 
-export interface MetadataPayload extends SongInfo {}
+/**
+ * FFI 边界使用的元数据类型，主要是 blob 转换为 base64 字符串以便跨 FFI 边界传递
+ */
+export interface MetadataPayload {
+	songName: string;
+	albumName: string;
+	authorName: string;
+	cover: MetadataCoverPayload | null;
+	ncmId: number;
+	duration?: number | undefined;
+}
+
+export interface MetadataCoverPayload {
+	base64?: string | undefined;
+	url?: string | undefined;
+}
 export interface PlayStatePayload {
 	status: PlaybackStatus;
 }

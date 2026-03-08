@@ -241,8 +241,8 @@ export function useBackendConnection(adapterState: AdapterState) {
 
 		const nativeBackend = NativeBackendInstance;
 
-		const onSongChange = (e: NcmAdapterEventMap["songChange"]) => {
-			nativeBackend.update(e.detail);
+		const onSongChange = async (e: NcmAdapterEventMap["songChange"]) => {
+			await nativeBackend.update(e.detail);
 			if (!hasSentInitialMetadata.current) {
 				hasSentInitialMetadata.current = true;
 				if (configRef.current.smtcEnabled) {

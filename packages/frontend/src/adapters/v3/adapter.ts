@@ -429,10 +429,7 @@ export class V3NcmAdapter extends BaseNcmAdapter {
 					currentVoice.track?.artists?.map((v) => v.name).join(" / ") ||
 					"未知主播",
 				albumName: currentVoice.radio?.name || "未知播单",
-				cover: currentVoice.coverUrl
-					? { type: "Url", value: currentVoice.coverUrl }
-					: null,
-				originalCoverUrl: currentVoice.coverUrl || undefined,
+				cover: currentVoice.coverUrl ? { url: currentVoice.coverUrl } : null,
 				ncmId: voiceId,
 				duration: duration > 0 ? duration : undefined,
 			};
@@ -482,8 +479,7 @@ export class V3NcmAdapter extends BaseNcmAdapter {
 				playingInfo.resourceArtists?.map((v) => v.name).join(" / ") ||
 				"未知艺术家",
 			albumName: albumName,
-			cover: coverUrl ? { type: "Url", value: coverUrl } : null,
-			originalCoverUrl: coverUrl || undefined,
+			cover: coverUrl ? { url: coverUrl } : null,
 			ncmId: currentTrackId,
 			duration: duration > 0 ? duration : undefined,
 		};

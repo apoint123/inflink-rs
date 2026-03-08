@@ -110,10 +110,7 @@ export abstract class BaseNcmAdapter
 		const isNewSong =
 			String(currentSongInfo.ncmId) !== String(this.lastDispatchedSongId);
 
-		const currentCoverUrl =
-			currentSongInfo.cover?.type === "Url"
-				? currentSongInfo.cover.value
-				: undefined;
+		const currentCoverUrl = currentSongInfo.cover?.url;
 		const isCoverChanged = currentCoverUrl !== this.lastDispatchedCoverUrl;
 
 		if (isNewSong || isCoverChanged) {

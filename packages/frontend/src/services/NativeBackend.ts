@@ -4,10 +4,12 @@ import type {
 	ControlMessage,
 	DiscordConfigPayload,
 	LogEntry,
+	MetadataCoverPayload,
 	MetadataPayload,
 	PlaybackStatus,
 	RepeatMode,
 	SmtcEvent,
+	SongInfo,
 } from "../types/backend";
 import type { LogLevel } from "../utils/logger";
 import logger from "../utils/logger";
@@ -39,6 +41,7 @@ function isLogLevel(level: string): level is LogLevel {
 
 class NativeBackend {
 	private isActive = false;
+	private updateGeneration = 0;
 
 	private call<K extends keyof NativeApiMap>(
 		func: K,
@@ -197,8 +200,74 @@ class NativeBackend {
 		logger.debug(`更新 Discord 配置`, "Native Bridge", config);
 	}
 
-	public update(songInfo: MetadataPayload) {
-		this.dispatch("UpdateMetadata", songInfo);
+	public async update(songInfo: SongInfo): Promise<void> {
+		this.updateGeneration++;
+		const generation = this.updateGeneration;
+
+		const coverPayload: MetadataCoverPayload | undefined = {
+			url: songInfo.cover?.url,
+		};
+
+		if (songInfo.cover?.blob) {
+			try {
+				const base64 = await this.convertBlobToBase64(songInfo.cover.blob);
+				if (generation !== this.updateGeneration) return;
+				coverPayload.base64 = base64;
+			} catch (e) {
+				logger.warn(
+					`封面 Blob 转 Base64 失败: ${(e as Error).message}`,
+					"Native Bridge",
+				);
+				if (generation !== this.updateGeneration) return;
+			}
+		}
+
+		const payload = this.toMetadataPayload(songInfo, coverPayload);
+		this.dispatch("UpdateMetadata", payload);
+	}
+
+	private toMetadataPayload(
+		songInfo: SongInfo,
+		cover: MetadataCoverPayload | undefined,
+	): MetadataPayload {
+		return {
+			songName: songInfo.songName,
+			albumName: songInfo.albumName,
+			authorName: songInfo.authorName,
+			cover: cover?.base64 || cover?.url ? cover : null,
+			ncmId: songInfo.ncmId,
+			duration: songInfo.duration,
+		};
+	}
+
+	private convertBlobToBase64(blob: Blob): Promise<string> {
+		return new Promise((resolve, reject) => {
+			const reader = new FileReader();
+
+			reader.onload = () => {
+				const dataUri = reader.result;
+
+				if (typeof dataUri !== "string") {
+					reject(new Error("读取结果不是字符串"));
+					return;
+				}
+
+				const commaIndex = dataUri.indexOf(",");
+				if (commaIndex === -1) {
+					reject(new Error("生成的 Data URI 格式无效"));
+					return;
+				}
+
+				const base64Data = dataUri.slice(commaIndex + 1);
+				resolve(base64Data);
+			};
+
+			reader.onerror = () => {
+				reject(reader.error || new Error("文件读取失败"));
+			};
+
+			reader.readAsDataURL(blob);
+		});
 	}
 
 	public updatePlayState(status: PlaybackStatus) {

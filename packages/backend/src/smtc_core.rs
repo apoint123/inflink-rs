@@ -56,7 +56,7 @@ use windows::{
 };
 
 use crate::model::{
-    CoverSource,
+    CoverPayload,
     MetadataPayload,
     PlaybackStatus,
     RepeatMode,
@@ -368,64 +368,70 @@ pub fn update_play_mode(
     Ok(())
 }
 
-fn create_cover_stream_ref(cover: Option<&CoverSource>) -> Option<RandomAccessStreamReference> {
+fn create_cover_stream_ref(cover: Option<&CoverPayload>) -> Option<RandomAccessStreamReference> {
     match cover {
         None => {
             warn!("未提供封面, 将清空现有封面");
             None
         }
-        Some(CoverSource::Base64(base64_data)) => {
-            debug!("正在从 Base64 数据解码封面");
-            let start_time = Instant::now();
+        Some(payload) => {
+            if let Some(base64_data) = &payload.base64 {
+                debug!("正在从 Base64 数据解码封面");
+                let start_time = Instant::now();
 
-            let bytes = match general_purpose::STANDARD.decode(base64_data) {
-                Ok(b) => {
-                    let elapsed = start_time.elapsed();
-                    debug!(duration = ?elapsed, "封面 Base64 解码完成");
-                    b
-                }
-                Err(e) => {
-                    warn!("解码封面 Base64 失败: {e}");
-                    return None;
-                }
-            };
+                let bytes = match general_purpose::STANDARD.decode(base64_data) {
+                    Ok(b) => {
+                        let elapsed = start_time.elapsed();
+                        debug!(duration = ?elapsed, "封面 Base64 解码完成");
+                        b
+                    }
+                    Err(e) => {
+                        warn!("解码封面 Base64 失败: {e}");
+                        return create_cover_from_url(payload.url.as_deref());
+                    }
+                };
 
-            let stream_result: windows::core::Result<RandomAccessStreamReference> = (|| {
-                let stream = InMemoryRandomAccessStream::new()?;
-                let writer = DataWriter::CreateDataWriter(&stream)?;
-                writer.WriteBytes(&bytes)?;
-                writer.StoreAsync()?.join()?;
-                writer.DetachStream()?;
-                stream.Seek(0)?;
-                RandomAccessStreamReference::CreateFromStream(&stream)
-            })(
-            );
+                let stream_result: windows::core::Result<RandomAccessStreamReference> = (|| {
+                    let stream = InMemoryRandomAccessStream::new()?;
+                    let writer = DataWriter::CreateDataWriter(&stream)?;
+                    writer.WriteBytes(&bytes)?;
+                    writer.StoreAsync()?.join()?;
+                    writer.DetachStream()?;
+                    stream.Seek(0)?;
+                    RandomAccessStreamReference::CreateFromStream(&stream)
+                })(
+                );
 
-            match stream_result {
-                Ok(stream_ref) => Some(stream_ref),
-                Err(e) => {
-                    error!("创建封面内存流失败: {e:?}");
-                    None
+                match stream_result {
+                    Ok(stream_ref) => Some(stream_ref),
+                    Err(e) => {
+                        error!("创建封面内存流失败: {e:?}");
+                        None
+                    }
                 }
+            } else {
+                create_cover_from_url(payload.url.as_deref())
             }
         }
-        Some(CoverSource::Url(url)) => {
-            debug!("正在从 URL 创建封面引用: {url}");
-            let uri = match Uri::CreateUri(&HSTRING::from(url)) {
-                Ok(u) => u,
-                Err(e) => {
-                    warn!("创建 URI 失败 ({url}): {e}");
-                    return None;
-                }
-            };
+    }
+}
 
-            match RandomAccessStreamReference::CreateFromUri(&uri) {
-                Ok(stream_ref) => Some(stream_ref),
-                Err(e) => {
-                    warn!("从 URI 创建流引用失败: {e}");
-                    None
-                }
-            }
+fn create_cover_from_url(url: Option<&str>) -> Option<RandomAccessStreamReference> {
+    let url = url?;
+    debug!("正在从 URL 创建封面引用: {url}");
+    let uri = match Uri::CreateUri(&HSTRING::from(url)) {
+        Ok(u) => u,
+        Err(e) => {
+            warn!("创建 URI 失败 ({url}): {e}");
+            return None;
+        }
+    };
+
+    match RandomAccessStreamReference::CreateFromUri(&uri) {
+        Ok(stream_ref) => Some(stream_ref),
+        Err(e) => {
+            warn!("从 URI 创建流引用失败: {e}");
+            None
         }
     }
 }

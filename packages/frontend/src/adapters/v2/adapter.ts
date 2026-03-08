@@ -324,10 +324,7 @@ export class V2NcmAdapter extends BaseNcmAdapter {
 				authorName:
 					songData.artists?.map((v) => v.name).join(" / ") || "未知作者",
 				albumName: songData.album?.name || "未知专辑",
-				cover: songData.album.picUrl
-					? { type: "Url", value: songData.album.picUrl }
-					: null,
-				originalCoverUrl: songData.album.picUrl || undefined,
+				cover: songData.album.picUrl ? { url: songData.album.picUrl } : null,
 				ncmId: ncmId,
 				duration: getDuration(),
 			};
@@ -343,10 +340,7 @@ export class V2NcmAdapter extends BaseNcmAdapter {
 					songName: programCache.name || "未知播客",
 					authorName: programCache.dj?.nickname || "未知主播",
 					albumName: programCache.radio?.name || "未知播单",
-					cover: programCache.coverUrl
-						? { type: "Url", value: programCache.coverUrl }
-						: null,
-					originalCoverUrl: programCache.coverUrl || undefined,
+					cover: programCache.coverUrl ? { url: programCache.coverUrl } : null,
 					ncmId: programCache.id,
 					duration: getDuration(),
 				};
@@ -358,8 +352,7 @@ export class V2NcmAdapter extends BaseNcmAdapter {
 				authorName:
 					songData.artists?.map((v) => v.name).join(" / ") || "未知主播",
 				albumName: songData.radio?.name || "未知播单",
-				cover: radioPic ? { type: "Url", value: radioPic } : null,
-				originalCoverUrl: radioPic || undefined,
+				cover: radioPic ? { url: radioPic } : null,
 				ncmId: songData.programId,
 				duration: getDuration(),
 			};
@@ -370,10 +363,7 @@ export class V2NcmAdapter extends BaseNcmAdapter {
 			authorName:
 				songData.artists?.map((v) => v.name).join(" / ") || "未知艺术家",
 			albumName: songData.album?.name || "未知专辑",
-			cover: songData.album?.picUrl
-				? { type: "Url", value: songData.album.picUrl }
-				: null,
-			originalCoverUrl: songData.album?.picUrl || undefined,
+			cover: songData.album?.picUrl ? { url: songData.album.picUrl } : null,
 			ncmId: songData.id,
 			duration: getDuration(),
 		};
