@@ -7,7 +7,7 @@ import {
 	ReduxStoreNotFoundError,
 } from "@/types/errors";
 import type { OrpheusCommand } from "@/types/global";
-import type { v3 } from "@/types/ncm";
+import type { AudioDataInfo, v3 } from "@/types/ncm";
 import {
 	findModule,
 	getWebpackRequire,
@@ -396,6 +396,14 @@ export class V3NcmAdapter extends BaseNcmAdapter {
 		}
 	}
 
+	protected onAudioDataSubscriptionStarted(): void {
+		this.audioPlayerWrapper?.setPluginAudioDataCallback(this.onAudioDataUpdate);
+	}
+
+	protected onAudioDataSubscriptionEnded(): void {
+		this.audioPlayerWrapper?.setPluginAudioDataCallback(undefined);
+	}
+
 	public getCurrentSongInfo(): SongInfo | null {
 		const state = this.reduxStore?.getState();
 		const playingInfo = state?.playing;
@@ -685,5 +693,9 @@ export class V3NcmAdapter extends BaseNcmAdapter {
 		const newPlayState = e.detail;
 		this.lastIsPlaying = newPlayState === "Playing";
 		this.updatePlayState(newPlayState);
+	};
+
+	private readonly onAudioDataUpdate = (data: AudioDataInfo): void => {
+		this.dispatch("audioDataUpdate", data);
 	};
 }

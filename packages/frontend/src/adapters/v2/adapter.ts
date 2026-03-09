@@ -4,8 +4,15 @@ import {
 	DomElementNotFoundError,
 	ReduxStoreNotFoundError,
 } from "@/types/errors";
-import type { v2 } from "@/types/ncm";
-import { NcmEventAdapter, type ParsedEventMap, waitForElement } from "@/utils";
+import type { AudioDataInfo, v2 } from "@/types/ncm";
+import {
+	findModule,
+	getWebpackRequire,
+	NcmEventAdapter,
+	type ParsedEventMap,
+	type WebpackRequire,
+	waitForElement,
+} from "@/utils";
 import logger from "@/utils/logger";
 import { BaseNcmAdapter } from "../baseAdapter";
 
@@ -235,6 +242,14 @@ export class V2NcmAdapter extends BaseNcmAdapter {
 
 	private lastPlayMode: NcmV2PlayMode | undefined = undefined;
 
+	private ncmWantsAudioData = false;
+	private pluginWantsAudioData = false;
+	private originalSetAudioDataEnabled?: (enabled: boolean) => void;
+	private pcmSubscription: { unsubscribe: () => void } | null = null;
+	private v2AudioPlayerPcmData$:
+		| v2.V2AudioPlayerModule["a"]["audioplayer"]["audioPlayerPcmData$"]
+		| null = null;
+
 	constructor() {
 		super();
 		this.eventAdapter = new NcmEventAdapter();
@@ -250,6 +265,9 @@ export class V2NcmAdapter extends BaseNcmAdapter {
 
 	public async initialize(): Promise<void> {
 		this.reduxStore = await findReduxStore("#portal_root");
+
+		const require = await getWebpackRequire();
+		this.initializeV2AudioData(require);
 
 		if (feature("DEV")) {
 			window.infstore = this.reduxStore;
@@ -413,6 +431,83 @@ export class V2NcmAdapter extends BaseNcmAdapter {
 		this.apiClient.setMuted(!this.isMuted);
 	}
 
+	private initializeV2AudioData(require: WebpackRequire): void {
+		const audioMod = findModule<v2.V2AudioPlayerModule>(
+			require,
+			(exports: unknown): exports is v2.V2AudioPlayerModule => {
+				if (!exports || typeof exports !== "object") {
+					return false;
+				}
+
+				return (
+					typeof (exports as v2.V2AudioPlayerModule).a?.audioplayer
+						?.setAudioDataTransferEnableStatus === "function"
+				);
+			},
+		);
+
+		if (!audioMod?.a?.audioplayer) {
+			logger.warn(
+				"未找到 V2 audioplayer 模块，音频数据功能不可用",
+				"Adapter V2",
+			);
+			return;
+		}
+
+		const parentObj = audioMod.a;
+		const originalAudioPlayer = parentObj.audioplayer;
+
+		this.originalSetAudioDataEnabled =
+			originalAudioPlayer.setAudioDataTransferEnableStatus.bind(
+				originalAudioPlayer,
+			);
+		this.v2AudioPlayerPcmData$ = originalAudioPlayer.audioPlayerPcmData$;
+
+		const proxy = new Proxy(originalAudioPlayer, {
+			get: (target, prop, receiver) => {
+				if (prop === "setAudioDataTransferEnableStatus") {
+					return (enabled: boolean) => {
+						this.ncmWantsAudioData = enabled;
+						this.syncAudioDataState();
+					};
+				}
+				return Reflect.get(target, prop, receiver);
+			},
+		});
+
+		try {
+			parentObj.audioplayer = proxy;
+		} catch (e) {
+			logger.error("挂载 V2 Proxy 失败", "Adapter V2", e);
+		}
+	}
+
+	private syncAudioDataState(): void {
+		const shouldEnable = this.ncmWantsAudioData || this.pluginWantsAudioData;
+		this.originalSetAudioDataEnabled?.(shouldEnable);
+	}
+
+	protected onAudioDataSubscriptionStarted(): void {
+		this.pluginWantsAudioData = true;
+		this.syncAudioDataState();
+
+		if (this.v2AudioPlayerPcmData$ && !this.pcmSubscription) {
+			this.pcmSubscription = this.v2AudioPlayerPcmData$.subscribe(
+				this.onAudioDataUpdate,
+			);
+		}
+	}
+
+	protected onAudioDataSubscriptionEnded(): void {
+		this.pluginWantsAudioData = false;
+		this.syncAudioDataState();
+
+		if (this.pcmSubscription) {
+			this.pcmSubscription.unsubscribe();
+			this.pcmSubscription = null;
+		}
+	}
+
 	private onStateChanged(): void {
 		if (!this.reduxStore) return;
 		const playingState = this.reduxStore.getState()?.playing;
@@ -499,5 +594,9 @@ export class V2NcmAdapter extends BaseNcmAdapter {
 
 	private readonly onMuteChanged = (payload: v2.CefPlayerMutePayload): void => {
 		this.updateVolume(this.volume, payload.mute);
+	};
+
+	private readonly onAudioDataUpdate = (data: AudioDataInfo): void => {
+		this.dispatch("audioDataUpdate", data);
 	};
 }

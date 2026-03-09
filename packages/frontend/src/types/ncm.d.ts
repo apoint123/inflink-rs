@@ -26,6 +26,20 @@ export interface EventMap {
 		code: number,
 		position: number,
 	) => void;
+	AudioData: (payload: AudioDataInfo) => void;
+}
+
+export interface AudioDataInfo {
+	/**
+	 * 原始音频数据
+	 *
+	 * 这是一个 48000Hz int16 2通道的 PCM 数据
+	 */
+	data: ArrayBuffer;
+	/**
+	 * 数据对应的时间戳，单位为毫秒
+	 */
+	pts: number;
 }
 
 export type EventName = keyof EventMap;
@@ -378,6 +392,19 @@ export namespace v2 {
 	export interface Radio {
 		name: string;
 		picUrl: string;
+	}
+
+	export interface V2AudioPlayerModule {
+		a: {
+			audioplayer: {
+				setAudioDataTransferEnableStatus: (enabled: boolean) => void;
+				audioPlayerPcmData$: {
+					subscribe: (callback: (data: AudioDataInfo) => void) => {
+						unsubscribe: () => void;
+					};
+				};
+			};
+		};
 	}
 
 	export interface CefPlayerVolumePayload {

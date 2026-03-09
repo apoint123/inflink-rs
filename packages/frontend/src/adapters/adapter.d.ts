@@ -6,6 +6,7 @@ import type {
 	TimelineInfo,
 	VolumeInfo,
 } from "../types/backend";
+import type { AudioDataInfo } from "../types/ncm";
 import type { TypedEventTarget } from "../utils/TypedEventTarget";
 
 export type NcmAdapterEventMap = {
@@ -15,6 +16,7 @@ export type NcmAdapterEventMap = {
 	timelineUpdate: CustomEvent<TimelineInfo>;
 	rawTimelineUpdate: CustomEvent<TimelineInfo>;
 	volumeChange: CustomEvent<VolumeInfo>;
+	audioDataUpdate: CustomEvent<AudioDataInfo>;
 };
 
 export interface INcmAdapter extends TypedEventTarget<NcmAdapterEventMap> {

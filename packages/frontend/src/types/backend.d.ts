@@ -1,3 +1,5 @@
+import type { AudioDataInfo } from "./ncm";
+
 export type PlaybackStatus = "Playing" | "Paused";
 
 export interface CoverInfo {
@@ -136,4 +138,5 @@ export interface InfLinkEventMap {
 	rawTimelineUpdate: CustomEvent<TimelineInfo>;
 	playModeChange: CustomEvent<PlayMode>;
 	volumeChange: CustomEvent<VolumeInfo>;
+	audioDataUpdate: CustomEvent<AudioDataInfo>;
 }

@@ -31,6 +31,9 @@ export abstract class BaseNcmAdapter
 	protected readonly dispatchTimelineThrottled: () => void;
 	protected readonly resetTimelineThrottle: () => void;
 
+	protected abstract onAudioDataSubscriptionStarted(): void;
+	protected abstract onAudioDataSubscriptionEnded(): void;
+
 	constructor() {
 		super();
 		[this.dispatchTimelineThrottled, , this.resetTimelineThrottle] = throttle(

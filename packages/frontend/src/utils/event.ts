@@ -1,14 +1,14 @@
 import type { PlaybackStatus } from "../types/backend";
 import type { OrpheusCommand } from "../types/global";
-import type { EventMap, EventName } from "../types/ncm";
+import type { AudioDataInfo, EventMap, EventName } from "../types/ncm";
 import logger from "./logger";
-
 import { TypedEventTarget } from "./TypedEventTarget";
 
 export interface ParsedEventMap {
 	playStateChange: CustomEvent<PlaybackStatus>;
 	progressUpdate: CustomEvent<number>;
 	seekUpdate: CustomEvent<number>;
+	audioDataUpdate: CustomEvent<AudioDataInfo>;
 }
 
 const NcmPlayState = {
@@ -140,6 +140,24 @@ export class NcmEventAdapter extends TypedEventTarget<ParsedEventMap> {
 		if (typeof position === "number") {
 			const positionInMs = Math.floor(position * 1000);
 			this.dispatch("seekUpdate", positionInMs);
+		}
+	};
+
+	public subscribeAudioData(): void {
+		this.subscribe("AudioData", this.onRawAudioData);
+	}
+
+	public unsubscribeAudioData(): void {
+		this.unsubscribe("AudioData", this.onRawAudioData);
+	}
+
+	// 格式: [{ data: ArrayBuffer, pts: number }]
+	private readonly onRawAudioData = (payload: AudioDataInfo): void => {
+		if (payload && payload.data instanceof ArrayBuffer) {
+			this.dispatch("audioDataUpdate", {
+				data: payload.data,
+				pts: payload.pts,
+			});
 		}
 	};
 
