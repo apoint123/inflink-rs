@@ -3,74 +3,46 @@ import logger from "./logger";
 
 export class CoverManager {
 	private fetchController: AbortController | null = null;
-	private fetchGeneration = 0;
 
-	public getCover(
+	public async getCover(
 		songInfo: SongInfo,
 		resolution: string,
-		onComplete: (result: {
-			songInfo: SongInfo;
-			cover: CoverInfo | null;
-		}) => void,
-	): void {
+	): Promise<{ songInfo: SongInfo; cover: CoverInfo | null }> {
 		this.fetchController?.abort();
-		this.fetchGeneration++;
 
-		const generation = this.fetchGeneration;
 		const currentCover = songInfo.cover;
-
 		if (!currentCover?.url) {
-			onComplete({ songInfo, cover: currentCover });
-			return;
+			return { songInfo, cover: currentCover };
 		}
 
 		const thumbnailUrl = this.createImageUrl(currentCover.url, resolution);
-
 		if (!thumbnailUrl) {
-			onComplete({ songInfo, cover: null });
-			return;
+			return { songInfo, cover: null };
 		}
 
 		this.fetchController = new AbortController();
 		const { signal } = this.fetchController;
 
-		(async () => {
-			try {
-				const fetchStart = performance.now();
-				const response = await fetch(thumbnailUrl, { signal });
-				if (!response.ok) {
-					throw new Error(`HTTP 错误, 状态码: ${response.status}`);
-				}
-				const fetchEnd = performance.now();
-				logger.debug(
-					`封面获取用时: ${Math.round(fetchEnd - fetchStart)}ms`,
-					"CoverManager",
-				);
-
-				if (generation !== this.fetchGeneration) return;
-
-				const blob = await response.blob();
-
-				onComplete({
-					songInfo,
-					cover: { blob, url: currentCover.url },
-				});
-			} catch (e) {
-				if ((e as Error).name !== "AbortError") {
-					logger.warn(
-						`获取缓存封面失败: ${(e as Error).message}`,
-						"CoverManager",
-					);
-					if (generation === this.fetchGeneration) {
-						onComplete({ songInfo, cover: currentCover });
-					}
-				}
-			} finally {
-				if (this.fetchController?.signal === signal) {
-					this.fetchController = null;
-				}
+		try {
+			const response = await fetch(thumbnailUrl, { signal });
+			if (!response.ok) {
+				throw new Error(`HTTP 错误, 状态码: ${response.status}`);
 			}
-		})();
+
+			const blob = await response.blob();
+			return { songInfo, cover: { blob, url: currentCover.url } };
+		} catch (e) {
+			if ((e as Error).name === "AbortError") {
+				throw e;
+			}
+
+			logger.warn(`获取封面失败: ${(e as Error).message}`, "CoverManager");
+			return { songInfo, cover: currentCover };
+		} finally {
+			if (this.fetchController?.signal === signal) {
+				this.fetchController = null;
+			}
+		}
 	}
 
 	private createImageUrl(url: string, resolution: string): string {

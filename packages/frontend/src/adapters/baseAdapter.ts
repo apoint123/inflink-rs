@@ -9,6 +9,7 @@ import type {
 	VolumeInfo,
 } from "@/types/backend";
 import { CoverManager, TypedEventTarget, throttle } from "@/utils";
+import logger from "@/utils/logger";
 
 export abstract class BaseNcmAdapter
 	extends TypedEventTarget<NcmAdapterEventMap>
@@ -128,16 +129,25 @@ export abstract class BaseNcmAdapter
 				this.dispatchTimelineUpdateNow();
 			}
 
-			this.coverManager.getCover(
-				currentSongInfo,
-				this.resolutionSetting,
-				(result) => {
-					this.dispatch("songChange", {
-						...result.songInfo,
-						cover: result.cover,
-					});
-				},
-			);
+			this.coverManager
+				.getCover(currentSongInfo, this.resolutionSetting)
+				.then((result) => {
+					if (
+						String(result.songInfo.ncmId) === String(this.lastDispatchedSongId)
+					) {
+						this.dispatch("songChange", {
+							...result.songInfo,
+							cover: result.cover,
+						});
+					}
+				})
+				.catch((error: Error) => {
+					if (error.name === "AbortError") {
+						return;
+					}
+
+					logger.error(`获取封面时错误: ${error.message}`, "BaseNcmAdapter");
+				});
 		}
 	}
 
