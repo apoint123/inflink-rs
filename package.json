@@ -17,7 +17,7 @@
 		"build:frontend": "bun scripts/build.ts --no-rust",
 		"lint": "bun biome check .",
 		"format": "bun biome format . --write",
-		"typecheck": "tsc --noEmit",
+		"typecheck": "tsc -b",
 		"prepare": "husky",
 		"cs:add": "bun changeset add",
 		"cs:version": "bun changeset version && bun ./scripts/sync-versions.ts"

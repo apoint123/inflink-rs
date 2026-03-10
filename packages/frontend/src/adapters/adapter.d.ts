@@ -1,25 +1,15 @@
 import type {
+	PlaybackEventMap,
 	PlaybackStatus,
 	PlayMode,
 	RepeatMode,
 	SongInfo,
 	TimelineInfo,
 	VolumeInfo,
-} from "../types/backend";
-import type { AudioDataInfo } from "../types/ncm";
+} from "../types/api";
 import type { TypedEventTarget } from "../utils/TypedEventTarget";
 
-export type NcmAdapterEventMap = {
-	songChange: CustomEvent<SongInfo>;
-	playStateChange: CustomEvent<PlaybackStatus>;
-	playModeChange: CustomEvent<PlayMode>;
-	timelineUpdate: CustomEvent<TimelineInfo>;
-	rawTimelineUpdate: CustomEvent<TimelineInfo>;
-	volumeChange: CustomEvent<VolumeInfo>;
-	audioDataUpdate: CustomEvent<AudioDataInfo>;
-};
-
-export interface INcmAdapter extends TypedEventTarget<NcmAdapterEventMap> {
+export interface INcmAdapter extends TypedEventTarget<PlaybackEventMap> {
 	initialize(): Promise<void>;
 	dispose(): void;
 	getCurrentSongInfo(): SongInfo | null;

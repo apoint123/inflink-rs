@@ -1,3 +1,4 @@
+import type { PlaybackStatus, RepeatMode, SongInfo } from "@/types/api";
 import type {
 	AppMessage,
 	CommandResult,
@@ -6,10 +7,7 @@ import type {
 	LogEntry,
 	MetadataCoverPayload,
 	MetadataPayload,
-	PlaybackStatus,
-	RepeatMode,
 	SmtcEvent,
-	SongInfo,
 } from "../types/backend";
 import type { LogLevel } from "../utils/logger";
 import logger from "../utils/logger";

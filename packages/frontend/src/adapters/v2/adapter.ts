@@ -1,10 +1,15 @@
 import { feature } from "bun:bundle";
-import type { PlaybackStatus, PlayMode, SongInfo } from "@/types/backend";
+import type {
+	AudioDataInfo,
+	PlaybackStatus,
+	PlayMode,
+	SongInfo,
+} from "@/types/api";
 import {
 	DomElementNotFoundError,
 	ReduxStoreNotFoundError,
 } from "@/types/errors";
-import type { AudioDataInfo, v2 } from "@/types/ncm";
+import type { v2 } from "@/types/ncm";
 import {
 	findModule,
 	getWebpackRequire,

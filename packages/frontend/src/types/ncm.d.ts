@@ -1,4 +1,5 @@
 import type { Dispatch, Store } from "redux";
+import type { AudioDataInfo } from "./api";
 
 // --- 通用类型 ---
 export interface Artist {
@@ -27,19 +28,6 @@ export interface EventMap {
 		position: number,
 	) => void;
 	AudioData: (payload: AudioDataInfo) => void;
-}
-
-export interface AudioDataInfo {
-	/**
-	 * 原始音频数据
-	 *
-	 * 这是一个 48000Hz int16 2通道的 PCM 数据
-	 */
-	data: ArrayBuffer;
-	/**
-	 * 数据对应的时间戳，单位为毫秒
-	 */
-	pts: number;
 }
 
 export type EventName = keyof EventMap;

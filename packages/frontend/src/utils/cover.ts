@@ -1,4 +1,4 @@
-import type { CoverInfo, SongInfo } from "../types/backend";
+import type { CoverInfo, SongInfo } from "../types/api";
 import logger from "./logger";
 
 export class CoverManager {

@@ -1,6 +1,6 @@
-import type { PlaybackStatus } from "../types/backend";
+import type { AudioDataInfo, PlaybackStatus } from "@/types/api";
+import type { EventMap, EventName } from "@/types/ncm";
 import type { OrpheusCommand } from "../types/global";
-import type { AudioDataInfo, EventMap, EventName } from "../types/ncm";
 import logger from "./logger";
 import { TypedEventTarget } from "./TypedEventTarget";
 

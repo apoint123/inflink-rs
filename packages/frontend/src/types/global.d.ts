@@ -1,6 +1,5 @@
 import type { NCMInjectPlugin, NCMPlugin } from "plugin";
 import type { Store } from "redux";
-import type { IInfLinkApi } from "./api";
 import type { v3 } from "./ncm";
 
 declare global {
@@ -88,11 +87,6 @@ declare global {
 		 * 调试用的 v3 内部存储模块
 		 */
 		infStorage?: v3.NcmStorageModule;
-
-		/**
-		 * 可以给其它插件用的接口
-		 */
-		InfLinkApi?: IInfLinkApi;
 	}
 
 	const BETTERNCM_API_KEY: Window["BETTERNCM_API_KEY"];

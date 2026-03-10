@@ -6,7 +6,7 @@
  * 可以订阅许多种事件，并返回已解析好的参数对象，使用它可以简化逻辑。
  */
 
-import type { AudioDataInfo } from "@/types/ncm";
+import type { AudioDataInfo } from "@/types/api";
 import logger from "@/utils/logger";
 
 export type PlayStatusEventType =

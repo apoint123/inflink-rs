@@ -1,38 +1,4 @@
-import type { AudioDataInfo } from "./ncm";
-
-export type PlaybackStatus = "Playing" | "Paused";
-
-export interface CoverInfo {
-	blob?: Blob | undefined;
-	url?: string | undefined;
-}
-
-export interface SongInfo {
-	songName: string;
-	albumName: string;
-	authorName: string;
-	cover: CoverInfo | null;
-	/**
-	 * 歌曲ID，可用于精确匹配歌曲
-	 *
-	 * 后端会把 ID 拼接为 `NCM-{ID}` 并上传到 SMTC 的流派字段
-	 */
-	ncmId: number;
-	/**
-	 * 单位毫秒
-	 */
-	duration?: number | undefined;
-}
-
-export interface TimelineInfo {
-	currentTime: number;
-	totalTime: number;
-}
-
-export interface VolumeInfo {
-	volume: number;
-	isMuted: boolean;
-}
+import type { PlaybackStatus, PlayMode, RepeatMode, VolumeInfo } from "./api";
 
 export type ControlMessage =
 	| { type: "Play" }
@@ -81,13 +47,6 @@ export interface TimelinePayload {
 	totalTime: number;
 }
 
-export type RepeatMode = "None" | "Track" | "List" | "AI";
-
-export interface PlayMode {
-	isShuffling: boolean;
-	repeatMode: RepeatMode;
-}
-
 export interface PlayModePayload extends PlayMode {}
 export interface VolumePayload extends VolumeInfo {}
 
@@ -130,13 +89,3 @@ export type LogEntry = {
 	message: string;
 	target: string;
 };
-
-export interface InfLinkEventMap {
-	songChange: CustomEvent<SongInfo>;
-	playStateChange: CustomEvent<PlaybackStatus>;
-	timelineUpdate: CustomEvent<TimelineInfo>;
-	rawTimelineUpdate: CustomEvent<TimelineInfo>;
-	playModeChange: CustomEvent<PlayMode>;
-	volumeChange: CustomEvent<VolumeInfo>;
-	audioDataUpdate: CustomEvent<AudioDataInfo>;
-}

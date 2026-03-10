@@ -1,10 +1,10 @@
 import type { PaletteMode } from "@mui/material";
 import { useAtomValue } from "jotai";
 import { useEffect, useRef, useState } from "react";
-import type { INcmAdapter, NcmAdapterEventMap } from "./adapters/adapter";
+import type { INcmAdapter } from "./adapters/adapter";
 import { NativeBackendInstance } from "./services/NativeBackend";
 import { appConfigAtom } from "./store";
-import type { IInfLinkApi } from "./types/api";
+import type { IInfLinkApi, PlaybackEventMap } from "./types/api";
 import type { ControlMessage } from "./types/backend";
 import logger from "./utils/logger";
 
@@ -241,7 +241,7 @@ export function useBackendConnection(adapterState: AdapterState) {
 
 		const nativeBackend = NativeBackendInstance;
 
-		const onSongChange = async (e: NcmAdapterEventMap["songChange"]) => {
+		const onSongChange = async (e: PlaybackEventMap["songChange"]) => {
 			await nativeBackend.update(e.detail);
 			if (!hasSentInitialMetadata.current) {
 				hasSentInitialMetadata.current = true;
@@ -250,11 +250,11 @@ export function useBackendConnection(adapterState: AdapterState) {
 				}
 			}
 		};
-		const onPlayStateChange = (e: NcmAdapterEventMap["playStateChange"]) =>
+		const onPlayStateChange = (e: PlaybackEventMap["playStateChange"]) =>
 			nativeBackend.updatePlayState(e.detail);
-		const onTimelineUpdate = (e: NcmAdapterEventMap["timelineUpdate"]) =>
+		const onTimelineUpdate = (e: PlaybackEventMap["timelineUpdate"]) =>
 			nativeBackend.updateTimeline(e.detail);
-		const onPlayModeChange = (e: NcmAdapterEventMap["playModeChange"]) =>
+		const onPlayModeChange = (e: PlaybackEventMap["playModeChange"]) =>
 			nativeBackend.updatePlayMode(e.detail);
 
 		const onControl = (msg: ControlMessage) => {

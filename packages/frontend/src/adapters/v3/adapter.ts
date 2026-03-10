@@ -1,13 +1,13 @@
 /** biome-ignore-all lint/complexity/useLiteralKeys: 和 ts 配置 noPropertyAccessFromIndexSignature 冲突 */
 import { feature } from "bun:bundle";
-import type { PlayMode, SongInfo } from "@/types/backend";
+import type { AudioDataInfo, PlayMode, SongInfo } from "@/types/api";
 import {
 	DomElementNotFoundError,
 	InconsistentStateError,
 	ReduxStoreNotFoundError,
 } from "@/types/errors";
 import type { OrpheusCommand } from "@/types/global";
-import type { AudioDataInfo, v3 } from "@/types/ncm";
+import type { v3 } from "@/types/ncm";
 import {
 	findModule,
 	getWebpackRequire,

@@ -1,18 +1,19 @@
-import type { INcmAdapter, NcmAdapterEventMap } from "@/adapters/adapter";
+import type { INcmAdapter } from "@/adapters/adapter";
 import { PlayModeController } from "@/adapters/playModeController";
 import type {
+	PlaybackEventMap,
 	PlaybackStatus,
 	PlayMode,
 	RepeatMode,
 	SongInfo,
 	TimelineInfo,
 	VolumeInfo,
-} from "@/types/backend";
+} from "@/types/api";
 import { CoverManager, TypedEventTarget, throttle } from "@/utils";
 import logger from "@/utils/logger";
 
 export abstract class BaseNcmAdapter
-	extends TypedEventTarget<NcmAdapterEventMap>
+	extends TypedEventTarget<PlaybackEventMap>
 	implements INcmAdapter
 {
 	protected playState: PlaybackStatus = "Paused";
