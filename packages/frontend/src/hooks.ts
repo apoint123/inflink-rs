@@ -356,6 +356,8 @@ export function useGlobalApi(adapter: INcmAdapter | null) {
 	useEffect(() => {
 		if (adapter) {
 			const api: IInfLinkApi = {
+				version: __APP_VERSION__,
+
 				getCurrentSong: () => adapter.getCurrentSongInfo(),
 				getPlaybackStatus: () => adapter.getPlaybackStatus(),
 				getTimeline: () => adapter.getTimelineInfo(),

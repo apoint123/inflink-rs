@@ -45,6 +45,10 @@ export interface PlayMode {
 	repeatMode: RepeatMode;
 }
 
+/**
+ * 网易云音乐 C++ 后端抛出的音频数据
+ * @since 插件版本 3.2.11
+ */
 export interface AudioDataInfo {
 	/**
 	 * 原始音频数据
@@ -70,6 +74,7 @@ export interface PlaybackEventMap {
 	 * C++ 后端抛出的音频数据
 	 *
 	 * 注意监听此事件可能会对性能有一定影响
+	 * @since 插件版本 3.2.11
 	 */
 	audioDataUpdate: CustomEvent<AudioDataInfo>;
 }
@@ -78,6 +83,12 @@ export interface PlaybackEventMap {
  * 可以给其它插件用的接口
  */
 export interface IInfLinkApi {
+	/**
+	 * 当前 InfLink 插件的版本号
+	 * @since 插件版本 3.2.11
+	 */
+	readonly version: string;
+
 	getPlaybackStatus(): PlaybackStatus;
 	getCurrentSong(): SongInfo | null;
 	getTimeline(): TimelineInfo | null;
