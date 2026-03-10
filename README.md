@@ -62,6 +62,26 @@
 
 更多细节请自行点击这两个按钮来了解
 
+## 插件 API
+
+InfLink-rs 会向全局暴露 `window.InfLinkApi`，供其他 BetterNCM 插件读取当前播放信息、控制播放器，以及订阅切歌和进度等事件。
+
+- 类型定义文件位于 `packages/frontend/src/types/api.d.ts`
+- 完整使用说明见 [docs/inflink-api.md](./docs/inflink-api.md)
+- 如果你的插件依赖这个 API，建议在自己的 `manifest.json` 里把 `loadAfter` 和 `requirements` 都配置为包含 `InfLinkrs`
+- 调用前请先判空，因为只有在 InfLink-rs 成功初始化后该接口才会存在
+
+```ts
+const api = window.InfLinkApi;
+
+if (api) {
+  console.log(api.getCurrentSong());
+  api.addEventListener("songChange", (event) => {
+    console.log("当前歌曲:", event.detail.songName);
+  });
+}
+```
+
 ## 更新日志
 
 [**CHANGELOG.md**](./packages/frontend/CHANGELOG.md)
