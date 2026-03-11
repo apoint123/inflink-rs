@@ -9,8 +9,18 @@ import type {
 	TimelineInfo,
 	VolumeInfo,
 } from "@/types/api";
-import { CoverManager, TypedEventTarget, throttle } from "@/utils";
+import {
+	CoverManager,
+	type TypedEventListenerOrEventListenerObject,
+	TypedEventTarget,
+	throttle,
+} from "@/utils";
 import logger from "@/utils/logger";
+
+type AudioDataListener = TypedEventListenerOrEventListenerObject<
+	PlaybackEventMap,
+	"audioDataUpdate"
+>;
 
 export abstract class BaseNcmAdapter
 	extends TypedEventTarget<PlaybackEventMap>
@@ -34,6 +44,8 @@ export abstract class BaseNcmAdapter
 
 	protected abstract onAudioDataSubscriptionStarted(): void;
 	protected abstract onAudioDataSubscriptionEnded(): void;
+
+	private audioDataListeners = new Set<AudioDataListener>();
 
 	constructor() {
 		super();
@@ -192,6 +204,58 @@ export abstract class BaseNcmAdapter
 				volume: this.volume,
 				isMuted: this.isMuted,
 			});
+		}
+	}
+
+	public override addEventListener<T extends keyof PlaybackEventMap & string>(
+		type: T,
+		listener: TypedEventListenerOrEventListenerObject<
+			PlaybackEventMap,
+			T
+		> | null,
+		options?: boolean | AddEventListenerOptions,
+	): void {
+		super.addEventListener(type, listener, options);
+
+		// 主要是为了让其他插件使用者可以直接 addEventListener("audioDataUpdate", ...)
+		// 或者 removeEventListener("audioDataUpdate", ...) 而不需要先调用其他方法
+		// 或者用别的特殊通道来开启音频管线和监听音频数据
+		if (type === "audioDataUpdate" && listener) {
+			const targetListener = listener as AudioDataListener;
+
+			const isNew = !this.audioDataListeners.has(targetListener);
+			if (isNew) {
+				this.audioDataListeners.add(targetListener);
+
+				if (this.audioDataListeners.size === 1) {
+					this.onAudioDataSubscriptionStarted();
+				}
+			}
+		}
+	}
+
+	public override removeEventListener<
+		T extends keyof PlaybackEventMap & string,
+	>(
+		type: T,
+		callback: TypedEventListenerOrEventListenerObject<
+			PlaybackEventMap,
+			T
+		> | null,
+		options?: EventListenerOptions | boolean,
+	): void {
+		super.removeEventListener(type, callback, options);
+
+		if (type === "audioDataUpdate" && callback) {
+			const targetCallback = callback as AudioDataListener;
+
+			if (this.audioDataListeners.has(targetCallback)) {
+				this.audioDataListeners.delete(targetCallback);
+
+				if (this.audioDataListeners.size === 0) {
+					this.onAudioDataSubscriptionEnded();
+				}
+			}
 		}
 	}
 }
