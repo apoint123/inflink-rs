@@ -387,7 +387,9 @@ export namespace v2 {
 			audioplayer: {
 				setAudioDataTransferEnableStatus: (enabled: boolean) => void;
 				audioPlayerPcmData$: {
-					subscribe: (callback: (data: AudioDataInfo) => void) => {
+					subscribe: (
+						callback: (data: AudioDataInfo | AudioDataInfo[]) => void,
+					) => {
 						unsubscribe: () => void;
 					};
 				};

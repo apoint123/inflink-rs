@@ -601,7 +601,21 @@ export class V2NcmAdapter extends BaseNcmAdapter {
 		this.updateVolume(this.volume, payload.mute);
 	};
 
-	private readonly onAudioDataUpdate = (data: AudioDataInfo): void => {
-		this.dispatch("audioDataUpdate", data);
+	private readonly onAudioDataUpdate = (
+		data: AudioDataInfo | AudioDataInfo[],
+	): void => {
+		let payload = data;
+		if (Array.isArray(data)) {
+			if (data.length > 0) {
+				// biome-ignore lint/style/noNonNullAssertion: 肯定有
+				payload = data[0]!;
+			} else {
+				return;
+			}
+		}
+
+		if (payload) {
+			this.dispatch("audioDataUpdate", payload as AudioDataInfo);
+		}
 	};
 }
