@@ -1,6 +1,6 @@
 {
 	"name": "frontend",
-	"version": "3.2.10",
+	"version": "3.2.11",
 	"license": "GPL-3.0-only",
 	"dependencies": {
 		"@emotion/react": "^11.14.0",

@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.2.11
+
+### Patch Changes
+
+- 4a27500: feat: 稳定公开 API
+
 ## 3.2.10
 
 ### Patch Changes
