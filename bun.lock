@@ -14,8 +14,9 @@
     },
     "packages/frontend": {
       "name": "frontend",
-      "version": "3.2.10",
+      "version": "3.2.11",
       "dependencies": {
+        "@emotion/cache": "^11.14.0",
         "@emotion/react": "^11.14.0",
         "@emotion/styled": "^11.14.1",
         "@mui/icons-material": "^7.3.9",

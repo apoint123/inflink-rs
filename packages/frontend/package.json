@@ -3,6 +3,7 @@
 	"version": "3.2.11",
 	"license": "GPL-3.0-only",
 	"dependencies": {
+		"@emotion/cache": "^11.14.0",
 		"@emotion/react": "^11.14.0",
 		"@emotion/styled": "^11.14.1",
 		"@mui/icons-material": "^7.3.9",

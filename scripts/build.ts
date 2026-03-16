@@ -84,7 +84,7 @@ async function buildFrontend() {
 			outdir: DIST_DIR,
 			target: "browser",
 			format: "iife",
-			minify: true,
+			minify: !isDev,
 			sourcemap: "none",
 			features: isDev ? ["DEV"] : [],
 			define: {

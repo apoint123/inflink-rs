@@ -3,9 +3,11 @@
  * 主要的业务逻辑组件
  */
 
+import createCache from "@emotion/cache";
+import { CacheProvider } from "@emotion/react";
 import { Box, Typography } from "@mui/material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
-import { useAtom } from "jotai";
+import { Provider, useAtom } from "jotai";
 import { useEffect, useMemo } from "react";
 import { AdvancedSettings } from "./components/AdvancedSettings";
 import { FeatureSettings } from "./components/FeatureSettings";
@@ -30,6 +32,10 @@ import {
 	resolutionAtom,
 } from "./store";
 import logger, { setLogLevel } from "./utils/logger";
+
+const inflinkEmotionCache = createCache({
+	key: "inflink-rs",
+});
 
 export default function App() {
 	const ncmThemeMode = useNcmTheme();
@@ -56,9 +62,13 @@ export default function App() {
 	);
 
 	return (
-		<ThemeProvider theme={theme}>
-			<Main />
-		</ThemeProvider>
+		<CacheProvider value={inflinkEmotionCache}>
+			<Provider>
+				<ThemeProvider theme={theme}>
+					<Main />
+				</ThemeProvider>
+			</Provider>
+		</CacheProvider>
 	);
 }
 
