@@ -1,4 +1,5 @@
 {
+	"$schema": "https://raw.githubusercontent.com/BetterNCM/BetterNCM-Plugins/refs/heads/master/manifest-schema.json",
 	"manifest_version": 1,
 	"name": "InfLink-rs",
 	"fork_of": "InfLink",
