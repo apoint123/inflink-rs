@@ -1,22 +1,11 @@
 {
 	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+	"files": {
+		"ignoreUnknown": false
+	},
 	"formatter": {
 		"enabled": true,
-		"formatWithErrors": false,
-		"attributePosition": "auto",
-		"indentStyle": "tab",
-		"indentWidth": 2,
-		"lineWidth": 80,
-		"lineEnding": "crlf"
-	},
-	"javascript": {
-		"formatter": {
-			"quoteStyle": "double",
-			"jsxQuoteStyle": "double"
-		},
-		"parser": {
-			"unsafeParameterDecoratorsEnabled": true
-		}
+		"indentStyle": "tab"
 	},
 	"linter": {
 		"enabled": true,
@@ -24,7 +13,13 @@
 			"recommended": true
 		}
 	},
+	"javascript": {
+		"formatter": {
+			"quoteStyle": "double"
+		}
+	},
 	"assist": {
+		"enabled": true,
 		"actions": {
 			"source": {
 				"organizeImports": "on"
