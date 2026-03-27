@@ -46,7 +46,7 @@ export class CoverManager {
 	}
 
 	private createImageUrl(url: string, resolution: string): string {
-		if (!url || !url.startsWith("http")) {
+		if (!url.startsWith("http")) {
 			return url;
 		}
 

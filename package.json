@@ -15,7 +15,7 @@
 		"build": "bun scripts/build.ts",
 		"dev": "bun scripts/build.ts --dev --watch",
 		"build:frontend": "bun scripts/build.ts --no-rust",
-		"lint": "bun biome check .",
+		"lint": "bun biome check . --error-on-warnings",
 		"format": "bun biome format . --write",
 		"typecheck": "bun tsgo -b",
 		"prepare": "husky",
