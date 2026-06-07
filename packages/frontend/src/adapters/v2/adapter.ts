@@ -1,4 +1,3 @@
-import { feature } from "bun:bundle";
 import type {
 	AudioDataInfo,
 	PlaybackStatus,
@@ -274,7 +273,7 @@ export class V2NcmAdapter extends BaseNcmAdapter {
 		const require = await getWebpackRequire();
 		this.initializeV2AudioData(require);
 
-		if (feature("DEV")) {
+		if (import.meta.env.DEV) {
 			window.infstore = this.reduxStore;
 		}
 
@@ -298,7 +297,7 @@ export class V2NcmAdapter extends BaseNcmAdapter {
 	}
 
 	public setInternalLogging(enabled: boolean): void {
-		if (feature("DEV")) {
+		if (import.meta.env.DEV) {
 			if (window.APP_CONF) {
 				window.APP_CONF.console = enabled;
 				logger.info(`内部日志已${enabled ? "开启" : "关闭"}`, "Adapter V2");

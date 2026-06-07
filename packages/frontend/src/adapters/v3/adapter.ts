@@ -1,5 +1,4 @@
 /** biome-ignore-all lint/complexity/useLiteralKeys: 和 ts 配置 noPropertyAccessFromIndexSignature 冲突 */
-import { feature } from "bun:bundle";
 import type { AudioDataInfo, PlayMode, SongInfo } from "@/types/api";
 import {
 	DomElementNotFoundError,
@@ -171,7 +170,7 @@ export class V3NcmAdapter extends BaseNcmAdapter {
 	public async initialize(): Promise<void> {
 		const require = await getWebpackRequire();
 
-		if (feature("DEV")) {
+		if (import.meta.env.DEV) {
 			patchInternalLogger(require, () => this.isInternalLoggingEnabled);
 		}
 		this.initializeAudioPlayer(require);
@@ -188,7 +187,7 @@ export class V3NcmAdapter extends BaseNcmAdapter {
 			this.reduxStore = await waitForReduxStore();
 		}
 
-		if (feature("DEV")) {
+		if (import.meta.env.DEV) {
 			window.infstore = this.reduxStore;
 		}
 
@@ -369,7 +368,7 @@ export class V3NcmAdapter extends BaseNcmAdapter {
 
 		if (!this.storageModule) {
 			logger.warn("未找到内部存储模块", "Adapter V3");
-		} else if (feature("DEV")) {
+		} else if (import.meta.env.DEV) {
 			window.infStorage = this.storageModule;
 		}
 	}
@@ -391,7 +390,7 @@ export class V3NcmAdapter extends BaseNcmAdapter {
 	}
 
 	public setInternalLogging(enabled: boolean): void {
-		if (feature("DEV")) {
+		if (import.meta.env.DEV) {
 			this.isInternalLoggingEnabled = enabled;
 		}
 	}

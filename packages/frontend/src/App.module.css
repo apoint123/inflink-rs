@@ -1,0 +1,18 @@
+.appWrapper {
+	color: var(--text-primary);
+	font-family:
+		"Noto Sans SC", "Microsoft YaHei", "Segoe UI", Roboto, "Helvetica Neue",
+		Arial, sans-serif;
+}
+
+.mainContainer {
+	padding-bottom: 2rem;
+	padding-top: 0.5rem;
+}
+
+.pageTitle {
+	margin-top: 0;
+	margin-bottom: 1.5rem;
+	font-weight: bold;
+	font-size: 1.5rem;
+}

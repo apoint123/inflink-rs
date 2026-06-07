@@ -1,5 +1,1 @@
-declare module "bun:bundle" {
-	interface Registry {
-		features: "DEV";
-	}
-}
+/// <reference types="vite/client" />

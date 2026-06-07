@@ -1,0 +1,24 @@
+:root {
+	--bg-color: #ffffff;
+	--surface-color: #ffffff;
+	--border-color: rgba(0, 0, 0, 0.09);
+	--text-primary: rgba(0, 0, 0, 0.87);
+	--text-secondary: rgba(0, 0, 0, 0.6);
+	--primary-color: #1976d2;
+
+	--control-bg: transparent;
+	--control-bg-hover: rgba(0, 0, 0, 0.04);
+	--control-bg-active: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="dark"] {
+	--bg-color: #222222;
+	--surface-color: rgba(255, 255, 255, 0.05);
+	--border-color: rgba(255, 255, 255, 0.12);
+	--text-primary: #ffffff;
+	--text-secondary: rgba(255, 255, 255, 0.7);
+
+	--control-bg: rgba(255, 255, 255, 0.08);
+	--control-bg-hover: rgba(255, 255, 255, 0.12);
+	--control-bg-active: rgba(255, 255, 255, 0.16);
+}

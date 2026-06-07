@@ -3,39 +3,45 @@
  * SMTC 和 Discord 的设置
  */
 
-import EditIcon from "@mui/icons-material/Edit";
-import GraphicEqIcon from "@mui/icons-material/GraphicEq";
-import HeadsetIcon from "@mui/icons-material/Headset";
-import HighQualityIcon from "@mui/icons-material/HighQuality";
-import PauseCircleIcon from "@mui/icons-material/PauseCircle";
-import StyleIcon from "@mui/icons-material/Style";
-import {
-	Autocomplete,
-	Box,
-	FormControl,
-	Link,
-	MenuItem,
-	Select,
-	Switch,
-	TextField,
-	Typography,
-} from "@mui/material";
 import { useAtom } from "jotai";
-import { useEffect, useState } from "react";
 import {
+	AudioLines,
+	Bug,
+	Database,
+	Edit,
+	ExternalLink,
+	Headset,
+	MonitorPlay,
+	Palette,
+	PauseCircle,
+	Terminal,
+} from "lucide-react";
+import { useEffect, useState } from "react";
+import type { DiscordDisplayMode } from "@/types/backend";
+import {
+	backendLogLevelAtom,
 	discordAppNameModeTypeAtom,
 	discordCustomAppNameTextAtom,
 	discordDisplayModeAtom,
 	discordEnabledAtom,
 	discordShowPausedAtom,
+	frontendLogLevelAtom,
+	internalLoggingAtom,
 	resolutionAtom,
 	smtcEnabledAtom,
 } from "../store";
+import type { LogLevel } from "../utils/logger";
+import { AnimatedLink } from "./AnimatedLink";
+import { Combobox } from "./Combobox";
+import styles from "./FeatureSettings.module.css";
+import { Input } from "./Input";
 import { SettingItem } from "./SettingItem";
+import { Switch } from "./Switch";
 
 export function FeatureSettings() {
 	const [smtcEnabled, setSmtcEnabled] = useAtom(smtcEnabledAtom);
 	const [resolution, setResolution] = useAtom(resolutionAtom);
+	const [localResolution, setLocalResolution] = useState(resolution);
 
 	const [discordEnabled, setDiscordEnabled] = useAtom(discordEnabledAtom);
 	const [discordShowPaused, setDiscordShowPaused] = useAtom(
@@ -53,9 +59,23 @@ export function FeatureSettings() {
 
 	const [localCustomText, setLocalCustomText] = useState(customAppNameText);
 
+	const [frontendLogLevel, setFrontendLogLevel] = useAtom(frontendLogLevelAtom);
+	const [backendLogLevel, setBackendLogLevel] = useAtom(backendLogLevelAtom);
+	const [internalLogging, setInternalLogging] = useAtom(internalLoggingAtom);
+
+	const logLevels: LogLevel[] = ["trace", "debug", "info", "warn", "error"];
+	const logLevelOptions = logLevels.map((level) => ({
+		label: level,
+		value: level,
+	}));
+
 	useEffect(() => {
 		setLocalCustomText(customAppNameText);
 	}, [customAppNameText]);
+
+	useEffect(() => {
+		setLocalResolution(resolution);
+	}, [resolution]);
 
 	const handleCustomTextCommit = () => {
 		if (localCustomText !== customAppNameText) {
@@ -63,7 +83,9 @@ export function FeatureSettings() {
 		}
 	};
 
-	const handleCustomTextKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+	const handleCustomTextKeyDown = (
+		e: React.KeyboardEvent<HTMLInputElement>,
+	) => {
 		if (e.key === "Enter") {
 			handleCustomTextCommit();
 			if (e.target instanceof HTMLElement) {
@@ -72,57 +94,55 @@ export function FeatureSettings() {
 		}
 	};
 
-	const predefinedResolutions = ["300", "500", "1024", "max"];
-	const handleResChange = (_event: unknown, newValue: string | null) => {
-		if (
-			newValue &&
-			(newValue.toLowerCase() === "max" || /^\d+$/.test(newValue))
-		) {
-			setResolution(newValue);
+	const handleResCommit = () => {
+		const val = localResolution.trim();
+		if (val && (val.toLowerCase() === "max" || /^\d+$/.test(val))) {
+			setResolution(val.toLowerCase());
+		} else {
+			setLocalResolution(resolution);
 		}
 	};
-	const handleResBlur = (event: React.FocusEvent<HTMLInputElement>) => {
-		const newValue = event.target.value;
-		if (
-			newValue &&
-			(newValue.toLowerCase() === "max" || /^\d+$/.test(newValue))
-		) {
-			setResolution(newValue);
-		}
-	};
+
+	const resolutionOptions = [
+		{ label: "300", value: "300" },
+		{ label: "500", value: "500" },
+		{ label: "1024", value: "1024" },
+		{ label: "max", value: "max" },
+	];
+
+	const displayModeOptions = [
+		{ label: "应用名称", value: "Name" },
+		{ label: "歌手名", value: "State" },
+		{ label: "歌曲名", value: "Details" },
+	];
+
+	const appNameModeOptions = [
+		{ label: "应用名称", value: "Default" },
+		{ label: "歌曲名", value: "Song" },
+		{ label: "歌手名", value: "Artist" },
+		{ label: "专辑名", value: "Album" },
+		{ label: "自定义文本", value: "Custom" },
+	];
 
 	return (
-		<Box sx={{ mt: 1 }}>
-			<Typography
-				variant="subtitle2"
-				color="text.secondary"
-				sx={{ mb: 1, ml: 1 }}
-			>
-				SMTC 设置
-			</Typography>
+		<div className={styles.sectionContainerSmall}>
+			<h3 className={styles.sectionTitle}>SMTC 设置</h3>
 
 			<SettingItem
-				icon={<GraphicEqIcon />}
+				icon={<AudioLines size={20} />}
 				title="启用 SMTC 集成"
 				description={
 					<span>
-						<Link
-							component="button"
-							variant="body2"
-							underline="hover"
+						<AnimatedLink
 							onClick={() => {
 								betterncm.ncm.openUrl(
 									"https://learn.microsoft.com/zh-cn/windows/uwp/audio-video-camera/integrate-with-systemmediatransportcontrols",
 								);
 							}}
-							sx={{
-								verticalAlign: "baseline",
-								cursor: "pointer",
-								fontSize: "inherit",
-							}}
+							icon={<ExternalLink size={14} strokeWidth={2.5} />}
 						>
 							在微软文档中查看
-						</Link>
+						</AnimatedLink>
 					</span>
 				}
 				action={
@@ -135,34 +155,26 @@ export function FeatureSettings() {
 
 			<SettingItem
 				visible={smtcEnabled}
-				icon={<HighQualityIcon />}
+				icon={<MonitorPlay size={20} />}
 				title="封面分辨率"
-				description="可让 Wallpaper 之类的软件显示更高清的封面，但可能会减缓切歌后 SMTC 的更新速度"
+				description="较高的分辨率可能会降低信息更新速度"
 				action={
-					<Autocomplete
-						freeSolo
-						value={resolution}
-						options={predefinedResolutions}
-						onChange={handleResChange}
-						onBlur={handleResBlur}
-						sx={{ width: 140 }}
-						renderInput={(params) => (
-							<TextField {...params} size="small" variant="outlined" />
-						)}
+					<Combobox
+						options={resolutionOptions}
+						value={localResolution}
+						onChange={setLocalResolution}
+						onBlur={handleResCommit}
+						allowCustomValue={true}
 					/>
 				}
 			/>
 
-			<Typography
-				variant="subtitle2"
-				color="text.secondary"
-				sx={{ mt: 3, mb: 1, ml: 1 }}
-			>
+			<h3 className={`${styles.sectionTitle} ${styles.sectionContainer}`}>
 				Discord Rich Presence 设置
-			</Typography>
+			</h3>
 
 			<SettingItem
-				icon={<HeadsetIcon />}
+				icon={<Headset size={20} />}
 				title="启用 Discord RPC 集成"
 				description="将当前播放的歌曲同步显示到 Discord 状态中"
 				action={
@@ -175,7 +187,7 @@ export function FeatureSettings() {
 
 			<SettingItem
 				visible={discordEnabled}
-				icon={<PauseCircleIcon />}
+				icon={<PauseCircle size={20} />}
 				title="暂停时显示状态"
 				description={
 					<span>
@@ -194,27 +206,22 @@ export function FeatureSettings() {
 
 			<SettingItem
 				visible={discordEnabled}
-				icon={<StyleIcon />}
+				icon={<Palette size={20} />}
 				title="简略信息"
 				description="向其他人展示的简略信息"
 				action={
-					<FormControl size="small" sx={{ width: 140 }}>
-						<Select
-							value={discordDisplayMode}
-							onChange={(e) => setDiscordDisplayMode(e.target.value)}
-							variant="outlined"
-						>
-							<MenuItem value="Name">应用名称</MenuItem>
-							<MenuItem value="State">歌手名</MenuItem>
-							<MenuItem value="Details">歌曲名</MenuItem>
-						</Select>
-					</FormControl>
+					<Combobox
+						options={displayModeOptions}
+						value={discordDisplayMode}
+						onChange={(val) => setDiscordDisplayMode(val as DiscordDisplayMode)}
+						editable={false}
+					/>
 				}
 			/>
 
 			<SettingItem
 				visible={discordEnabled}
-				icon={<EditIcon />}
+				icon={<Edit size={20} />}
 				title="自定义应用名称"
 				description={
 					<span>
@@ -224,35 +231,72 @@ export function FeatureSettings() {
 					</span>
 				}
 				action={
-					<Box sx={{ display: "flex", gap: 1 }}>
-						<FormControl size="small" sx={{ width: 140 }}>
-							<Select
-								value={appNameModeType}
-								onChange={(e) => setAppNameModeType(e.target.value)}
-								variant="outlined"
-							>
-								<MenuItem value="Default">应用名称</MenuItem>
-								<MenuItem value="Song">歌曲名</MenuItem>
-								<MenuItem value="Artist">歌手名</MenuItem>
-								<MenuItem value="Album">专辑名</MenuItem>
-								<MenuItem value="Custom">自定义文本</MenuItem>
-							</Select>
-						</FormControl>
+					<div className={styles.flexRow}>
+						<Combobox
+							options={appNameModeOptions}
+							value={appNameModeType}
+							onChange={(val) =>
+								setAppNameModeType(
+									val as "Default" | "Song" | "Artist" | "Album" | "Custom",
+								)
+							}
+							editable={false}
+						/>
 						{appNameModeType === "Custom" && (
-							<TextField
-								size="small"
-								variant="outlined"
+							<Input
+								style={{ width: 140 }}
 								placeholder="自定义名称..."
 								value={localCustomText}
 								onChange={(e) => setLocalCustomText(e.target.value)}
 								onBlur={handleCustomTextCommit}
 								onKeyDown={handleCustomTextKeyDown}
-								sx={{ width: 140 }}
 							/>
 						)}
-					</Box>
+					</div>
 				}
 			/>
-		</Box>
+
+			<h3 className={styles.sectionTitle}>高级选项</h3>
+
+			<SettingItem
+				icon={<Terminal size={20} />}
+				title="前端日志级别"
+				action={
+					<Combobox
+						options={logLevelOptions}
+						value={frontendLogLevel}
+						onChange={(val) => setFrontendLogLevel(val as LogLevel)}
+						editable={false}
+					/>
+				}
+			/>
+
+			<SettingItem
+				icon={<Database size={20} />}
+				title="后端日志级别"
+				action={
+					<Combobox
+						options={logLevelOptions}
+						value={backendLogLevel}
+						onChange={(val) => setBackendLogLevel(val as LogLevel)}
+						editable={false}
+					/>
+				}
+			/>
+
+			{import.meta.env.DEV ? (
+				<SettingItem
+					icon={<Bug size={20} />}
+					title="内部日志转发"
+					description="仅供调试"
+					action={
+						<Switch
+							checked={internalLogging}
+							onChange={(_e, checked) => setInternalLogging(checked)}
+						/>
+					}
+				/>
+			) : null}
+		</div>
 	);
 }

@@ -1,0 +1,23 @@
+.loadingContainer {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	color: var(--text-secondary);
+}
+
+.spinner {
+	animation: spin 1s linear infinite;
+}
+
+.loadingText {
+	font-size: 0.875rem;
+}
+
+@keyframes spin {
+	from {
+		transform: rotate(0deg);
+	}
+	to {
+		transform: rotate(360deg);
+	}
+}

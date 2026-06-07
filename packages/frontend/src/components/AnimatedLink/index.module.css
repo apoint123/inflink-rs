@@ -1,0 +1,33 @@
+.animatedLink {
+	background: none;
+	border: none;
+	padding: 0;
+	font-size: inherit;
+	font-family: inherit;
+
+	text-decoration: none;
+	color: var(--primary-color);
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	transition:
+		color 0.2s,
+		opacity 0.2s;
+	vertical-align: baseline;
+}
+
+.animatedLink:hover {
+	color: var(--primary-color);
+	opacity: 0.8;
+}
+
+.animatedLink svg {
+	transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+	width: auto;
+	height: auto;
+}
+
+.animatedLink:hover svg {
+	transform: translateX(3px);
+}

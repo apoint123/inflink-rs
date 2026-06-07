@@ -1,0 +1,120 @@
+.container {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+}
+
+.input {
+	padding-right: 32px;
+	user-select: none;
+}
+
+.iconWrapper {
+	position: absolute;
+	right: 8px;
+	top: 0;
+	bottom: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--text-secondary);
+	background: none;
+	border: none;
+	padding: 0;
+	pointer-events: none;
+}
+
+.iconWrapper svg {
+	width: auto;
+	height: auto;
+}
+
+.dropdown {
+	font-family:
+		"Noto Sans SC", "Microsoft YaHei", "Segoe UI", Roboto, "Helvetica Neue",
+		Arial, sans-serif;
+	position: absolute;
+	left: 0;
+	right: 0;
+	z-index: 1000;
+	max-height: 200px;
+	overflow-y: auto;
+	background-color: var(--bg-color);
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+	padding: 4px 0;
+}
+
+.dropdownDown {
+	top: calc(100% + 4px);
+	animation: fadeInDown 0.1s ease-out forwards;
+}
+.dropdownDownClosing {
+	top: calc(100% + 4px);
+	animation: fadeOutDown 0.1s ease-in forwards;
+}
+
+@keyframes fadeInDown {
+	from {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes fadeOutDown {
+	from {
+		opacity: 1;
+		transform: translateY(0);
+	}
+	to {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+}
+
+.dropdownUp {
+	bottom: calc(100% + 4px);
+	animation: fadeInUp 0.15s ease-out forwards;
+}
+.dropdownUpClosing {
+	bottom: calc(100% + 4px);
+	animation: fadeOutUp 0.15s ease-in forwards;
+}
+
+@keyframes fadeInUp {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+@keyframes fadeOutUp {
+	from {
+		opacity: 1;
+		transform: translateY(0);
+	}
+	to {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+}
+
+.option {
+	margin: 2px 6px;
+	padding: 6px 8px;
+	border-radius: 4px;
+	color: var(--text-primary);
+	font-size: 0.875rem;
+}
+
+.option:hover {
+	background-color: var(--border-color);
+}

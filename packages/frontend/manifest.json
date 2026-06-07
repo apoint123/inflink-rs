@@ -21,7 +21,15 @@
 			"orpheus://orpheus/pub/hybrid/vendors~app~subApp.chunk": [
 				{
 					"type": "regex",
-					"id": "inflink-disable-native-smtc",
+					"id": "inflink-disable-native-smtc-old",
+					"from": "(setSMTCEnable\\s*\\([^)]*\\)\\s*\\{)",
+					"to": "$1 /* This method has been patched by InfLink-rs to disable native SMTC. */ return Promise.resolve();"
+				}
+			],
+			"orpheus://orpheus/pub/hybrid/app.chunk": [
+				{
+					"type": "regex",
+					"id": "inflink-disable-native-smtc-new",
 					"from": "(setSMTCEnable\\s*\\([^)]*\\)\\s*\\{)",
 					"to": "$1 /* This method has been patched by InfLink-rs to disable native SMTC. */ return Promise.resolve();"
 				}

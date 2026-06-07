@@ -1,0 +1,33 @@
+.sectionContainer {
+	margin-top: 1.5rem;
+}
+
+.sectionContainerSmall {
+	margin-top: 0.5rem;
+}
+
+.sectionTitle {
+	margin: 1.6rem 0 0.8rem 0.5rem;
+	padding-left: 0.6rem;
+	font-size: 1.125rem;
+	color: var(--text-secondary);
+	font-weight: 600;
+	position: relative;
+}
+
+.sectionTitle::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 50%;
+	transform: translateY(-50%);
+	width: 4px;
+	height: 16px;
+	background-color: var(--primary-color);
+	border-radius: 2px;
+}
+
+.flexRow {
+	display: flex;
+	gap: 0.5rem;
+}

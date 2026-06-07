@@ -304,11 +304,12 @@ declare module "betterncm-api/index" {
 	 * 插件作者可以通过此处的接口来和界面或程序外部交互
 	 */
 	import "betterncm-api/react";
-	import type { fs } from "betterncm-api/fs";
 	import type { app } from "betterncm-api/app";
+	import type { fs } from "betterncm-api/fs";
 	import type { ncm } from "betterncm-api/ncm";
 	import type { tests } from "betterncm-api/tests";
 	import type { utils } from "betterncm-api/utils";
+
 	/**
 	 * 包含加载动画的重载
 	 */
@@ -329,7 +330,8 @@ declare module "betterncm-api/index" {
 				| undefined,
 		) => Promise<Response>;
 	};
-	export type { fs, app, ncm, utils, tests, reload };
+
+	export type { app, fs, ncm, reload, tests, utils };
 	export default BetterNCM;
 }
 

@@ -2,6 +2,7 @@
 	"include": [
 		"packages/frontend/src/**/*.ts",
 		"packages/frontend/src/**/*.tsx",
+		"./packages/frontend/vite.config.ts",
 		"./scripts/*.ts"
 	],
 	"compilerOptions": {

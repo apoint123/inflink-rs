@@ -3,13 +3,8 @@
  * 主要的业务逻辑组件
  */
 
-import createCache from "@emotion/cache";
-import { CacheProvider } from "@emotion/react";
-import { Box, Typography } from "@mui/material";
-import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { Provider, useAtom } from "jotai";
-import { useEffect, useMemo } from "react";
-import { AdvancedSettings } from "./components/AdvancedSettings";
+import { useEffect } from "react";
 import { FeatureSettings } from "./components/FeatureSettings";
 import {
 	InitializationErrorAlert,
@@ -32,43 +27,18 @@ import {
 	resolutionAtom,
 } from "./store";
 import logger, { setLogLevel } from "./utils/logger";
-
-const inflinkEmotionCache = createCache({
-	key: "inflink-rs",
-});
+import "./theme.css";
+import styles from "./App.module.css";
 
 export default function App() {
 	const ncmThemeMode = useNcmTheme();
 
-	const theme = useMemo(
-		() =>
-			createTheme({
-				palette: {
-					mode: ncmThemeMode,
-				},
-				typography: {
-					fontFamily: [
-						'"Noto Sans SC"',
-						'"Microsoft YaHei"',
-						'"Segoe UI"',
-						"Roboto",
-						'"Helvetica Neue"',
-						"Arial",
-						"sans-serif",
-					].join(","),
-				},
-			}),
-		[ncmThemeMode],
-	);
-
 	return (
-		<CacheProvider value={inflinkEmotionCache}>
-			<Provider>
-				<ThemeProvider theme={theme}>
-					<Main />
-				</ThemeProvider>
-			</Provider>
-		</CacheProvider>
+		<Provider>
+			<div data-theme={ncmThemeMode} className={styles.appWrapper}>
+				<Main />
+			</div>
+		</Provider>
 	);
 }
 
@@ -126,16 +96,12 @@ function Main() {
 	}
 
 	return (
-		<Box sx={{ pb: 4, pt: 1 }}>
-			<Typography variant="h5" sx={{ mb: 3, fontWeight: "bold" }}>
-				InfLink-rs 设置
-			</Typography>
+		<div className={styles.mainContainer}>
+			<h2 className={styles.pageTitle}>InfLink-rs 设置</h2>
 
 			<VersionWarningAlert version={ncmVersion} show={showVersionWarning} />
 
 			<FeatureSettings />
-
-			<AdvancedSettings />
-		</Box>
+		</div>
 	);
 }

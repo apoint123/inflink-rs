@@ -1,0 +1,24 @@
+.control {
+	padding: 8px 12px;
+	font-size: 0.875rem;
+	border-radius: 6px;
+	border: 1px solid var(--border-color);
+	background-color: var(--control-bg);
+	color: var(--text-primary);
+	outline: none;
+	transition: all 0.1s ease;
+	font-family: inherit;
+	box-sizing: border-box;
+}
+
+.control:hover {
+	background-color: var(--control-bg-hover);
+}
+
+.control:focus {
+	border-color: #c4c4c4;
+}
+
+.control::placeholder {
+	color: var(--text-secondary);
+}

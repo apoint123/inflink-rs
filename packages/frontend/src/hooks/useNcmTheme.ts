@@ -1,6 +1,7 @@
-import type { PaletteMode } from "@mui/material";
 import { useEffect, useState } from "react";
 import logger from "../utils/logger";
+
+export type PaletteMode = "light" | "dark";
 
 function getNcmThemeMode(): PaletteMode {
 	const v3Theme = localStorage.getItem("currentTheme");
