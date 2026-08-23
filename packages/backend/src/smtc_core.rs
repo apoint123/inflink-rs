@@ -334,8 +334,12 @@ pub fn update_timeline(ctx: &SmtcContext, current_ms: f64, total_ms: f64) -> Res
 
     let props = SystemMediaTransportControlsTimelineProperties::new()?;
     props.SetStartTime(TimeSpan { Duration: 0 })?;
+    props.SetMinSeekTime(TimeSpan { Duration: 0 })?;
     props.SetPosition(TimeSpan {
         Duration: (current_ms * HNS_PER_MILLISECOND) as i64,
+    })?;
+    props.SetMaxSeekTime(TimeSpan {
+        Duration: (total_ms * HNS_PER_MILLISECOND) as i64,
     })?;
     props.SetEndTime(TimeSpan {
         Duration: (total_ms * HNS_PER_MILLISECOND) as i64,
