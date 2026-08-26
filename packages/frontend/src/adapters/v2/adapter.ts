@@ -582,11 +582,13 @@ export class V2NcmAdapter extends BaseNcmAdapter {
 	private readonly onProgressUpdate = (
 		e: ParsedEventMap["progressUpdate"],
 	): void => {
-		this.updateTimeline(e.detail);
+		if (!this.isProgressForCurrentTrack(e.detail.playId)) return;
+		this.updateTimeline(e.detail.currentMs);
 	};
 
 	private readonly onSeekUpdate = (e: ParsedEventMap["seekUpdate"]): void => {
-		this.musicPlayProgress = e.detail;
+		if (!this.isProgressForCurrentTrack(e.detail.playId)) return;
+		this.musicPlayProgress = e.detail.currentMs;
 		this.resetTimelineThrottle();
 	};
 

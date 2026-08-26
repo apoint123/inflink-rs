@@ -667,20 +667,23 @@ export class V3NcmAdapter extends BaseNcmAdapter {
 	private readonly onProgressUpdate = (
 		e: ParsedEventMap["progressUpdate"],
 	): void => {
-		if (this.ignoreNextZeroProgressEvent && e.detail === 0) {
+		if (!this.isProgressForCurrentTrack(e.detail.playId)) return;
+
+		if (this.ignoreNextZeroProgressEvent && e.detail.currentMs === 0) {
 			this.ignoreNextZeroProgressEvent = false;
 			return;
 		}
 
-		if (e.detail > 0) {
+		if (e.detail.currentMs > 0) {
 			this.ignoreNextZeroProgressEvent = false;
 		}
 
-		this.updateTimeline(e.detail);
+		this.updateTimeline(e.detail.currentMs);
 	};
 
 	private readonly onSeekUpdate = (e: ParsedEventMap["seekUpdate"]): void => {
-		this.musicPlayProgress = e.detail;
+		if (!this.isProgressForCurrentTrack(e.detail.playId)) return;
+		this.musicPlayProgress = e.detail.currentMs;
 		this.resetTimelineThrottle();
 		// 跳转同时也会触发progress事件，所以在这里就不派发更新了
 		// this.dispatchTimelineUpdateNow();

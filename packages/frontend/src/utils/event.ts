@@ -6,8 +6,8 @@ import { TypedEventTarget } from "./TypedEventTarget";
 
 export interface ParsedEventMap {
 	playStateChange: CustomEvent<PlaybackStatus>;
-	progressUpdate: CustomEvent<number>;
-	seekUpdate: CustomEvent<number>;
+	progressUpdate: CustomEvent<ProgressPayload>;
+	seekUpdate: CustomEvent<ProgressPayload>;
 	audioDataUpdate: CustomEvent<AudioDataInfo>;
 }
 
@@ -18,6 +18,17 @@ const NcmPlayState = {
 	ERROR: 3,
 	END: 4,
 } as const;
+
+/**
+ * 播放进度事件载荷
+ *
+ * playId 为原生 audioplayer 的轨道标识，格式 "${songId}_${suffix}"，
+ * 用于判定进度归属（切歌后旧音频管线的事件可据此丢弃）
+ */
+export interface ProgressPayload {
+	currentMs: number;
+	playId: string;
+}
 
 export class NcmEventAdapter extends TypedEventTarget<ParsedEventMap> {
 	private readonly nativeCmder: OrpheusCommand;
@@ -100,7 +111,7 @@ export class NcmEventAdapter extends TypedEventTarget<ParsedEventMap> {
 	};
 
 	private readonly onRawPlayProgress = (
-		_playId: string,
+		rawPlayId: string,
 		currentInSeconds: number,
 		/**
 		 * 歌曲缓冲进度百分比
@@ -116,7 +127,10 @@ export class NcmEventAdapter extends TypedEventTarget<ParsedEventMap> {
 		// 	"EventAdapter",
 		// );
 		const progressInMs = Math.floor(currentInSeconds * 1000);
-		this.dispatch("progressUpdate", progressInMs);
+		this.dispatch("progressUpdate", {
+			currentMs: progressInMs,
+			playId: rawPlayId,
+		});
 	};
 
 	// 格式:
@@ -139,7 +153,7 @@ export class NcmEventAdapter extends TypedEventTarget<ParsedEventMap> {
 
 		if (typeof position === "number") {
 			const positionInMs = Math.floor(position * 1000);
-			this.dispatch("seekUpdate", positionInMs);
+			this.dispatch("seekUpdate", { currentMs: positionInMs, playId });
 		}
 	};
 
