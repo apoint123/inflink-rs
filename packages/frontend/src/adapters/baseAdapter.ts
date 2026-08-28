@@ -174,6 +174,21 @@ export abstract class BaseNcmAdapter
 		}
 	}
 
+	/**
+	 * 判定一次原生进度事件是否属于当前曲目
+	 *
+	 * playId 形如 "${songId}_${suffix}"；切歌后旧音频管线仍会短暂推送旧
+	 * 曲目的进度，归属不符时必须丢弃，否则会把新曲的进度锚点盖回旧值。
+	 * 解析失败或尚未建立曲目标识时按旧行为放行（fail-open）。
+	 */
+	protected isProgressForCurrentTrack(playId: string | undefined): boolean {
+		if (!playId) return true;
+		const eventSongId = Number.parseInt(playId, 10);
+		if (Number.isNaN(eventSongId)) return true;
+		if (this.lastDispatchedSongId === null) return true;
+		return String(eventSongId) === String(this.lastDispatchedSongId);
+	}
+
 	protected updateTimeline(currentTime: number, totalTime?: number): void {
 		this.musicPlayProgress = currentTime;
 		if (totalTime !== undefined && totalTime > 0) {
