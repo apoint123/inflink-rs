@@ -50,6 +50,14 @@ impl TryFrom<&str> for CefString16 {
     }
 }
 
+impl std::str::FromStr for CefString16 {
+    type Err = CefError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_str(s)
+    }
+}
+
 impl Drop for CefString16 {
     fn drop(&mut self) {
         unsafe {
