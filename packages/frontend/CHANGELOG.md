@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.3.0
+
+### Minor Changes
+
+- 7665b4e: feat: 发布 SMTC seek 进度范围 (#81)
+
+### Patch Changes
+
+- 8514ca0: fix: 歌曲切换后丢弃上一首歌曲的播放进度事件 (#82)
+- 5b75ae4: refactor(ui): 使用自建轻量 UI 组件替代 MUI
+
 ## 3.2.11
 
 ### Patch Changes
