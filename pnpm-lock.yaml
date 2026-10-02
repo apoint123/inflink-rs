@@ -191,8 +191,8 @@ importers:
   packages/frontend:
     dependencies:
       jotai:
-        specifier: ^2.19.1
-        version: 2.20.3(@types/react@19.3.0)(react@19.3.0)
+        specifier: ^3.0.0
+        version: 3.0.1(@types/react@19.3.0)(react@19.3.0)
       loglevel:
         specifier: ^1.9.2
         version: 1.9.2
@@ -642,19 +642,13 @@ packages:
   jju@1.4.0:
     resolution: {integrity: sha512-8wb9Yw966OSxApiCt0K3yNJL8pnNeIv+OEq2YMidz4FKP6nonSRoOXc80iXY4JaN2FC11B9qsNmDsm+ZOfMROA==}
 
-  jotai@2.20.3:
-    resolution: {integrity: sha512-N8L9FUbeGDP+0qNJw1FebOxt+5hk+jTOwUA2LlRE4C081jUcY6F1T/FSETp4DT2/INMtiSRZyNm2D+yZdzrSgA==}
-    engines: {node: '>=12.20.0'}
+  jotai@3.0.1:
+    resolution: {integrity: sha512-6tS7wY9otdiNp26Wqb/1ds3OuVJVoV+tJlN4hpLrYmfFf/t9bauVt+zKBNSpS5qSl5h6GieVQ+OknVraZX+udQ==}
+    engines: {node: '>=22.12.0'}
     peerDependencies:
-      '@babel/core': '>=7.0.0'
-      '@babel/template': '>=7.0.0'
-      '@types/react': '>=17.0.0'
-      react: '>=17.0.0'
+      '@types/react': '>=18.0.0'
+      react: '>=18.0.0'
     peerDependenciesMeta:
-      '@babel/core':
-        optional: true
-      '@babel/template':
-        optional: true
       '@types/react':
         optional: true
       react:
@@ -1199,7 +1193,7 @@ snapshots:
 
   jju@1.4.0: {}
 
-  jotai@2.20.3(@types/react@19.3.0)(react@19.3.0):
+  jotai@3.0.1(@types/react@19.3.0)(react@19.3.0):
     optionalDependencies:
       '@types/react': 19.3.0
       react: 19.3.0

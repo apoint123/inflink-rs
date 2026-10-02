@@ -4,7 +4,7 @@
 	"license": "GPL-3.0-only",
 	"type": "module",
 	"dependencies": {
-		"jotai": "^2.19.1",
+		"jotai": "^3.0.0",
 		"loglevel": "^1.9.2",
 		"lucide-react": "^1.8.0",
 		"react": "^19.2.5",
