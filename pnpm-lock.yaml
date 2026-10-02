@@ -172,6 +172,9 @@ importers:
       '@changesets/cli':
         specifier: ^3.0.0
         version: 3.0.3
+      '@changesets/types':
+        specifier: ^7.0.0
+        version: 7.0.0
       '@types/node':
         specifier: ^26.6.3
         version: 26.6.3

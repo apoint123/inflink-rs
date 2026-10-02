@@ -22,6 +22,7 @@
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.12",
 		"@changesets/cli": "^3.0.0",
+		"@changesets/types": "^7.0.0",
 		"@types/node": "^26.6.3",
 		"husky": "^9.1.7",
 		"typescript": "^7.0.2",
