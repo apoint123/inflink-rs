@@ -4,15 +4,15 @@ import { cp, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { defineConfig, type Plugin } from "vite";
 import cssInjectedByJsPlugin from "vite-plugin-css-injected-by-js";
-import type pkg from "./package.json";
+import pkg from "./package.json" with { type: "json" };
 
 const packageJson: typeof pkg = JSON.parse(
 	fs.readFileSync("./package.json", "utf-8"),
 );
 const APP_VERSION = packageJson.version;
 
-const PROJECT_ROOT = path.resolve(__dirname, "../..");
-const FRONTEND_DIR = __dirname;
+const PROJECT_ROOT = path.resolve(import.meta.dirname, "../..");
+const FRONTEND_DIR = import.meta.dirname;
 const DIST_DIR = path.join(FRONTEND_DIR, "dist");
 const MANIFEST_SRC = path.join(FRONTEND_DIR, "manifest.json");
 const DEFAULT_PLUGIN_DIR = "C:/betterncm/plugins_dev/InfLink-rs";
@@ -111,7 +111,7 @@ export default defineConfig(({ mode }) => {
 	return {
 		resolve: {
 			alias: {
-				"@": path.resolve(__dirname, "src"),
+				"@": path.resolve(import.meta.dirname, "src"),
 			},
 		},
 		define: {
@@ -127,7 +127,7 @@ export default defineConfig(({ mode }) => {
 			sourcemap: false,
 			watch: isDev ? {} : undefined,
 			lib: {
-				entry: path.resolve(__dirname, "src/index.tsx"),
+				entry: path.resolve(import.meta.dirname, "src/index.tsx"),
 				name: "InfLinkrs",
 				formats: ["iife"],
 				fileName: () => "index.js",
