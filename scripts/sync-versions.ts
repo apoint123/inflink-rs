@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,6 +25,7 @@ function main() {
 			"packages/backend",
 			"Cargo.toml",
 		);
+		const cargoLockPath = path.join(projectRoot, "Cargo.lock");
 
 		const sourcePackageJson = JSON.parse(
 			fs.readFileSync(sourcePackageJsonPath, "utf-8"),
@@ -62,9 +64,35 @@ function main() {
 			console.log(`已更新 ${path.basename(filePath)}`);
 		};
 
+		const updateCargoLockVersion = (filePath: string) => {
+			try {
+				execSync("cargo update -p backend --offline", {
+					cwd: projectRoot,
+					stdio: "ignore",
+				});
+				console.log(`已通过 cargo CLI 更新 ${path.basename(filePath)}`);
+			} catch {
+				const fileContent = fs.readFileSync(filePath, "utf-8");
+				const backendBlock =
+					/(\[\[package\]\]\r?\nname\s*=\s*"backend"\r?\nversion\s*=\s*)".*"/;
+				if (!backendBlock.test(fileContent)) {
+					throw new Error(`无法在 ${filePath} 中找到 backend 包的版本号。`);
+				}
+				const updatedContent = fileContent.replace(
+					backendBlock,
+					`$1"${newVersion}"`,
+				);
+				if (updatedContent !== fileContent) {
+					fs.writeFileSync(filePath, updatedContent);
+				}
+				console.log(`已通过文本替换更新 ${path.basename(filePath)}`);
+			}
+		};
+
 		updateJsonVersion(rootPackageJsonPath);
 		updateJsonVersion(manifestPath);
 		updateCargoTomlVersion(cargoTomlPath);
+		updateCargoLockVersion(cargoLockPath);
 	} catch (error) {
 		console.error("同步版本号时发生错误:", error);
 		process.exit(1);
