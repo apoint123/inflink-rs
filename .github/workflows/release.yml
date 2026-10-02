@@ -1,25 +1,80 @@
-name: 构建并发布
+name: 版本管理与发布
 
 on:
   push:
-    tags:
-      - "v*.*.*"
+    branches:
+      - main
 
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
+  contents: read
 
 jobs:
+  version-packages:
+    name: 创建或更新版本 PR
+    runs-on: windows-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v7
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v7
+        with:
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 创建或更新版本 PR
+        uses: changesets/action@v2.1.2
+        with:
+          version-script: pnpm run cs:version
+          commit-message: "chore: version packages"
+          pr-title: "Version Packages"
+          pr-base-branch: main
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          create-github-releases: false
+          push-git-tags: false
+
   build-and-publish:
     name: 构建并发布
+    if: |
+      contains(github.event.head_commit.message, 'Version Packages') ||
+      contains(github.event.head_commit.message, 'chore: version packages') ||
+      startsWith(github.event.head_commit.message, 'chore(release)')
     runs-on: windows-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
 
     steps:
       - name: 检出代码
         uses: actions/checkout@v7
         with:
           submodules: "recursive"
+
+      - name: 读取当前版本号并校验 Tag
+        id: pkg-version
+        shell: pwsh
+        run: |
+          $ver = (Get-Content packages/frontend/package.json -Raw | ConvertFrom-Json).version
+          if ([string]::IsNullOrWhiteSpace($ver)) {
+            throw "无法从 packages/frontend/package.json 获取版本号"
+          }
+          $tag = "v$ver"
+          $tagExists = git ls-remote --tags origin "refs/tags/$tag"
+          if ($tagExists) {
+            throw "Tag $tag 已存在于远程仓库，中止发布以避免重复构建。"
+          }
+          Write-Output "检测到待发布版本: $tag"
+          "version=$ver" >> $env:GITHUB_OUTPUT
 
       - name: 安装 pnpm
         uses: pnpm/action-setup@v6
@@ -55,10 +110,10 @@ jobs:
           user_email: "github-actions[bot]@users.noreply.github.com"
 
       - name: 打包插件文件
+        shell: pwsh
         run: |
           Compress-Archive -Path packages/frontend/dist/* -DestinationPath InfLink-rs.zip
           Rename-Item -Path InfLink-rs.zip -NewName InfLink-rs.plugin
-        shell: powershell
 
       - name: 生成 Artifact Attestation
         uses: actions/attest-build-provenance@v4
@@ -71,5 +126,7 @@ jobs:
       - name: 创建 Release
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: v${{ steps.pkg-version.outputs.version }}
+          target_commitish: ${{ github.sha }}
           body_path: RELEASE_NOTES.md
           files: InfLink-rs.plugin
