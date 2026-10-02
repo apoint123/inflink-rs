@@ -6,9 +6,9 @@
 
 - **核心框架**: React + Chromium Embedded Framework
 - **UI 组件库**: MUI
-- **包管理器**: bun (不要使用 npm 或其他包管理器)
-- **构建命令**: `bun run build`
-- **测试**: 让用户运行 `bun dev` 然后打开网易云人工测试
+- **包管理器**: pnpm (不要使用 npm 或其他包管理器)
+- **构建命令**: `pnpm build`
+- **测试**: 让用户运行 `pnpm dev` 然后打开网易云人工测试
 
 ## 代码风格与规范
 

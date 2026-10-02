@@ -48,14 +48,17 @@ function main() {
 
 		const updateCargoTomlVersion = (filePath: string) => {
 			const fileContent = fs.readFileSync(filePath, "utf-8");
-			const updatedContent = fileContent.replace(
-				/^version\s*=\s*".*"$/m,
-				`version = "${newVersion}"`,
-			);
-			if (updatedContent === fileContent) {
+			const versionLine = /^version\s*=\s*".*"$/m;
+			if (!versionLine.test(fileContent)) {
 				throw new Error(`无法在 ${filePath} 中找到并更新版本号。`);
 			}
-			fs.writeFileSync(filePath, updatedContent);
+			const updatedContent = fileContent.replace(
+				versionLine,
+				`version = "${newVersion}"`,
+			);
+			if (updatedContent !== fileContent) {
+				fs.writeFileSync(filePath, updatedContent);
+			}
 			console.log(`已更新 ${path.basename(filePath)}`);
 		};
 

@@ -21,8 +21,13 @@ jobs:
         with:
           submodules: "recursive"
 
-      - name: 安装 Bun
-        uses: oven-sh/setup-bun@v2
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v7
+        with:
+          cache: pnpm
 
       - name: 安装 Rust 工具链
         uses: dtolnay/rust-toolchain@stable
@@ -34,10 +39,10 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: 安装依赖
-        run: bun install
+        run: pnpm install --frozen-lockfile
 
       - name: 构建项目
-        run: bun run build
+        run: pnpm run build
 
       - name: 部署到插件商店分支
         uses: peaceiris/actions-gh-pages@v4
@@ -61,7 +66,7 @@ jobs:
           subject-path: "InfLink-rs.plugin"
 
       - name: 提取更新日志
-        run: bun run scripts/extract-changelog.ts
+        run: node scripts/extract-changelog.ts
 
       - name: 创建 Release
         uses: softprops/action-gh-release@v3

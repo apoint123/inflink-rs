@@ -90,8 +90,8 @@ if (api) {
 
 先决条件：
 
-* Node.js (v18+)
-* Bun
+* Node.js (v24+)
+* pnpm 12
 * Rust 工具链
 
 1. 克隆仓库
@@ -112,13 +112,13 @@ rustup target add i686-pc-windows-msvc
 3. 安装依赖
 
 ```bash
-bun install
+pnpm install
 ```
 
 4. 构建
 
 ```bash
-bun run build
+pnpm build
 ```
 
 这个命令会自动完成整个扩展 (包括前端和后端) 的构建，你可以在 `packages\frontend\dist` 找到构建产物
