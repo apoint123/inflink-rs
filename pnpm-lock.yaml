@@ -177,7 +177,7 @@ importers:
         version: 7.0.0
       '@types/node':
         specifier: ^26.6.3
-        version: 26.6.3
+        version: 26.6.4
       husky:
         specifier: ^9.1.7
         version: 9.1.7
@@ -186,10 +186,10 @@ importers:
         version: 7.0.2
       vite:
         specifier: ^8.0.8
-        version: 8.3.1(@types/node@26.6.3)(yaml@2.9.1)
+        version: 8.3.1(@types/node@26.6.4)(yaml@2.9.1)
       vite-plugin-css-injected-by-js:
         specifier: ^5.0.0
-        version: 5.0.2(vite@8.3.1(@types/node@26.6.3)(yaml@2.9.1))
+        version: 5.0.2(vite@8.3.1(@types/node@26.6.4)(yaml@2.9.1))
 
   packages/frontend:
     dependencies:
@@ -465,8 +465,8 @@ packages:
   '@rolldown/pluginutils@1.0.1':
     resolution: {integrity: sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw==}
 
-  '@types/node@26.6.3':
-    resolution: {integrity: sha512-dsqMQQoeTLqu9wynDD00q573mNzso3IdQOAfHRJqLCcmCFPoGo9A1bDpUcv/9tnKpErQWv9uKeGfl37EIS02Yg==}
+  '@types/node@26.6.4':
+    resolution: {integrity: sha512-ldVPDCzj7fsaGZrLB0NuHuTvJcsNasysBAqMolr/cgxrLd1xbqxIr3XJiPnHHJUCxj5sNF1vnRj9aWnrVh5Jcg==}
 
   '@types/react-dom@19.3.0':
     resolution: {integrity: sha512-ZI7bU42mZXXKHn/qNLEw2IrbiINU7X5+vfgdixBHkCNpYWXjKgfQ/P+uyGb5CjOLB9UcnTeg3rylQtV2hym44Q==}
@@ -1099,7 +1099,7 @@ snapshots:
 
   '@rolldown/pluginutils@1.0.1': {}
 
-  '@types/node@26.6.3':
+  '@types/node@26.6.4':
     dependencies:
       undici-types: 8.9.0
 
@@ -1357,11 +1357,11 @@ snapshots:
 
   undici-types@8.9.0: {}
 
-  vite-plugin-css-injected-by-js@5.0.2(vite@8.3.1(@types/node@26.6.3)(yaml@2.9.1)):
+  vite-plugin-css-injected-by-js@5.0.2(vite@8.3.1(@types/node@26.6.4)(yaml@2.9.1)):
     dependencies:
-      vite: 8.3.1(@types/node@26.6.3)(yaml@2.9.1)
+      vite: 8.3.1(@types/node@26.6.4)(yaml@2.9.1)
 
-  vite@8.3.1(@types/node@26.6.3)(yaml@2.9.1):
+  vite@8.3.1(@types/node@26.6.4)(yaml@2.9.1):
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.7
@@ -1369,7 +1369,7 @@ snapshots:
       rolldown: 1.2.12
       tinyglobby: 0.2.17
     optionalDependencies:
-      '@types/node': 26.6.3
+      '@types/node': 26.6.4
       fsevents: 2.3.3
       yaml: 2.9.1
 
