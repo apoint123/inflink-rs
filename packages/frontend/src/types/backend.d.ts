@@ -24,7 +24,7 @@ export type SmtcEvent =
 	| { type: "Seek"; position_ms: number };
 
 /**
- * FFI 边界使用的元数据类型，主要是 blob 转换为 base64 字符串以便跨 FFI 边界传递
+ * FFI 边界使用的元数据类型
  */
 export interface MetadataPayload {
 	songName: string;
@@ -36,7 +36,7 @@ export interface MetadataPayload {
 }
 
 export interface MetadataCoverPayload {
-	base64?: string | undefined;
+	/** 封面地址。只有在二进制通道没送成时才会用到（后端直接按这个地址取图） */
 	url?: string | undefined;
 }
 export interface PlayStatePayload {

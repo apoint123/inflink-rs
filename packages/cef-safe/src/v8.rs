@@ -37,6 +37,18 @@ impl CefV8Value {
         unsafe { self.is_valid.is_some_and(|func| func(self.as_raw()) == 1) }
     }
 
+    /// 冻结/切断 `ArrayBuffer` 的底层内存块，防止 JS 继续访问
+    ///
+    /// 对于用 `cef_v8value_create_array_buffer` 创建的外部化 `ArrayBuffer`，
+    /// CEF 文档保证这一步会触发释放回调，因此它是确定性回收缓冲区的关键一步。
+    #[must_use]
+    pub fn neuter_array_buffer(&self) -> bool {
+        unsafe {
+            self.neuter_array_buffer
+                .is_some_and(|func| func(self.as_raw()) == 1)
+        }
+    }
+
     /// 从`&str` 创建一个新的 JavaScript 字符串值
     ///
     /// # Errors

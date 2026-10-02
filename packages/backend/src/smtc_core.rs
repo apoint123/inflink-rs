@@ -1,16 +1,9 @@
-use std::{
-    sync::{
-        LazyLock,
-        Mutex,
-    },
-    time::Instant,
+use std::sync::{
+    LazyLock,
+    Mutex,
 };
 
 use anyhow::Result;
-use base64::{
-    Engine,
-    engine::general_purpose,
-};
 use cef_safe::{
     CefResult,
     CefV8Context,
@@ -372,50 +365,50 @@ pub fn update_play_mode(
     Ok(())
 }
 
-fn create_cover_stream_ref(cover: Option<&CoverPayload>) -> Option<RandomAccessStreamReference> {
-    match cover {
-        None => {
-            warn!("未提供封面, 将清空现有封面");
-            None
+/// 创建封面的流引用
+///
+/// 优先使用前端通过 `ArrayBuffer` 通道直接送来的原始字节, 只有在没有字节、
+/// 或者用字节建流失败时, 才退回到封面 URL。
+fn create_cover_stream_ref(
+    cover: Option<&CoverPayload>,
+    cover_bytes: Option<&[u8]>,
+) -> Option<RandomAccessStreamReference> {
+    if let Some(bytes) = cover_bytes {
+        debug!(
+            bytes = bytes.len(),
+            "正在用 ArrayBuffer 通道送来的原始字节创建封面"
+        );
+        if let Some(stream_ref) = create_cover_from_bytes(bytes) {
+            return Some(stream_ref);
         }
-        Some(payload) => {
-            if let Some(base64_data) = &payload.base64 {
-                debug!("正在从 Base64 数据解码封面");
-                let start_time = Instant::now();
+        warn!("用二进制数据创建封面失败, 回退到封面 URL");
+    }
 
-                let bytes = match general_purpose::STANDARD.decode(base64_data) {
-                    Ok(b) => {
-                        let elapsed = start_time.elapsed();
-                        debug!(duration = ?elapsed, "封面 Base64 解码完成");
-                        b
-                    }
-                    Err(e) => {
-                        warn!("解码封面 Base64 失败: {e}");
-                        return create_cover_from_url(payload.url.as_deref());
-                    }
-                };
+    let Some(payload) = cover else {
+        warn!("未提供封面, 将清空现有封面");
+        return None;
+    };
 
-                let stream_result: windows::core::Result<RandomAccessStreamReference> = (|| {
-                    let stream = InMemoryRandomAccessStream::new()?;
-                    let writer = DataWriter::CreateDataWriter(&stream)?;
-                    writer.WriteBytes(&bytes)?;
-                    writer.StoreAsync()?.join()?;
-                    writer.DetachStream()?;
-                    stream.Seek(0)?;
-                    RandomAccessStreamReference::CreateFromStream(&stream)
-                })(
-                );
+    create_cover_from_url(payload.url.as_deref())
+}
 
-                match stream_result {
-                    Ok(stream_ref) => Some(stream_ref),
-                    Err(e) => {
-                        error!("创建封面内存流失败: {e:?}");
-                        None
-                    }
-                }
-            } else {
-                create_cover_from_url(payload.url.as_deref())
-            }
+/// 把内存里的图片字节包装成 SMTC 可以消费的随机访问流
+fn create_cover_from_bytes(bytes: &[u8]) -> Option<RandomAccessStreamReference> {
+    let stream_result: windows::core::Result<RandomAccessStreamReference> = (|| {
+        let stream = InMemoryRandomAccessStream::new()?;
+        let writer = DataWriter::CreateDataWriter(&stream)?;
+        writer.WriteBytes(bytes)?;
+        writer.StoreAsync()?.join()?;
+        writer.DetachStream()?;
+        stream.Seek(0)?;
+        RandomAccessStreamReference::CreateFromStream(&stream)
+    })();
+
+    match stream_result {
+        Ok(stream_ref) => Some(stream_ref),
+        Err(e) => {
+            error!("创建封面内存流失败: {e:?}");
+            None
         }
     }
 }
@@ -440,8 +433,12 @@ fn create_cover_from_url(url: Option<&str>) -> Option<RandomAccessStreamReferenc
     }
 }
 
-#[instrument]
-pub fn update_metadata(ctx: &SmtcContext, payload: &MetadataPayload) -> Result<()> {
+#[instrument(skip(cover_bytes))]
+pub fn update_metadata(
+    ctx: &SmtcContext,
+    payload: &MetadataPayload,
+    cover_bytes: Option<&[u8]>,
+) -> Result<()> {
     if !ctx.is_enabled {
         return Ok(());
     }
@@ -454,7 +451,7 @@ pub fn update_metadata(ctx: &SmtcContext, payload: &MetadataPayload) -> Result<(
         "正在更新 SMTC 歌曲元数据"
     );
 
-    let thumbnail_stream_ref = create_cover_stream_ref(payload.cover.as_ref());
+    let thumbnail_stream_ref = create_cover_stream_ref(payload.cover.as_ref(), cover_bytes);
 
     let smtc = ctx.smtc()?;
     let updater = smtc.DisplayUpdater()?;

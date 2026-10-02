@@ -98,13 +98,14 @@ fn run_dispatcher_loop(rx: &Receiver<AppMessage>) {
 
     while let Ok(msg) = rx.recv() {
         match msg {
-            AppMessage::UpdateMetadata(payload) => {
-                let shared_meta = SharedMetadata(Arc::new(payload));
+            AppMessage::UpdateMetadata(update) => {
+                let shared_meta = SharedMetadata(Arc::new(update.payload));
+                let cover_bytes = update.cover_bytes.as_deref();
 
                 discord::update_metadata(shared_meta.clone());
 
                 if let Some(ctx) = smtc_manager.get_or_init()
-                    && let Err(e) = smtc_core::update_metadata(ctx, &shared_meta)
+                    && let Err(e) = smtc_core::update_metadata(ctx, &shared_meta, cover_bytes)
                 {
                     error!("更新 SMTC 元数据失败: {e:?}");
                 }
@@ -162,8 +163,8 @@ fn run_dispatcher_loop(rx: &Receiver<AppMessage>) {
     }
 }
 
-pub fn send_command(json: &str) -> String {
-    let command: AppMessage = match serde_json::from_str(json) {
+pub fn send_command(json: &str, binary: Option<Vec<u8>>) -> String {
+    let mut command: AppMessage = match serde_json::from_str(json) {
         Ok(cmd) => cmd,
         Err(e) => {
             return serde_json::to_string(&CommandResult {
@@ -173,6 +174,21 @@ pub fn send_command(json: &str) -> String {
             .expect("序列化错误响应时出错");
         }
     };
+
+    // 二进制数据由调用方在渲染线程上就地取到 (`dispatchWithArrayBuffer`),
+    // 跟着命令一起进来 —— 二者在同一个参数表里到达, 不存在错配的可能。
+    if let Some(bytes) = binary {
+        match &mut command {
+            AppMessage::UpdateMetadata(update) => update.cover_bytes = Some(bytes),
+            _ => {
+                return serde_json::to_string(&CommandResult {
+                    status: CommandStatus::Error,
+                    message: Some("该命令不接受随附的二进制数据".to_owned()),
+                })
+                .expect("序列化错误响应时出错");
+            }
+        }
+    }
 
     if let Ok(guard) = GLOBAL_SENDER.lock()
         && let Some(tx) = guard.as_ref()

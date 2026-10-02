@@ -23,6 +23,7 @@ use crate::{
         CefResult,
     },
     v8::CefV8Context,
+    vtable::cef_ref_counted_vtable,
 };
 
 /// 一个将 Rust 闭包封装成 CEF 任务的结构体，用于在 Rust 和 CEF 之间传递
@@ -99,65 +100,7 @@ mod internal_logic {
     }
 }
 
-#[cfg(not(all(target_arch = "x86", target_os = "windows")))]
-use internal_logic::{
-    base_add_ref as extern_base_add_ref,
-    base_has_at_least_one_ref as extern_base_has_at_least_one_ref,
-    base_has_one_ref as extern_base_has_one_ref,
-    base_release as extern_base_release,
-    execute_rust_closure as extern_execute_rust_closure,
-};
-
-#[cfg(not(all(target_arch = "x86", target_os = "windows")))]
-unsafe extern "C" fn execute_rust_closure(task: *mut _cef_task_t) {
-    unsafe { extern_execute_rust_closure(task) }
-}
-#[cfg(not(all(target_arch = "x86", target_os = "windows")))]
-unsafe extern "C" fn base_add_ref(base: *mut _cef_base_ref_counted_t) {
-    unsafe { extern_base_add_ref(base) }
-}
-#[cfg(not(all(target_arch = "x86", target_os = "windows")))]
-unsafe extern "C" fn base_release(base: *mut _cef_base_ref_counted_t) -> i32 {
-    unsafe { extern_base_release(base) }
-}
-#[cfg(not(all(target_arch = "x86", target_os = "windows")))]
-unsafe extern "C" fn base_has_one_ref(base: *mut _cef_base_ref_counted_t) -> i32 {
-    unsafe { extern_base_has_one_ref(base) }
-}
-#[cfg(not(all(target_arch = "x86", target_os = "windows")))]
-unsafe extern "C" fn base_has_at_least_one_ref(base: *mut _cef_base_ref_counted_t) -> i32 {
-    unsafe { extern_base_has_at_least_one_ref(base) }
-}
-
-#[cfg(all(target_arch = "x86", target_os = "windows"))]
-use internal_logic::{
-    base_add_ref as extern_base_add_ref,
-    base_has_at_least_one_ref as extern_base_has_at_least_one_ref,
-    base_has_one_ref as extern_base_has_one_ref,
-    base_release as extern_base_release,
-    execute_rust_closure as extern_execute_rust_closure,
-};
-
-#[cfg(all(target_arch = "x86", target_os = "windows"))]
-unsafe extern "stdcall" fn execute_rust_closure(task: *mut _cef_task_t) {
-    unsafe { extern_execute_rust_closure(task) }
-}
-#[cfg(all(target_arch = "x86", target_os = "windows"))]
-unsafe extern "stdcall" fn base_add_ref(base: *mut _cef_base_ref_counted_t) {
-    unsafe { extern_base_add_ref(base) }
-}
-#[cfg(all(target_arch = "x86", target_os = "windows"))]
-unsafe extern "stdcall" fn base_release(base: *mut _cef_base_ref_counted_t) -> i32 {
-    unsafe { extern_base_release(base) }
-}
-#[cfg(all(target_arch = "x86", target_os = "windows"))]
-unsafe extern "stdcall" fn base_has_one_ref(base: *mut _cef_base_ref_counted_t) -> i32 {
-    unsafe { extern_base_has_one_ref(base) }
-}
-#[cfg(all(target_arch = "x86", target_os = "windows"))]
-unsafe extern "stdcall" fn base_has_at_least_one_ref(base: *mut _cef_base_ref_counted_t) -> i32 {
-    unsafe { extern_base_has_at_least_one_ref(base) }
-}
+cef_ref_counted_vtable!(internal_logic, execute_rust_closure, (task: *mut _cef_task_t) -> ());
 
 /// 将一个 Rust 闭包作为提交到 CEF 的渲染线程，并在指定的 V8 上下文中执行
 ///

@@ -30,10 +30,12 @@ Get-NetTCPConnection -State Listen -LocalPort $debugPort -ErrorAction SilentlyCo
 Start-Process -FilePath $ncmExe -ArgumentList @(
     "--remote-debugging-port=$debugPort",
     '--remote-debugging-address=127.0.0.1'
-) -WindowStyle Hidden
+) -WindowStyle Hidden -WorkingDirectory (Split-Path $ncmExe)
 ```
 
 `-WindowStyle Hidden` 是此次验证过的启动方式；客户端仍创建了可操作主窗口。需要桌面操作时，通过窗口工具选择并激活实际返回的网易云窗口。
+
+**务必带上 `-WorkingDirectory`（安装目录）**：客户端会往**自己的当前工作目录**写 `debug.log`（Chromium 的 network_monitor）。从仓库目录启动就会在仓库根留下这个未跟踪文件。
 
 **完成条件：** 新主进程的命令行包含调试参数，且下一节的接口能返回网易云信息。若触发客户端自动更新，等更新完成后重新检查版本、进程和端口，必要时再次带参数启动。
 
@@ -41,13 +43,15 @@ Start-Process -FilePath $ncmExe -ArgumentList @(
 
 ```powershell
 $debugBase = "http://127.0.0.1:$debugPort"
-$version = Invoke-RestMethod "$debugBase/json/version" -TimeoutSec 5
-$targets = Invoke-RestMethod "$debugBase/json/list" -TimeoutSec 5
+$version = Invoke-RestMethod "$debugBase/json/version" -TimeoutSec 5 -UseBasicParsing
+$targets = Invoke-RestMethod "$debugBase/json/list" -TimeoutSec 5 -UseBasicParsing
 $version | ConvertTo-Json
 $targets | Select-Object id, type, title, url, webSocketDebuggerUrl
 Get-NetTCPConnection -State Listen -LocalPort $debugPort |
     Select-Object LocalAddress, LocalPort, OwningProcess
 ```
+
+`-UseBasicParsing` 不能省：在非交互式 PowerShell（AI/脚本调用）里，这些 cmdlet 默认走 IE 解析引擎，会直接报 `NonInteractive mode` 或**返回属性全空的对象**——看起来像"目标拿不到"，其实是解析问题。
 
 接口刚启动时可每秒重试一次，总等待不超过 15 秒；仍失败就检查进程、端口和更新状态。
 
@@ -273,3 +277,24 @@ console.log(await evaluate(`(() => {
 | 页面   | `网易云音乐`，`orpheus://orpheus/pub/app.html`，就绪状态 `complete` |
 | 截图   | `Page.captureScreenshot` 成功生成并检查 PNG，原图为 `2510 × 1670`   |
 | 日志   | 收到本次主动输出的 `Runtime.consoleAPICalled` 验证消息              |
+
+### 封面二进制通道验证（2026-10-02 晚，重构 `array_buffer` 之后）
+
+目标：验证「在原生调用栈内同步 `cef_v8value_create_array_buffer` + `execute_function` 回调 JS」在真实客户端可行，
+且外部化 `ArrayBuffer` 的引用计数与冻结流程正确。
+
+| 检查项     | 结果                                                                                                    |
+| ---------- | ------------------------------------------------------------------------------------------------------- |
+| 构建产物   | `vite build --mode development`（监听模式首轮）同步的 debug DLL + 现场构建的 `index.js`                  |
+| 歌切触发   | 三次真实歌切：启动时的当前歌曲、`InfLinkApi.next()`、`InfLinkApi.previous()`                            |
+| 原生证据   | 每次均出现 `dispatchWithArrayBuffer: 已通过外部 ArrayBuffer 收到二进制数据`，`released=true neutered=true` |
+| 字节一致性 | 前端 `songChange` 事件里的 `Blob`（`image/jpg`，43553 字节）与后端 `bytes=43553` 逐字节一致              |
+| 内容       | `preview=[255, 216, 255, 224, 0, 16, 74, 70]`，即 JPEG 的 `FF D8 FF E0 ... "JF"`                        |
+| 稳定性     | 三次传输后无崩溃、无 panic、无 `更新 SMTC 元数据失败`，插件仍能响应 CDP 调用                             |
+| SMTC       | GSMTC 会话 `cloudmusic.exe` 的标题/艺术家/专辑与当前歌曲一致，`Thumbnail` 非空                           |
+| 状态恢复   | 回到原歌曲并暂停（进度残留约 0.27s）                                                                     |
+| 未验证     | 缩略图的**视觉**确认（PS 5.1 的 COM 投影读不出缩略图流字节，已放弃程序化读取）                            |
+
+关键日志字段含义：`neutered=false` 表示冻结失败、缓冲区被刻意泄漏；`released=false` 表示 CEF 未回调
+`release_buffer`。两者都应当出现在排查清单里。原生日志在 `%APPDATA%\InfLink-rs\inflink-rs.<date>.log`，
+文件层为 `trace` 全量，前端转发层默认 `INFO`，因此这类 `debug!` 证据只在文件里看得到。

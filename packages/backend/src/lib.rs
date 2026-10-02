@@ -1,6 +1,8 @@
+mod array_buffer;
 mod discord;
 mod dispatcher;
 mod ffi;
+mod ffi_support;
 mod logger;
 mod model;
 mod smtc_core;

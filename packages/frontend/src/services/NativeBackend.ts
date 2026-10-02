@@ -23,6 +23,13 @@ interface NativeApiMap {
 	) => void;
 	setLogLevel: (args: [level: LogLevel]) => void;
 	dispatch: (args: [commandJson: string]) => string;
+	dispatchWithArrayBuffer: (
+		args: [
+			commandJson: string,
+			size: number,
+			callback: (buffer: ArrayBuffer) => void,
+		],
+	) => string;
 }
 
 const ALL_LOG_LEVELS: Readonly<LogLevel[]> = [
@@ -56,12 +63,24 @@ class NativeBackend {
 		type: T,
 		payload: AppMessage[T],
 	) {
-		const command = JSON.stringify({ type, payload });
-		const resultJson = this.call("dispatch", [command]);
+		this.handleCommandResult(
+			type as string,
+			this.call("dispatch", [JSON.stringify({ type, payload })]),
+		);
+	}
 
+	/**
+	 * 处理后端对一条命令的返回结果（`dispatch` 与 `dispatchWithArrayBuffer` 共用）
+	 *
+	 * 返回解析出的结果；解析不出来时返回 `undefined`。
+	 */
+	private handleCommandResult(
+		type: string,
+		resultJson: string,
+	): CommandResult | undefined {
 		if (!resultJson) {
 			logger.error(`命令 '${type}' 未收到任何返回结果。`, "Native Bridge");
-			return;
+			return undefined;
 		}
 
 		try {
@@ -73,6 +92,7 @@ class NativeBackend {
 					result.message,
 				);
 			}
+			return result;
 		} catch (e) {
 			logger.error(
 				`解析后端返回结果失败:`,
@@ -81,6 +101,7 @@ class NativeBackend {
 				"\n原始结果:",
 				resultJson,
 			);
+			return undefined;
 		}
 	}
 
@@ -202,26 +223,64 @@ class NativeBackend {
 		this.updateGeneration++;
 		const generation = this.updateGeneration;
 
-		const coverPayload: MetadataCoverPayload | undefined = {
-			url: songInfo.cover?.url,
-		};
+		let coverBytes: Uint8Array | undefined;
 
 		if (songInfo.cover?.blob) {
 			try {
-				const base64 = await this.convertBlobToBase64(songInfo.cover.blob);
+				coverBytes = new Uint8Array(await songInfo.cover.blob.arrayBuffer());
+
+				// 等待期间可能有更新的更新插了进来, 这时候这次更新已经没有意义了
 				if (generation !== this.updateGeneration) return;
-				coverPayload.base64 = base64;
 			} catch (e) {
 				logger.warn(
-					`封面 Blob 转 Base64 失败: ${(e as Error).message}`,
+					`读取封面二进制数据失败: ${(e as Error).message}`,
 					"Native Bridge",
 				);
-				if (generation !== this.updateGeneration) return;
 			}
 		}
 
-		const payload = this.toMetadataPayload(songInfo, coverPayload);
-		this.dispatch("UpdateMetadata", payload);
+		this.dispatchMetadata(songInfo, coverBytes);
+	}
+
+	/**
+	 * 发送元数据更新
+	 *
+	 * 拿到封面字节时走 `dispatchWithArrayBuffer`：一次调用里同时交二进制和命令，
+	 * 后端读回字节后直接把它挂到这条命令上，二者不可能错配。
+	 * 没有字节（或读取失败）时退回普通 `dispatch`，封面交给后端按 URL 取。
+	 */
+	private dispatchMetadata(
+		songInfo: SongInfo,
+		coverBytes: Uint8Array | undefined,
+	) {
+		const payload = this.toMetadataPayload(songInfo, {
+			url: songInfo.cover?.url,
+		});
+
+		if (!coverBytes || coverBytes.byteLength === 0) {
+			this.dispatch("UpdateMetadata", payload);
+			return;
+		}
+
+		// 与前一条 `dispatch` 完全相同的载荷，只是额外捎带一次二进制传输
+		const command = JSON.stringify({ type: "UpdateMetadata", payload });
+		const result = this.handleCommandResult(
+			"UpdateMetadata",
+			this.call("dispatchWithArrayBuffer", [
+				command,
+				coverBytes.byteLength,
+				(target: ArrayBuffer) => {
+					new Uint8Array(target).set(coverBytes);
+				},
+			]),
+		);
+
+		if (result?.status === "Success") {
+			logger.debug(
+				`封面二进制数据已随命令送达后端 (${coverBytes.byteLength} 字节)`,
+				"Native Bridge",
+			);
+		}
 	}
 
 	private toMetadataPayload(
@@ -232,40 +291,10 @@ class NativeBackend {
 			songName: songInfo.songName,
 			albumName: songInfo.albumName,
 			authorName: songInfo.authorName,
-			cover: cover?.base64 || cover?.url ? cover : null,
+			cover: cover?.url ? cover : null,
 			ncmId: songInfo.ncmId,
 			duration: songInfo.duration,
 		};
-	}
-
-	private convertBlobToBase64(blob: Blob): Promise<string> {
-		return new Promise((resolve, reject) => {
-			const reader = new FileReader();
-
-			reader.onload = () => {
-				const dataUri = reader.result;
-
-				if (typeof dataUri !== "string") {
-					reject(new Error("读取结果不是字符串"));
-					return;
-				}
-
-				const commaIndex = dataUri.indexOf(",");
-				if (commaIndex === -1) {
-					reject(new Error("生成的 Data URI 格式无效"));
-					return;
-				}
-
-				const base64Data = dataUri.slice(commaIndex + 1);
-				resolve(base64Data);
-			};
-
-			reader.onerror = () => {
-				reject(reader.error || new Error("文件读取失败"));
-			};
-
-			reader.readAsDataURL(blob);
-		});
 	}
 
 	public updatePlayState(status: PlaybackStatus) {

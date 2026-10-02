@@ -29,7 +29,7 @@ impl AsRef<MetadataPayload> for SharedMetadata {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "type", content = "payload")]
 pub enum AppMessage {
-    UpdateMetadata(MetadataPayload),
+    UpdateMetadata(MetadataUpdate),
 
     UpdatePlayState(PlayStatePayload),
     UpdateTimeline(TimelinePayload),
@@ -45,19 +45,11 @@ pub enum AppMessage {
     Shutdown,
 }
 
-#[derive(Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct CoverPayload {
-    pub base64: Option<String>,
+    /// 封面地址。只有在二进制通道没送成时才会用到 (后端直接按这个地址取图)
+    #[serde(default)]
     pub url: Option<String>,
-}
-
-impl fmt::Debug for CoverPayload {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("CoverPayload")
-            .field("base64", &self.base64.as_ref().map(|_| "<...omitted...>"))
-            .field("url", &self.url)
-            .finish()
-    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
@@ -69,6 +61,31 @@ pub struct MetadataPayload {
     pub cover: Option<CoverPayload>,
     pub ncm_id: Option<u64>,
     pub duration: Option<f64>,
+}
+
+/// 一次元数据更新命令
+///
+/// 除了前端送来的元数据, 它还带着封面二进制数据: 前端用
+/// `inflink.dispatchWithArrayBuffer` 在同一次调用里把字节和命令一起交过来,
+/// `dispatcher::send_command` 会把字节挂到这个字段上 (详见 `array_buffer` 模块),
+/// 让它跟着命令一起跨线程送到 dispatcher。
+#[derive(Deserialize, Serialize, Clone, PartialEq)]
+pub struct MetadataUpdate {
+    #[serde(flatten)]
+    pub payload: MetadataPayload,
+
+    /// 封面原始字节, 只由后端内部填充, 前端不会传
+    #[serde(default, skip_serializing)]
+    pub cover_bytes: Option<Vec<u8>>,
+}
+
+impl fmt::Debug for MetadataUpdate {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MetadataUpdate")
+            .field("payload", &self.payload)
+            .field("cover_bytes", &self.cover_bytes.as_ref().map(Vec::len))
+            .finish()
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]

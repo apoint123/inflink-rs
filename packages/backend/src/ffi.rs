@@ -1,18 +1,12 @@
 use std::{
     ffi::{
-        CStr,
         CString,
         c_char,
         c_int,
         c_void,
     },
-    panic,
     ptr,
-    sync::{
-        LazyLock,
-        Mutex,
-        Once,
-    },
+    sync::Once,
 };
 
 use tracing::{
@@ -23,34 +17,24 @@ use tracing::{
 };
 
 use crate::{
+    array_buffer::dispatchWithArrayBuffer,
     dispatcher,
+    ffi_support::{
+        c_char_to_string,
+        return_string,
+        safe_call,
+    },
     logger,
     smtc_core,
 };
 
-fn safe_call<F, T>(func: F) -> T
-where
-    F: FnOnce() -> T + panic::UnwindSafe,
-    T: Default,
-{
-    match panic::catch_unwind(func) {
-        Ok(result) => result,
-        Err(e) => {
-            let message = e.downcast_ref::<&'static str>().map_or_else(
-                || {
-                    e.downcast_ref::<String>()
-                        .map_or("未知类型的 Panic", |s| s.as_str())
-                },
-                |s| *s,
-            );
-            error!("一个 FFI 调用发生了 Panic: {message}");
-            T::default()
-        }
-    }
-}
-
 const DISPATCH_ARGS: [NativeAPIType; 1] = [NativeAPIType::String];
 const CALLBACK_ARGS: [NativeAPIType; 1] = [NativeAPIType::V8Value];
+const DISPATCH_WITH_ARRAY_BUFFER_ARGS: [NativeAPIType; 3] = [
+    NativeAPIType::String,
+    NativeAPIType::Int,
+    NativeAPIType::V8Value,
+];
 
 #[repr(i32)]
 #[derive(Debug, PartialEq, Eq)]
@@ -109,13 +93,6 @@ unsafe fn register_api(
     Ok(())
 }
 
-unsafe fn c_char_to_string(s: *const c_char) -> String {
-    if s.is_null() {
-        return String::new();
-    }
-    unsafe { CStr::from_ptr(s).to_string_lossy().into_owned() }
-}
-
 #[instrument(skip(_args))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn initialize(_args: *mut *mut c_void) -> *mut c_char {
@@ -153,16 +130,6 @@ pub unsafe extern "C" fn registerEventCallback(args: *mut *mut c_void) -> *mut c
     })
 }
 
-/// 用来存放返回值的缓冲区
-///
-/// betterncm 复制完我们的返回值后就直接丢弃了，完全没有释放内存，所以我们在 `dispatch`
-/// 直接返回一个缓冲区
-///
-/// 如果 betterncm 未来更新了他们的代码，又尝试保留之前的指针，这里需要修正
-///
-/// 参见 <https://github.com/std-microblock/chromatic/blob/1b7eb7fdaa08de15e579c86dadb6ef848a72b6f1/src/v8NativeCalls.cpp#L585-L590>
-static RETURN_BUFFER: LazyLock<Mutex<CString>> = LazyLock::new(|| Mutex::new(CString::default()));
-
 #[instrument(skip(args))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn dispatch(args: *mut *mut c_void) -> *mut c_char {
@@ -177,28 +144,10 @@ pub unsafe extern "C" fn dispatch(args: *mut *mut c_void) -> *mut c_char {
             return ptr::null_mut();
         }
 
-        let command_json = unsafe { c_char_to_string(command_ptr.cast::<c_char>()) };
+        let command_json = c_char_to_string(command_ptr.cast::<c_char>());
         // trace!(command = %command_json, "收到前端命令");
 
-        let result_json = dispatcher::send_command(&command_json);
-        // trace!(result = %result_json, "发送执行结果到前端");
-
-        let mut buffer_guard = match RETURN_BUFFER.lock() {
-            Ok(guard) => guard,
-            Err(e) => {
-                error!("RETURN_BUFFER 锁毒化: {e}");
-                return ptr::null_mut();
-            }
-        };
-
-        *buffer_guard = match CString::new(result_json) {
-            Ok(s) => s,
-            Err(e) => {
-                error!("无法创建返回的 CString: {e}");
-                CString::default()
-            }
-        };
-        buffer_guard.as_ptr().cast_mut()
+        return_string(dispatcher::send_command(&command_json, None))
     })
 }
 
@@ -234,7 +183,7 @@ pub unsafe extern "C" fn setLogLevel(args: *mut *mut c_void) -> *mut c_char {
             return ptr::null_mut();
         }
 
-        let level_string = unsafe { c_char_to_string(level_pointer.cast::<c_char>()) };
+        let level_string = c_char_to_string(level_pointer.cast::<c_char>());
         if let Err(e) = logger::set_frontend_log_level(&level_string) {
             error!("设置日志级别失败: {e}");
         }
@@ -287,6 +236,10 @@ pub unsafe extern "C" fn BetterNCMPluginMain(api: *mut PluginAPI) -> c_int {
                     reg!(terminate),
                     reg!(registerEventCallback, Some(&CALLBACK_ARGS)),
                     reg!(dispatch, Some(&DISPATCH_ARGS)),
+                    reg!(
+                        dispatchWithArrayBuffer,
+                        Some(&DISPATCH_WITH_ARRAY_BUFFER_ARGS)
+                    ),
                 ];
 
                 for result in registrations {
