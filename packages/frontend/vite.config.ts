@@ -126,6 +126,17 @@ export default defineConfig(({ mode }) => {
 			minify: !isDev,
 			sourcemap: false,
 			watch: isDev ? {} : undefined,
+			rolldownOptions: {
+				onwarn(warning, defaultHandler) {
+					if (
+						warning.code === "MODULE_LEVEL_DIRECTIVE" &&
+						warning.message.includes("use client")
+					) {
+						return;
+					}
+					defaultHandler(warning);
+				},
+			},
 			lib: {
 				entry: path.resolve(import.meta.dirname, "src/index.tsx"),
 				name: "InfLinkrs",
