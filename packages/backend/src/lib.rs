@@ -6,3 +6,4 @@ mod ffi_support;
 mod logger;
 mod model;
 mod smtc_core;
+mod smtc_window;

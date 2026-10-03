@@ -260,41 +260,6 @@ console.log(await evaluate(`(() => {
 
 **完成条件：** 运行中的目标插件和本次构建对应；问题复现步骤有操作前后证据；需要的原生或外部表现已验证，或明确标记为待人工验证。
 
-## 6. 收尾和报告
+## 6. 收尾
 
 清理测试文本、临时 DOM 与事件监听，恢复本次改变的页面或播放状态，关闭自己的 WebSocket。关闭 WebSocket 不会关闭客户端调试端口；仅为排障临时开启端口的会话，结束后完全退出并普通启动客户端，再核验端口已关闭。用户仍要继续调试时，可以保留客户端并说明地址。
-
-报告至少包含：客户端和引擎版本、所用端口和页面、每项操作的可观察结果、状态恢复情况、未验证项。截图与原始日志默认放系统临时目录，仓库只保存必要的脱敏结论。
-
-## 实机记录：2026-10-02
-
-| 检查项 | 结果                                                                |
-| ------ | ------------------------------------------------------------------- |
-| 客户端 | `3.1.41.205529`                                                     |
-| 引擎   | `/json/version` 返回 `Chrome/91.0.4472.169`，协议 `1.3`             |
-| 启动   | `--remote-debugging-port=9223 --remote-debugging-address=127.0.0.1` |
-| 监听   | `127.0.0.1:9223`，属于网易云主进程                                  |
-| 页面   | `网易云音乐`，`orpheus://orpheus/pub/app.html`，就绪状态 `complete` |
-| 截图   | `Page.captureScreenshot` 成功生成并检查 PNG，原图为 `2510 × 1670`   |
-| 日志   | 收到本次主动输出的 `Runtime.consoleAPICalled` 验证消息              |
-
-### 封面二进制通道验证（2026-10-02 晚，重构 `array_buffer` 之后）
-
-目标：验证「在原生调用栈内同步 `cef_v8value_create_array_buffer` + `execute_function` 回调 JS」在真实客户端可行，
-且外部化 `ArrayBuffer` 的引用计数与冻结流程正确。
-
-| 检查项     | 结果                                                                                                    |
-| ---------- | ------------------------------------------------------------------------------------------------------- |
-| 构建产物   | `vite build --mode development`（监听模式首轮）同步的 debug DLL + 现场构建的 `index.js`                  |
-| 歌切触发   | 三次真实歌切：启动时的当前歌曲、`InfLinkApi.next()`、`InfLinkApi.previous()`                            |
-| 原生证据   | 每次均出现 `dispatchWithArrayBuffer: 已通过外部 ArrayBuffer 收到二进制数据`，`released=true neutered=true` |
-| 字节一致性 | 前端 `songChange` 事件里的 `Blob`（`image/jpg`，43553 字节）与后端 `bytes=43553` 逐字节一致              |
-| 内容       | `preview=[255, 216, 255, 224, 0, 16, 74, 70]`，即 JPEG 的 `FF D8 FF E0 ... "JF"`                        |
-| 稳定性     | 三次传输后无崩溃、无 panic、无 `更新 SMTC 元数据失败`，插件仍能响应 CDP 调用                             |
-| SMTC       | GSMTC 会话 `cloudmusic.exe` 的标题/艺术家/专辑与当前歌曲一致，`Thumbnail` 非空                           |
-| 状态恢复   | 回到原歌曲并暂停（进度残留约 0.27s）                                                                     |
-| 未验证     | 缩略图的**视觉**确认（PS 5.1 的 COM 投影读不出缩略图流字节，已放弃程序化读取）                            |
-
-关键日志字段含义：`neutered=false` 表示冻结失败、缓冲区被刻意泄漏；`released=false` 表示 CEF 未回调
-`release_buffer`。两者都应当出现在排查清单里。原生日志在 `%APPDATA%\InfLink-rs\inflink-rs.<date>.log`，
-文件层为 `trace` 全量，前端转发层默认 `INFO`，因此这类 `debug!` 证据只在文件里看得到。

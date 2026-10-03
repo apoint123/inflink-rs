@@ -45,9 +45,13 @@ The project follows a bidirectional communication architecture between the NCM F
 3.  **V8 Interop:** `v8.rs` handles the conversion of data types between Rust and JavaScript strings/objects.
 
 #### C. The Backend Layer (Rust)
-1.  **SMTC Core:** `smtc_core.rs` uses the Windows Runtime (WinRT) APIs (`Windows.Media.Playback`) to initialize a virtual `MediaPlayer`.
+1.  **SMTC Core:** `smtc_core.rs` drives the Windows System Media Transport Controls through a
+    `SystemMediaTransportControls` instance obtained via
+    `ISystemMediaTransportControlsInterop::GetForWindow`, bound to a hidden top-level window that
+    `smtc_window.rs` creates on its own thread (together with the message pump that window needs).
     * It receives metadata updates from the frontend and pushes them to the Windows System Media Transport Controls.
     * It sets up event handlers for Windows media buttons. When a button is pressed, it triggers a callback that sends a message back to the Frontend to execute the command (e.g., `adapter.play()`).
+    * Binding the session to the plugin's own window is what makes clicking the media card's whitespace bring NetEase Cloud Music to the foreground: the system activates the window recorded in the session, and the window procedure forwards that activation to the app's main window.
 2.  **Discord RPC:** `discord.rs` runs a background thread that connects to the Discord IPC. It receives metadata/timeline payloads and updates the user's activity status, handling connection retries and debouncing to prevent rate limits.
 3.  **Async Runtime:** The backend uses the `tokio` runtime to handle asynchronous tasks like downloading cover art images or updating timeline properties without blocking the main thread.
 

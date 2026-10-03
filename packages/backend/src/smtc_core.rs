@@ -29,7 +29,6 @@ use windows::{
         MediaPlaybackAutoRepeatMode,
         MediaPlaybackStatus,
         MediaPlaybackType,
-        Playback::MediaPlayer,
         PlaybackPositionChangeRequestedEventArgs,
         ShuffleEnabledChangeRequestedEventArgs,
         SystemMediaTransportControls,
@@ -48,11 +47,14 @@ use windows::{
     },
 };
 
-use crate::model::{
-    CoverPayload,
-    MetadataPayload,
-    PlaybackStatus,
-    RepeatMode,
+use crate::{
+    model::{
+        CoverPayload,
+        MetadataPayload,
+        PlaybackStatus,
+        RepeatMode,
+    },
+    smtc_window::SmtcWindowHost,
 };
 
 const HNS_PER_MILLISECOND: f64 = 10_000.0;
@@ -93,18 +95,24 @@ enum SmtcEvent {
 
 #[derive(Debug)]
 pub struct SmtcContext {
-    player: MediaPlayer,
+    smtc: SystemMediaTransportControls,
+    /// 承载会话的隐藏窗口
+    ///
+    /// 必须声明在 `smtc` 之后: 字段按声明顺序析构, 这样会话窗口会在 SMTC 之后才销毁,
+    /// 否则会话里会留下一个已经失效的 HWND。除了 `Drop` 之外不会读它。
+    #[allow(dead_code, reason = "只依赖它的 Drop 来收尾会话窗口")]
+    window_host: SmtcWindowHost,
     tokens: SmtcHandlerTokens,
     is_enabled: bool,
 }
 
 impl SmtcContext {
-    fn smtc(&self) -> Result<SystemMediaTransportControls> {
-        Ok(self.player.SystemMediaTransportControls()?)
+    const fn smtc(&self) -> &SystemMediaTransportControls {
+        &self.smtc
     }
 
     fn remove_handlers(&self) -> Result<()> {
-        let smtc = self.smtc()?;
+        let smtc = self.smtc();
         smtc.RemoveButtonPressed(self.tokens.button_pressed)?;
         smtc.RemoveShuffleEnabledChangeRequested(self.tokens.shuffle_changed)?;
         smtc.RemoveAutoRepeatModeChangeRequested(self.tokens.repeat_changed)?;
@@ -119,9 +127,7 @@ impl Drop for SmtcContext {
             warn!("销毁 SmtcContext 时移除处理器失败: {e:?}");
         }
 
-        if let Ok(smtc) = self.smtc() {
-            let _ = smtc.SetIsEnabled(false);
-        }
+        let _ = self.smtc.SetIsEnabled(false);
     }
 }
 
@@ -217,8 +223,8 @@ fn dispatch_event(event: &SmtcEvent) {
 
 #[instrument]
 pub fn initialize() -> Result<SmtcContext> {
-    let player = MediaPlayer::new()?;
-    let smtc = player.SystemMediaTransportControls()?;
+    // 细节见 smtc_window 模块文档: 窗口与消息泵必须同线程, 且不能在 dispatcher 线程上建。
+    let (window_host, smtc) = SmtcWindowHost::spawn()?;
 
     smtc.SetIsEnabled(false)?;
     smtc.SetIsPlayEnabled(true)?;
@@ -288,7 +294,8 @@ pub fn initialize() -> Result<SmtcContext> {
     debug!("SMTC 事件处理器已全部附加");
 
     let context = SmtcContext {
-        player,
+        smtc,
+        window_host,
         tokens: SmtcHandlerTokens {
             button_pressed,
             shuffle_changed,
@@ -313,8 +320,7 @@ pub fn update_play_state(ctx: &SmtcContext, status: PlaybackStatus) -> Result<()
         PlaybackStatus::Paused => MediaPlaybackStatus::Paused,
     };
 
-    let smtc = ctx.smtc()?;
-    smtc.SetPlaybackStatus(win_status)?;
+    ctx.smtc().SetPlaybackStatus(win_status)?;
     debug!(?status, "SMTC 播放状态已更新");
     Ok(())
 }
@@ -338,8 +344,7 @@ pub fn update_timeline(ctx: &SmtcContext, current_ms: f64, total_ms: f64) -> Res
         Duration: (total_ms * HNS_PER_MILLISECOND) as i64,
     })?;
 
-    let smtc = ctx.smtc()?;
-    smtc.UpdateTimelineProperties(&props)?;
+    ctx.smtc().UpdateTimelineProperties(&props)?;
     Ok(())
 }
 
@@ -353,7 +358,7 @@ pub fn update_play_mode(
         return Ok(());
     }
 
-    let smtc = ctx.smtc()?;
+    let smtc = ctx.smtc();
     smtc.SetShuffleEnabled(is_shuffling)?;
 
     let repeat_mode_win = match repeat_mode {
@@ -453,7 +458,7 @@ pub fn update_metadata(
 
     let thumbnail_stream_ref = create_cover_stream_ref(payload.cover.as_ref(), cover_bytes);
 
-    let smtc = ctx.smtc()?;
+    let smtc = ctx.smtc();
     let updater = smtc.DisplayUpdater()?;
     updater.SetType(MediaPlaybackType::Music)?;
 
@@ -485,8 +490,7 @@ pub fn update_metadata(
 
 pub fn set_enabled(ctx: &mut SmtcContext, enabled: bool) -> Result<()> {
     ctx.is_enabled = enabled;
-    let smtc = ctx.smtc()?;
-    smtc.SetIsEnabled(enabled)?;
+    ctx.smtc.SetIsEnabled(enabled)?;
 
     if !enabled {
         unregister_event_callback();
