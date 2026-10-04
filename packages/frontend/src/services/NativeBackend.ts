@@ -47,6 +47,8 @@ function isLogLevel(level: string): level is LogLevel {
 class NativeBackend {
 	private isActive = false;
 	private updateGeneration = 0;
+	private beforeunloadRegistered = false;
+	private controlHandler: ((msg: ControlMessage) => void) | null = null;
 
 	private call<K extends keyof NativeApiMap>(
 		func: K,
@@ -62,10 +64,12 @@ class NativeBackend {
 	private dispatch<T extends keyof AppMessage>(
 		type: T,
 		payload: AppMessage[T],
-	) {
-		this.handleCommandResult(
-			type as string,
-			this.call("dispatch", [JSON.stringify({ type, payload })]),
+	): boolean {
+		return (
+			this.handleCommandResult(
+				type as string,
+				this.call("dispatch", [JSON.stringify({ type, payload })]),
+			)?.status === "Success"
 		);
 	}
 
@@ -105,26 +109,45 @@ class NativeBackend {
 		}
 	}
 
+	/**
+	 * 连接后端（幂等）
+	 *
+	 * dispatcher 与 SMTC 会话随页面常驻：SMTC/Discord 的开关只是隐藏会话或
+	 * 断开 RPC，不会走到 terminate，因此重复调用 initialize 时不必重建后端，
+	 * 只需重新注册回调 —— control_handler 可能绑定的是新的 adapter 实例，
+	 * 后端只保留最后一次注册的回调。
+	 */
 	public initialize(control_handler: (msg: ControlMessage) => void) {
-		if (this.isActive) return;
-		this.call("terminate");
+		if (!this.isActive) {
+			// 防御性终止: 清理上一次生命周期可能残留的后端状态
+			this.call("terminate");
+			this.isActive = true;
+			this.call("initialize");
+		}
 
-		this.isActive = true;
+		this.controlHandler = control_handler;
 		this.registerLogger();
-		this.call("initialize");
+		this.registerEventCallback();
 
-		window.addEventListener("beforeunload", () => {
-			if (this.isActive) {
-				this.disableDiscordRpc();
-				this.disableSmtcSession();
-				this.call("terminate");
-			}
-		});
+		if (!this.beforeunloadRegistered) {
+			this.beforeunloadRegistered = true;
+			window.addEventListener("beforeunload", () => {
+				if (this.isActive) {
+					this.disableDiscordRpc();
+					this.disableSmtcSession();
+					this.call("terminate");
+					this.isActive = false;
+					logger.info("页面卸载，已终止后端", "Native Bridge");
+				}
+			});
+		}
+	}
 
+	private registerEventCallback() {
 		const eventCallback = (eventJson: string) => {
 			try {
 				const event: SmtcEvent = JSON.parse(eventJson);
-				control_handler(event);
+				this.controlHandler?.(event);
 			} catch (e) {
 				logger.error("解析后端事件失败:", "Native Bridge", e);
 			}
@@ -181,14 +204,6 @@ class NativeBackend {
 		this.call("registerLogger", [logCallback]);
 	}
 
-	public disable() {
-		if (!this.isActive) return;
-		this.isActive = false;
-
-		this.call("terminate");
-		logger.info("已终止后端", "Native Bridge");
-	}
-
 	public enableSmtcSession() {
 		if (!this.isActive) return;
 		this.dispatch("EnableSmtc", undefined);
@@ -219,7 +234,13 @@ class NativeBackend {
 		logger.debug(`更新 Discord 配置`, "Native Bridge", config);
 	}
 
-	public async update(songInfo: SongInfo): Promise<void> {
+	/**
+	 * 发送当前歌曲的元数据（含封面字节）
+	 *
+	 * @returns 后端是否确认接收。等待封面期间有更新的更新插了进来、或后端
+	 * 返回错误时返回 false —— 调用方不应据此更新"已送达"状态。
+	 */
+	public async update(songInfo: SongInfo): Promise<boolean> {
 		this.updateGeneration++;
 		const generation = this.updateGeneration;
 
@@ -230,7 +251,7 @@ class NativeBackend {
 				coverBytes = new Uint8Array(await songInfo.cover.blob.arrayBuffer());
 
 				// 等待期间可能有更新的更新插了进来, 这时候这次更新已经没有意义了
-				if (generation !== this.updateGeneration) return;
+				if (generation !== this.updateGeneration) return false;
 			} catch (e) {
 				logger.warn(
 					`读取封面二进制数据失败: ${(e as Error).message}`,
@@ -239,7 +260,7 @@ class NativeBackend {
 			}
 		}
 
-		this.dispatchMetadata(songInfo, coverBytes);
+		return this.dispatchMetadata(songInfo, coverBytes);
 	}
 
 	/**
@@ -252,14 +273,13 @@ class NativeBackend {
 	private dispatchMetadata(
 		songInfo: SongInfo,
 		coverBytes: Uint8Array | undefined,
-	) {
+	): boolean {
 		const payload = this.toMetadataPayload(songInfo, {
 			url: songInfo.cover?.url,
 		});
 
 		if (!coverBytes || coverBytes.byteLength === 0) {
-			this.dispatch("UpdateMetadata", payload);
-			return;
+			return this.dispatch("UpdateMetadata", payload);
 		}
 
 		// 与前一条 `dispatch` 完全相同的载荷，只是额外捎带一次二进制传输
@@ -281,6 +301,7 @@ class NativeBackend {
 				"Native Bridge",
 			);
 		}
+		return result?.status === "Success";
 	}
 
 	private toMetadataPayload(

@@ -103,7 +103,6 @@ pub struct SmtcContext {
     #[allow(dead_code, reason = "只依赖它的 Drop 来收尾会话窗口")]
     window_host: SmtcWindowHost,
     tokens: SmtcHandlerTokens,
-    is_enabled: bool,
 }
 
 impl SmtcContext {
@@ -149,20 +148,6 @@ pub fn register_event_callback(v8_function: CefV8Value) {
             Err(e) => error!("创建回调对象失败: {e:?}"),
         },
         Err(e) => error!("注册回调时锁中毒: {e:?}"),
-    }
-}
-
-#[instrument]
-pub fn unregister_event_callback() {
-    match GLOBAL_CALLBACK.lock() {
-        Ok(mut guard) => {
-            *guard = None;
-        }
-        Err(e) => {
-            warn!("清理 SMTC 回调时锁中毒");
-            let mut guard = e.into_inner();
-            *guard = None;
-        }
     }
 }
 
@@ -302,7 +287,6 @@ pub fn initialize() -> Result<SmtcContext> {
             repeat_changed,
             seek_requested,
         },
-        is_enabled: false,
     };
 
     debug!("SMTC 已初始化");
@@ -311,10 +295,6 @@ pub fn initialize() -> Result<SmtcContext> {
 
 #[instrument]
 pub fn update_play_state(ctx: &SmtcContext, status: PlaybackStatus) -> Result<()> {
-    if !ctx.is_enabled {
-        return Ok(());
-    }
-
     let win_status = match status {
         PlaybackStatus::Playing => MediaPlaybackStatus::Playing,
         PlaybackStatus::Paused => MediaPlaybackStatus::Paused,
@@ -327,10 +307,6 @@ pub fn update_play_state(ctx: &SmtcContext, status: PlaybackStatus) -> Result<()
 
 #[instrument]
 pub fn update_timeline(ctx: &SmtcContext, current_ms: f64, total_ms: f64) -> Result<()> {
-    if !ctx.is_enabled {
-        return Ok(());
-    }
-
     let props = SystemMediaTransportControlsTimelineProperties::new()?;
     props.SetStartTime(TimeSpan { Duration: 0 })?;
     props.SetMinSeekTime(TimeSpan { Duration: 0 })?;
@@ -354,10 +330,6 @@ pub fn update_play_mode(
     is_shuffling: bool,
     repeat_mode: &RepeatMode,
 ) -> Result<()> {
-    if !ctx.is_enabled {
-        return Ok(());
-    }
-
     let smtc = ctx.smtc();
     smtc.SetShuffleEnabled(is_shuffling)?;
 
@@ -444,10 +416,6 @@ pub fn update_metadata(
     payload: &MetadataPayload,
     cover_bytes: Option<&[u8]>,
 ) -> Result<()> {
-    if !ctx.is_enabled {
-        return Ok(());
-    }
-
     info!(
         title = %payload.song_name,
         artist = %payload.author_name,
@@ -488,13 +456,17 @@ pub fn update_metadata(
     Ok(())
 }
 
-pub fn set_enabled(ctx: &mut SmtcContext, enabled: bool) -> Result<()> {
-    ctx.is_enabled = enabled;
+/// 设置会话对系统是否可见
+///
+/// 本函数是字面量开关, 不做任何校验: "开启时会话里必须已有当前歌的元数据"
+/// 是前端 (useBackendConnection) 负责维持的约定 —— 后端只做转发, 元数据与
+/// 可见性的时序由前端保证, 出现空白卡片时应到前端查调用时序。
+///
+/// 会话随 dispatcher 常驻, `DisableSmtc` 只把卡片藏起来而不销毁会话;
+/// 隐藏期间元数据、时间线等更新照常写入 (各 `update_*` 不检查启用状态),
+/// 保证重新启用时展示的就是当前歌曲。媒体键回调是页面级资源, 不随禁用
+/// 注销 —— 隐藏的会话不会收到系统派发的按键。
+pub fn set_enabled(ctx: &SmtcContext, enabled: bool) -> Result<()> {
     ctx.smtc.SetIsEnabled(enabled)?;
-
-    if !enabled {
-        unregister_event_callback();
-    }
-
     Ok(())
 }

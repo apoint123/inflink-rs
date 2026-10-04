@@ -38,6 +38,7 @@ InfLink-rs 是一个为**网易云音乐**桌面客户端（基于 BetterNCM 插
    - **V3 适配器**：遍历 React Fiber 树，或使用内部 `dva` 工具定位 Redux store。通过订阅状态变更来检测切歌、音量变化与播放状态。
    - **V2 适配器**：与更老的混淆 API 端点（`playerInstance.KJ`）及不同的 Redux store 交互。
 2. **事件监听**：适配器监听网易云内部的特定事件（进度更新、跳转操作），并归一化为标准的 `SongInfo` / `TimelineInfo` 格式。
+3. **SMTC 显示决策**：`useBackendConnection` 是"媒体卡片何时亮起"的唯一决策者。`activateSmtcIfNeeded()` 是全项目唯一发出 `EnableSmtc` 的收口。约束细则见下方 D 节。
 
 ### B. 原生桥梁（FFI 与 CEF）
 
@@ -51,10 +52,22 @@ InfLink-rs 是一个为**网易云音乐**桌面客户端（基于 BetterNCM 插
    `SystemMediaTransportControls` 实例通过
    `ISystemMediaTransportControlsInterop::GetForWindow` 获取，并绑定到一个隐藏的顶层窗口上；
    该窗口由 `smtc_window.rs` 在自己的线程中创建（同时创建该窗口所需的消息泵）。
-   - 接收来自前端的元数据更新并推送到 Windows 系统媒体传输控件。
-   - 为 Windows 媒体按键设置事件处理器：按键被按下时触发回调，向前端发送消息以执行命令（如 `adapter.play()`）。
+   - 后端是纯转发的中间人，不做任何业务决策：`EnableSmtc` / `DisableSmtc` 是字面量开关（直接 `SetIsEnabled`），元数据/时间线/播放状态/播放模式原样写入会话。
+   - SMTC 会话随 dispatcher 常驻，由元数据更新或 `EnableSmtc` 懒创建（`DisableSmtc` 在会话不存在时跳过、不创建）；`DisableSmtc` 只隐藏卡片、不销毁会话，隐藏期间各 `update_*` 不检查启用状态、照常写入，因此重新启用时展示的就是当前歌曲。
+   - 为 Windows 媒体按键设置事件处理器：按键被按下时触发回调，向前端发送消息以执行命令（如 `adapter.play()`）。回调（`GLOBAL_CALLBACK`）是页面级资源，不随会话禁用注销——隐藏的会话本来就不会收到系统派发的按键。
    - 将媒体会话绑定到插件自己的窗口，正是「点击媒体卡片空白区域可将网易云音乐带到前台」的原因：系统会激活会话中记录的窗口，而该窗口过程会把激活转发给应用主窗口。
+   - 显示时序的职责划分与约束见下方 D 节。
 2. **Discord RPC**：`discord.rs` 运行后台线程连接 Discord IPC，接收元数据/时间轴负载并更新用户活动状态，包含连接重试与防抖处理以避免触发速率限制。
+
+### D. SMTC 显示时序约定
+
+以下决策是前后端的职责边界，改动相关代码时不得破坏：
+
+1. **后端零决策**：`EnableSmtc` / `DisableSmtc` 是字面量开关，后端不校验、不持有决策状态。
+2. **元数据先于可见性**：前端保证发出 `EnableSmtc` 时，当前歌的元数据必已送达后端（songChange 送达后按需开启，或经 `getResolvedCurrentSongInfo()` 补发后开启）。新增任何需要亮卡片的触发点时，必须汇入 `activateSmtcIfNeeded()` 收口，禁止另行直接发送 `EnableSmtc`。
+3. **会话常驻 + 隐藏期跟进**：`DisableSmtc` 只隐藏卡片；隐藏期间元数据/时间线照常写入是"重新开启立即显示当前歌"的前提。不要为 `update_*` 恢复启用状态检查，也不要在禁用时销毁会话或终止 dispatcher。
+4. **补发元数据仅作边界兜底**：`getResolvedCurrentSongInfo()` 只在送达记录与当前歌不一致时触发（如歌曲恢复早于监听器挂载的竞态），常规开关路径不补发。
+5. **不引入新的就绪信号**：`songChange` 事件 + `getCurrentSongInfo()` 查询已覆盖全部时机——网易云播放栏的挂载实测与适配器依赖的曲目恢复落在同一时刻（两者都等待播放器状态恢复进 Redux store），不存在更早或更稳的第三方信号，无需添加 `playerReady` 之类的事件。
 
 ## 三、技术栈
 

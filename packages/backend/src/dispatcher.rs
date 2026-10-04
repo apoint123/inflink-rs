@@ -52,7 +52,7 @@ pub fn init() {
 }
 
 pub fn shutdown() {
-    if let Ok(guard) = GLOBAL_SENDER.lock() {
+    if let Ok(mut guard) = GLOBAL_SENDER.lock() {
         if let Some(tx) = guard.as_ref() {
             if let Err(e) = tx.send(AppMessage::Shutdown) {
                 error!("发送关闭信号失败: {e}");
@@ -60,6 +60,8 @@ pub fn shutdown() {
         } else {
             warn!("尝试关闭，但 Dispatcher 未初始化");
         }
+        // 清空发送端, 避免重建后对已销毁的接收端发消息
+        *guard = None;
     }
 }
 
@@ -87,8 +89,8 @@ impl SmtcManager {
     }
 
     fn shutdown(&mut self) {
-        if let Some(mut ctx) = self.ctx.take() {
-            let _ = smtc_core::set_enabled(&mut ctx, false);
+        if let Some(ctx) = self.ctx.take() {
+            let _ = smtc_core::set_enabled(&ctx, false);
         }
     }
 }
@@ -145,7 +147,8 @@ fn run_dispatcher_loop(rx: &Receiver<AppMessage>) {
                 }
             }
             AppMessage::DisableSmtc => {
-                if let Some(ctx) = smtc_manager.get_or_init()
+                // 没有会话时不必创建 (例如仅启用 Discord 的用户), 跳过即可
+                if let Some(ctx) = smtc_manager.ctx.as_mut()
                     && let Err(e) = smtc_core::set_enabled(ctx, false)
                 {
                     error!("禁用 SMTC 失败: {e:?}");

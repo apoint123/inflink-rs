@@ -11,6 +11,7 @@ import type {
 } from "@/types/api";
 import {
 	CoverManager,
+	isSameSongId,
 	type TypedEventListenerOrEventListenerObject,
 	TypedEventTarget,
 	throttle,
@@ -124,8 +125,10 @@ export abstract class BaseNcmAdapter
 			return;
 		}
 
-		const isNewSong =
-			String(currentSongInfo.ncmId) !== String(this.lastDispatchedSongId);
+		const isNewSong = !isSameSongId(
+			currentSongInfo.ncmId,
+			this.lastDispatchedSongId,
+		);
 
 		const currentCoverUrl = currentSongInfo.cover?.url;
 		const isCoverChanged = currentCoverUrl !== this.lastDispatchedCoverUrl;
@@ -148,9 +151,7 @@ export abstract class BaseNcmAdapter
 			this.coverManager
 				.getCover(currentSongInfo, this.resolutionSetting)
 				.then((result) => {
-					if (
-						String(result.songInfo.ncmId) === String(this.lastDispatchedSongId)
-					) {
+					if (isSameSongId(result.songInfo.ncmId, this.lastDispatchedSongId)) {
 						this.dispatch("songChange", {
 							...result.songInfo,
 							cover: result.cover,
@@ -175,6 +176,38 @@ export abstract class BaseNcmAdapter
 	}
 
 	/**
+	 * 取当前歌曲, 并把封面解析成可直接送达后端的形式 (blob 优先)
+	 *
+	 * 供"会话里可能还没有当前歌元数据"的补发场景使用, 与 songChange 的正常
+	 * 派发共用封面管线。等待取图期间切了歌时返回 null —— 过期元数据交由
+	 * songChange 正常派发。中断同一首歌的在途取图是安全的: 中断后由本方法
+	 * 重新发起并送达, 当前歌的元数据不会因此丢失。
+	 */
+	public async getResolvedCurrentSongInfo(): Promise<SongInfo | null> {
+		const info = this.getCurrentSongInfo();
+		if (!info) return null;
+
+		try {
+			const result = await this.coverManager.getCover(
+				info,
+				this.resolutionSetting,
+			);
+			if (!isSameSongId(result.songInfo.ncmId, this.lastDispatchedSongId)) {
+				return null;
+			}
+			return { ...result.songInfo, cover: result.cover };
+		} catch (error) {
+			// 取图中途被更新请求打断: 交给正常 songChange 流程
+			if ((error as Error).name === "AbortError") return null;
+			logger.error(
+				`解析当前歌曲封面时错误: ${(error as Error).message}`,
+				"BaseNcmAdapter",
+			);
+			return null;
+		}
+	}
+
+	/**
 	 * 判定一次原生进度事件是否属于当前曲目
 	 *
 	 * playId 形如 "${songId}_${suffix}"；切歌后旧音频管线仍会短暂推送旧
@@ -186,7 +219,7 @@ export abstract class BaseNcmAdapter
 		const eventSongId = Number.parseInt(playId, 10);
 		if (Number.isNaN(eventSongId)) return true;
 		if (this.lastDispatchedSongId === null) return true;
-		return String(eventSongId) === String(this.lastDispatchedSongId);
+		return isSameSongId(eventSongId, this.lastDispatchedSongId);
 	}
 
 	protected updateTimeline(currentTime: number, totalTime?: number): void {

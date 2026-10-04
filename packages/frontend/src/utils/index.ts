@@ -3,6 +3,7 @@ export * from "./dom";
 export * from "./event";
 export * from "./logger";
 export * from "./patchLocalStorage";
+export * from "./songId";
 export * from "./TypedEventTarget";
 export * from "./throttle";
 export * from "./webpack";

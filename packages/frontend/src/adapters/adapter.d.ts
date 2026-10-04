@@ -13,6 +13,7 @@ export interface INcmAdapter extends TypedEventTarget<PlaybackEventMap> {
 	initialize(): Promise<void>;
 	dispose(): void;
 	getCurrentSongInfo(): SongInfo | null;
+	getResolvedCurrentSongInfo(): Promise<SongInfo | null>;
 	getPlaybackStatus(): PlaybackStatus;
 	getTimelineInfo(): TimelineInfo | null;
 	getPlayMode(): PlayMode;
