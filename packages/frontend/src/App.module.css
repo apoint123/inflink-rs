@@ -1,8 +1,5 @@
 .appWrapper {
 	color: var(--text-primary);
-	font-family:
-		"Noto Sans SC", "Microsoft YaHei", "Segoe UI", Roboto, "Helvetica Neue",
-		Arial, sans-serif;
 }
 
 .mainContainer {
