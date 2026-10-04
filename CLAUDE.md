@@ -1,1 +1,1 @@
-Read GEMINI.md and AGENTS.md
+请阅读 AGENTS.md。
