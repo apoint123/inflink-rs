@@ -2,7 +2,7 @@
 	"name": "inflink-rs-workspace",
 	"private": true,
 	"type": "module",
-	"version": "3.3.0",
+	"version": "3.4.0",
 	"license": "GPL-3.0-only",
 	"packageManager": "pnpm@12.8.1",
 	"engines": {
