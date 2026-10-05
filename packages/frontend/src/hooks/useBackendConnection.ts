@@ -2,9 +2,9 @@ import { useAtomValue } from "jotai";
 import { useCallback, useEffect, useRef } from "react";
 import { NativeBackendInstance } from "../services/NativeBackend";
 import { appConfigAtom } from "../store";
-import type { PlaybackEventMap } from "../types/api";
+import type { PlaybackEventMap, SongInfo } from "../types/api";
 import type { ControlMessage } from "../types/backend";
-import { isSameSongId } from "../utils";
+import { isSameSong } from "../utils";
 import logger from "../utils/logger";
 import { handleAdapterCommand } from "./handleAdapterCommand";
 import type { AdapterState } from "./useInfoProvider";
@@ -24,9 +24,9 @@ export function useBackendConnection(adapterState: AdapterState) {
 	// 前端持有的 SMTC 可见性镜像: 发出 EnableSmtc 后为 true, Disable 后为 false。
 	// 后端是纯转发的中间人, "卡片何时亮起"完全由这里决定。
 	const smtcActiveRef = useRef(false);
-	// 最近一次确认送达后端的歌曲 id。会话常驻, 其中的元数据始终对应这个值;
+	// 最近一次确认送达后端的歌曲。会话常驻, 其中的元数据始终对应这个值;
 	// 与 adapter 当前歌不一致时, 上线前需要补发元数据。
-	const deliveredSongIdRef = useRef<string | number | null>(null);
+	const deliveredSongRef = useRef<SongInfo | null>(null);
 
 	const configRef = useRef(config);
 	useEffect(() => {
@@ -55,7 +55,7 @@ export function useBackendConnection(adapterState: AdapterState) {
 		const onSongChange = async (e: PlaybackEventMap["songChange"]) => {
 			const delivered = await nativeBackend.update(e.detail);
 			if (!delivered) return;
-			deliveredSongIdRef.current = e.detail.ncmId;
+			deliveredSongRef.current = e.detail;
 			activateSmtcIfNeeded();
 		};
 		const onPlayStateChange = (e: PlaybackEventMap["playStateChange"]) =>
@@ -111,11 +111,11 @@ export function useBackendConnection(adapterState: AdapterState) {
 					const info = adapter.getCurrentSongInfo();
 					if (!info) return;
 
-					if (!isSameSongId(deliveredSongIdRef.current, info.ncmId)) {
+					if (!isSameSong(deliveredSongRef.current, info)) {
 						const resolved = await adapter.getResolvedCurrentSongInfo();
 						if (!resolved) return;
 						if (!(await nativeBackend.update(resolved))) return;
-						deliveredSongIdRef.current = resolved.ncmId;
+						deliveredSongRef.current = resolved;
 					}
 					activateSmtcIfNeeded();
 				} catch (e) {

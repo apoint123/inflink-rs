@@ -349,6 +349,7 @@ export class V2NcmAdapter extends BaseNcmAdapter {
 				cover: songData.album.picUrl ? { url: songData.album.picUrl } : null,
 				ncmId: ncmId,
 				duration: getDuration(),
+				trackId: String(songData.id || trackObject?.uiOpts?.playId || ncmId),
 			};
 		}
 
@@ -365,6 +366,7 @@ export class V2NcmAdapter extends BaseNcmAdapter {
 					cover: programCache.coverUrl ? { url: programCache.coverUrl } : null,
 					ncmId: programCache.id,
 					duration: getDuration(),
+					trackId: String(programCache.id || songData.programId),
 				};
 			}
 
@@ -377,6 +379,7 @@ export class V2NcmAdapter extends BaseNcmAdapter {
 				cover: radioPic ? { url: radioPic } : null,
 				ncmId: songData.programId,
 				duration: getDuration(),
+				trackId: String(songData.programId || songData.id),
 			};
 		}
 
@@ -388,6 +391,7 @@ export class V2NcmAdapter extends BaseNcmAdapter {
 			cover: songData.album?.picUrl ? { url: songData.album.picUrl } : null,
 			ncmId: songData.id,
 			duration: getDuration(),
+			trackId: String(songData.id),
 		};
 	}
 

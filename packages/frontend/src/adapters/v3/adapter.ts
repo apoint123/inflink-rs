@@ -439,6 +439,7 @@ export class V3NcmAdapter extends BaseNcmAdapter {
 				cover: currentVoice.coverUrl ? { url: currentVoice.coverUrl } : null,
 				ncmId: voiceId,
 				duration: duration > 0 ? duration : undefined,
+				trackId: String(playingInfo.resourceTrackId || currentVoice.id),
 			};
 		}
 
@@ -489,6 +490,7 @@ export class V3NcmAdapter extends BaseNcmAdapter {
 			cover: coverUrl ? { url: coverUrl } : null,
 			ncmId: currentTrackId,
 			duration: duration > 0 ? duration : undefined,
+			trackId: String(playingInfo.resourceTrackId),
 		};
 	}
 
@@ -569,7 +571,15 @@ export class V3NcmAdapter extends BaseNcmAdapter {
 		const playingInfo = state.playing;
 
 		const currentRawTrackId = playingInfo.resourceTrackId;
-		if (currentRawTrackId && currentRawTrackId !== this.lastTrackId) {
+		const trackChanged =
+			Boolean(currentRawTrackId) && currentRawTrackId !== this.lastTrackId;
+		const durationReady =
+			!trackChanged &&
+			this.musicDuration === 0 &&
+			typeof playingInfo.curTrack?.duration === "number" &&
+			playingInfo.curTrack.duration > 0;
+
+		if (trackChanged || durationReady) {
 			let songInfo: SongInfo | null;
 			try {
 				songInfo = this.getCurrentSongInfo();
@@ -580,11 +590,13 @@ export class V3NcmAdapter extends BaseNcmAdapter {
 				throw e;
 			}
 
-			this.lastTrackId = currentRawTrackId;
+			if (trackChanged) {
+				this.lastTrackId = currentRawTrackId ?? null;
+			}
 
 			this.processSongInfoChange(songInfo);
 
-			if (!this.hasRestoredInitialState) {
+			if (trackChanged && !this.hasRestoredInitialState) {
 				this.hasRestoredInitialState = true;
 				this.restoreLastPlaybackState();
 			}

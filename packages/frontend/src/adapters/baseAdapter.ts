@@ -11,7 +11,7 @@ import type {
 } from "@/types/api";
 import {
 	CoverManager,
-	isSameSongId,
+	isSameSong,
 	type TypedEventListenerOrEventListenerObject,
 	TypedEventTarget,
 	throttle,
@@ -39,6 +39,8 @@ export abstract class BaseNcmAdapter
 
 	protected lastDispatchedSongId: string | number | null = null;
 	protected lastDispatchedCoverUrl: string | undefined = undefined;
+	protected currentTrackId: string | null = null;
+	protected currentSongInfo: SongInfo | null = null;
 
 	protected readonly dispatchTimelineThrottled: () => void;
 	protected readonly resetTimelineThrottle: () => void;
@@ -125,19 +127,24 @@ export abstract class BaseNcmAdapter
 			return;
 		}
 
-		const isNewSong = !isSameSongId(
-			currentSongInfo.ncmId,
-			this.lastDispatchedSongId,
-		);
+		const isNewSong = !isSameSong(currentSongInfo, this.currentSongInfo);
 
 		const currentCoverUrl = currentSongInfo.cover?.url;
 		const isCoverChanged = currentCoverUrl !== this.lastDispatchedCoverUrl;
 
 		if (isNewSong || isCoverChanged) {
+			this.currentSongInfo = currentSongInfo;
+			this.currentTrackId =
+				currentSongInfo.trackId ??
+				(currentSongInfo.ncmId > 0 ? String(currentSongInfo.ncmId) : null);
 			this.lastDispatchedSongId = currentSongInfo.ncmId;
 			this.lastDispatchedCoverUrl = currentCoverUrl;
 
 			if (isNewSong) {
+				logger.info(
+					`曲目切换: ${currentSongInfo.songName} (trackId: ${this.currentTrackId}, ncmId: ${currentSongInfo.ncmId}, duration: ${currentSongInfo.duration}ms)`,
+					"BaseNcmAdapter",
+				);
 				this.musicPlayProgress = 0;
 				if (currentSongInfo.duration && currentSongInfo.duration > 0) {
 					this.musicDuration = currentSongInfo.duration;
@@ -151,7 +158,7 @@ export abstract class BaseNcmAdapter
 			this.coverManager
 				.getCover(currentSongInfo, this.resolutionSetting)
 				.then((result) => {
-					if (isSameSongId(result.songInfo.ncmId, this.lastDispatchedSongId)) {
+					if (isSameSong(result.songInfo, this.currentSongInfo)) {
 						this.dispatch("songChange", {
 							...result.songInfo,
 							cover: result.cover,
@@ -192,7 +199,7 @@ export abstract class BaseNcmAdapter
 				info,
 				this.resolutionSetting,
 			);
-			if (!isSameSongId(result.songInfo.ncmId, this.lastDispatchedSongId)) {
+			if (!isSameSong(result.songInfo, this.currentSongInfo)) {
 				return null;
 			}
 			return { ...result.songInfo, cover: result.cover };
@@ -210,16 +217,52 @@ export abstract class BaseNcmAdapter
 	/**
 	 * 判定一次原生进度事件是否属于当前曲目
 	 *
-	 * playId 形如 "${songId}_${suffix}"；切歌后旧音频管线仍会短暂推送旧
+	 * playId 形如 "${trackId}_${suffix}"；切歌后旧音频管线仍会短暂推送旧
 	 * 曲目的进度，归属不符时必须丢弃，否则会把新曲的进度锚点盖回旧值。
 	 * 解析失败或尚未建立曲目标识时按旧行为放行（fail-open）。
 	 */
 	protected isProgressForCurrentTrack(playId: string | undefined): boolean {
 		if (!playId) return true;
-		const eventSongId = Number.parseInt(playId, 10);
-		if (Number.isNaN(eventSongId)) return true;
-		if (this.lastDispatchedSongId === null) return true;
-		return isSameSongId(eventSongId, this.lastDispatchedSongId);
+		if (
+			!this.currentTrackId &&
+			(this.lastDispatchedSongId === null || this.lastDispatchedSongId === 0)
+		) {
+			return true;
+		}
+
+		// 从 playId 提取前置 trackId（网易云格式为 ${trackId}_${suffix} 或 ${trackId}|${suffix}）
+		const separatorIndex = playId.search(/[_|]/);
+		const eventTrackId =
+			separatorIndex !== -1 ? playId.slice(0, separatorIndex) : playId;
+
+		// 1. 与当前曲目的内部轨道唯一标识匹配（适用于本地音频 40 位哈希与在线音频纯数字 ID）
+		if (this.currentTrackId) {
+			if (eventTrackId.toLowerCase() === this.currentTrackId.toLowerCase()) {
+				return true;
+			}
+			if (
+				playId.toLowerCase().startsWith(`${this.currentTrackId.toLowerCase()}_`)
+			) {
+				return true;
+			}
+		}
+
+		// 2. 与当前曲目的在线 ncmId 匹配（仅当 ncmId 为有效正整数时）
+		if (this.lastDispatchedSongId !== null && this.lastDispatchedSongId !== 0) {
+			const currentSongIdStr = String(this.lastDispatchedSongId);
+			if (
+				eventTrackId === currentSongIdStr ||
+				playId.startsWith(`${currentSongIdStr}_`)
+			) {
+				return true;
+			}
+		}
+
+		logger.debug(
+			`丢弃不属于当前曲目的进度事件: playId=${playId}, eventTrackId=${eventTrackId}, currentTrackId=${this.currentTrackId}, ncmId=${this.lastDispatchedSongId}`,
+			"BaseNcmAdapter",
+		);
+		return false;
 	}
 
 	protected updateTimeline(currentTime: number, totalTime?: number): void {

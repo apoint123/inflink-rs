@@ -21,6 +21,8 @@ export interface SongInfo {
 	ncmId: number;
 	/** 单位毫秒 */
 	duration?: number | undefined;
+	/** 客户端内部轨道唯一标识（适用于本地音频 40 位哈希与在线音频） */
+	trackId?: string | undefined;
 }
 
 export interface TimelineInfo {
