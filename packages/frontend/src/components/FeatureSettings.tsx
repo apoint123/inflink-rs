@@ -5,6 +5,7 @@
 
 import { useAtom } from "jotai";
 import {
+	Activity,
 	AudioLines,
 	Bug,
 	Database,
@@ -18,6 +19,8 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { DiscordDisplayMode } from "@/types/backend";
+import type { INcmAdapter } from "../adapters/adapter";
+import type { PaletteMode } from "../hooks/useNcmTheme";
 import {
 	backendLogLevelAtom,
 	discordAppNameModeTypeAtom,
@@ -33,12 +36,20 @@ import {
 import type { LogLevel } from "../utils/logger";
 import { AnimatedLink } from "./AnimatedLink";
 import { Combobox } from "./Combobox";
+import { DebugPanel } from "./DebugPanel";
 import styles from "./FeatureSettings.module.css";
 import { Input } from "./Input";
 import { SettingItem } from "./SettingItem";
 import { Switch } from "./Switch";
 
-export function FeatureSettings() {
+export function FeatureSettings({
+	adapter,
+	theme,
+}: {
+	adapter: INcmAdapter | null;
+	theme: PaletteMode;
+}) {
+	const [debugOpen, setDebugOpen] = useState(false);
 	const [smtcEnabled, setSmtcEnabled] = useAtom(smtcEnabledAtom);
 	const [resolution, setResolution] = useAtom(resolutionAtom);
 	const [localResolution, setLocalResolution] = useState(resolution);
@@ -284,6 +295,21 @@ export function FeatureSettings() {
 				}
 			/>
 
+			<SettingItem
+				icon={<Activity size={20} />}
+				title="调试面板"
+				description="实时查看当前的播放状态数据"
+				action={
+					<button
+						type="button"
+						className={styles.openButton}
+						onClick={() => setDebugOpen(true)}
+					>
+						打开
+					</button>
+				}
+			/>
+
 			{import.meta.env.DEV ? (
 				<SettingItem
 					icon={<Bug size={20} />}
@@ -297,6 +323,14 @@ export function FeatureSettings() {
 					}
 				/>
 			) : null}
+
+			{debugOpen && (
+				<DebugPanel
+					adapter={adapter}
+					theme={theme}
+					onClose={() => setDebugOpen(false)}
+				/>
+			)}
 		</div>
 	);
 }

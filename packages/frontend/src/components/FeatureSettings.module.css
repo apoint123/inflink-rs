@@ -31,3 +31,22 @@
 	display: flex;
 	gap: 0.5rem;
 }
+
+.openButton {
+	padding: 0.375rem 1rem;
+	border: 1px solid var(--border-color);
+	border-radius: 8px;
+	background-color: var(--control-bg);
+	color: var(--text-primary);
+	font-size: 0.85rem;
+	cursor: pointer;
+	transition: background-color 0.2s ease;
+}
+
+.openButton:hover {
+	background-color: var(--control-bg-hover);
+}
+
+.openButton:active {
+	background-color: var(--control-bg-active);
+}

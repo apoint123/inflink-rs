@@ -44,6 +44,7 @@ export default function App() {
 
 function Main() {
 	const ncmVersion = useNcmVersion();
+	const ncmThemeMode = useNcmTheme();
 	const adapterState = useInfoProvider(ncmVersion);
 	const { adapter, status, error } = adapterState;
 
@@ -101,7 +102,7 @@ function Main() {
 
 			<VersionWarningAlert version={ncmVersion} show={showVersionWarning} />
 
-			<FeatureSettings />
+			<FeatureSettings adapter={adapter} theme={ncmThemeMode} />
 		</div>
 	);
 }
