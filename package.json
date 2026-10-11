@@ -10,7 +10,7 @@
 	},
 	"scripts": {
 		"build": "cd packages/frontend && vite build",
-		"dev": "cd packages/frontend && vite build --watch --mode development",
+		"dev": "cd packages/frontend && vite",
 		"build:frontend": "cd packages/frontend && vite build --mode frontend-only",
 		"lint": "biome check . --error-on-warnings",
 		"format": "biome format . --write",

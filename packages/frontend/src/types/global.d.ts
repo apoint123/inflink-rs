@@ -87,6 +87,9 @@ declare global {
 		 * 调试用的 v3 内部存储模块
 		 */
 		infStorage?: v3.NcmStorageModule;
+
+		$RefreshReg$?: (type: unknown, id: string) => void;
+		$RefreshSig$?: () => (type: unknown) => unknown;
 	}
 
 	const BETTERNCM_API_KEY: Window["BETTERNCM_API_KEY"];
@@ -113,6 +116,12 @@ declare global {
 	const plugin: Window["plugin"];
 
 	const __APP_VERSION__: string;
+
+	/**
+	 * HMR dev server 端口号，由构建时的 `define` 替换为字面量。
+	 * 占位符标识符定义在 `packages/frontend/plugins/constants.ts`。
+	 */
+	const __INFLINK_HMR_PORT__: number;
 }
 
 /**

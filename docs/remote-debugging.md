@@ -249,9 +249,10 @@ console.log(await evaluate(`(() => {
 
 接口缺失时检查所选页面、初始化日志和 BetterNCM 插件加载情况。端口连通或 `window.betterncm` 存在，均不能证明 InfLink-rs 已加载。
 
-需要验证工作区改动时，查看 `package.json` 和 `packages/frontend/vite.config.ts` 的当前配置，再执行项目要求的构建与开发流程：
+需要验证工作区改动时，查看 `package.json`、`packages/frontend/vite.config.ts` 以及 `packages/frontend/plugins/` 的当前配置，再执行项目要求的构建与开发流程：
 
-- `pnpm dev` 是 Vite 的监听构建，默认将产物同步到 `C:/betterncm/plugins_dev/InfLink-rs`，可由 `BETTERNCM_PLUGIN_PATH` 覆盖；它不提供一个用于调试的网页服务器。确认此位置对应本机 BetterNCM 数据目录。
+- `pnpm dev` 是 HMR 开发流程：Vite dev server + React Fast Refresh（默认 `http://localhost:5135`，`INFLINK_DEV_PORT` 可改，CORS 只放行网易云页面 Origin，可用 `INFLINK_DEV_ORIGIN` 覆盖），由 `inflinkHmrBootstrap` 插件向插件目录生成引导脚本 `index.js` 与 dev 专用 `manifest.json`（`noDevReload` + 移除 app.html CSP 的 hijack）。引导脚本同步注册 `onConfig` 后后台跨源加载入口，加载完成后直接调用入口导出的 `mount(plugin, element)`（生产构建则基于 `!import.meta.env.DEV` 走 loader 的 load 事件）。启动时先编译 Rust debug DLL 并复制到插件目录（`SKIP_RUST=1` 跳过编译只做复制；客户端锁住 DLL 时警告跳过，需退出客户端后重跑 `pnpm dev`）。组件改动不刷新页面，只被组件引用的工具模块随组件热更（副作用重跑），其余非组件模块改动由 Vite 整页 reload。
+- `pnpm build`（或 `SKIP_RUST=1` 跳过 Rust）是生产构建，产物**总是同步到插件目录**，会覆盖 dev 引导产物；要回到 HMR 开发需再运行 `pnpm dev` 重新生成。hijack 规则只在客户端启动时注册，改过 hijack 或从生产构建切回 HMR 后都需完全重启客户端。
 - 读取完整构建输出，分别确认前端、目标架构 DLL 和同步成功；仅有 `dist` 文件或一次成功输出不足以排除后续复制失败。
 - 文件同步不等于运行中的插件已更新。前端重载后重新验证 API 和行为；修改原生 DLL 时完全退出并重新带参数启动客户端。不要用 `Page.navigate` 把宿主页面导航走来尝试加载插件。
 - `build:frontend` 或 `SKIP_RUST` 跳过 Rust 构建时，只能据实际产物声明前端验证，不能据此声称原生改动生效。插件版本也不一定随每次本地编辑变化，应结合构建产物和实际行为判断。

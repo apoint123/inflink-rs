@@ -336,43 +336,9 @@ declare module "betterncm-api/index" {
 }
 
 declare module "plugin" {
-	export interface InjectFile {
-		file: string;
-	}
-
-	export interface HijackReplaceOrRegexOperation {
-		type: "replace" | "regex";
-		from: string;
-		to: string;
-	}
-
-	export interface HijackAppendOrPrependOperation {
-		type: "append" | "prepend";
-		code: string;
-	}
-
-	export type HijackOperation =
-		| HijackReplaceOrRegexOperation
-		| HijackAppendOrPrependOperation;
-
-	export interface PluginManifest {
-		manifest_version: number;
-		name: string;
-		version: string;
-		slug: string;
-		/** 是否禁用自带的开发重载功能，适用于那些需要自制热重载的插件开发者们，默认不禁用 */
-		noDevReload?: boolean;
-		loadAfter?: string[];
-		loadBefore?: string[];
-		injects: {
-			[pageType: string]: InjectFile[];
-		};
-		hijacks: {
-			[versionRange: string]: {
-				[matchUrlPath: string]: HijackOperation;
-			};
-		};
-	}
+	export type PluginManifest = import("./manifest").BetterNCMPluginManifest;
+	export type InjectFile = import("./manifest").InjectedScript;
+	export type HijackOperation = import("./manifest").HijackAction;
 
 	export class NCMPlugin extends EventTarget {
 		readonly pluginPath: string;

@@ -91,6 +91,13 @@ InfLink-rs 是一个为**网易云音乐**桌面客户端（基于 BetterNCM 插
 - **核心框架**：React + Chromium Embedded Framework
 - **包管理器**：pnpm（不要使用 npm 或其他包管理器）
 - **构建命令**：`pnpm build`
+- **前端开发（HMR）**：`pnpm dev` 启动 Vite dev server + React Fast Refresh（默认 `http://localhost:5135`，支持环境变量 `INFLINK_DEV_PORT`；dev server 只放行网易云页面的 Origin，可用 `INFLINK_DEV_ORIGIN` 覆盖），由 `inflinkHmrBootstrap` 插件在启动时编译 Rust debug DLL 并复制到插件目录（`SKIP_RUST=1` 跳过编译、直接复制现有 DLL），并自动生成引导脚本与 dev 专用 manifest（`noDevReload` 关闭 BetterNCM 的整页重载，加上移除 app.html CSP 的 hijack 规则；写入 `BETTERNCM_PLUGIN_PATH` 指向的目录，默认 `C:/betterncm/plugins_dev/InfLink-rs`，不影响仓库 manifest）。入口 `index.tsx` 导出 `mount(plugin, element)`：dev 下由引导脚本跨源加载入口模块后直接调用（显式依赖注入，模块顶层不引用 loader 注入的裸 `plugin` 全局）；生产构建则基于 `!import.meta.env.DEV` 走 loader 的 load 事件生命周期，dev/prod 共享同一份渲染逻辑。**引导脚本必须同步注册 onConfig 并立即 resolve、入口后台加载**：BetterNCM loader 在 AsyncFunction resolve 后才把 inject 推入 `injects`，且插件管理器面板挂载时会立即求值并永久缓存所有插件的 `haveConfigElement()`，若等待入口加载完成再 resolve 会导致面板缓存“无设置页”而永久禁用入口。组件级修改由 React Fast Refresh 毫秒级热更且保持状态；只被组件引用的工具模块与 hooks 会随组件热更（模块副作用重跑），其余非组件模块改动由 Vite 整页 reload。**DLL 与 hijack 的生效时机**：客户端占用 DLL 时复制会失败并只打印警告、不会重试，需退出客户端后重新运行 `pnpm dev`；hijack 规则只在客户端启动时注册，改规则或从 `pnpm build` 切回 `pnpm dev` 后都需完全重启客户端。
+- **构建插件体系**：Vite 插件及辅助构建脚本集中维护于 `packages/frontend/plugins/`，统一从 `index.ts` 导入：
+  - `inflink-hmr-bootstrap.ts`：开发环境 HMR 引导脚本生成、dev manifest 注入及 debug DLL 复制；
+  - `betterncm-builder.ts`：生产打包时 Rust release 编译、`dist` 产物补全与 BetterNCM 插件目录全量同步；
+  - `constants.ts`：集中管理前端/根目录路径、插件目录、HMR 端口与 Origin、hijack 规则；
+  - `rust.ts`：维护架构表（`RUST_TARGETS`）并提供 Rust 双架构编译（`buildRust`）与 DLL 复制（`copyDlls`）通用函数。
+- **生产构建**：`pnpm build` 编译 Rust（`SKIP_RUST=1` 跳过）并构建前端，产物**总是同步到插件目录**（会覆盖 dev 引导产物，下次 `pnpm dev` 再生成）。
 - **远程调试**：排查客户端启动、复现页面交互、读取运行时日志或验证插件 API 时，先读 [AI 远程调试指南](docs/remote-debugging.md)，按实机结果区分已验证项与仍需人工验证项。
 
 ## 五、代码风格与规范
