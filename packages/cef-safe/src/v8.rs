@@ -61,13 +61,31 @@ impl CefV8Value {
     }
 
     /// 执行JS函数并返回其结果或错误
+    ///
+    /// CEF C API 的 refptr 参数遵循**所有权转移**约定：libcef 侧的
+    /// `CppToC::Unwrap` 会先给底层对象加一份引用，再释放调用方传入的那一份 wrapper
+    /// 引用（源码注释："the reference that was added before the structure was passed
+    /// back to us"）。官方 C++ 包装库会在传参前由 `CtoCpp::Unwrap` 补上这一份，所以
+    /// C++ 用户感知不到；这里是直接调用 C API，必须自己交出。
+    ///
+    /// 相关源码（CEF 91，公开分支 4472，commit `04c8d56`）：
+    ///
+    /// - `execute_function` 胶水层，参数与 `object` 都会经过 `CppToC::Unwrap`： <https://github.com/chromiumembedded/cef/blob/04c8d5653ca5b3e36b693d871cce1ef09617bfc9/libcef_dll/cpptoc/v8value_cpptoc.cc#L909-L941>
+    /// - `CppToC::Unwrap`，消费引用的位置： <https://github.com/chromiumembedded/cef/blob/04c8d5653ca5b3e36b693d871cce1ef09617bfc9/libcef_dll/cpptoc/cpptoc_ref_counted.h#L39-L58>
+    /// - `CtoCpp::Unwrap`，C++ 包装库的补偿： <https://github.com/chromiumembedded/cef/blob/04c8d5653ca5b3e36b693d871cce1ef09617bfc9/libcef_dll/ctocpp/ctocpp_ref_counted.h#L131-L149>
+    ///
+    /// `args` 按值传入，**调用后即被消费**，不能再使用；`this` 是借用，内部会克隆
+    /// 一份再交出，调用方手里的引用不受影响。
+    ///
+    /// 若误用 `as_raw` 借出引用，接收方仍会消费掉它，调用返回后 Rust 侧再析构就是
+    /// use-after-free / 双重释放。
     pub fn execute_function(&self, this: Option<&Self>, args: Vec<Self>) -> CefResult<Self> {
-        let this_ptr = this.map_or(ptr::null_mut(), Self::as_raw);
+        // this 是借用，不能把调用方唯一的一份引用交出去；克隆一份再 into_raw，
+        // 等价于官方 C++ 包装库在传参前对 object 做的 UnderlyingAddRef()。
+        let this_ptr = this.map_or(ptr::null_mut(), |value| value.clone().into_raw());
 
-        // 这里必须使用 into_raw 而不是 as_raw
-        // 经过反复测试，网易云提供的 execute_function 似乎在内部帮我们调用了 release，
-        // 错误地取得了所有权，在这里调用 as_raw，会造成双重释放并导致网易云音乐崩溃
-        // 这很不同寻常，但千万不要改成 as_raw，它真的会崩溃！
+        // CEF 会消费每个参数携带的一份引用，因此这里必须交出所有权（into_raw）而不是
+        // 借出（as_raw）。改用 as_raw 会在调用返回后双重释放并导致崩溃。
         let args_vec: Vec<*mut cef_sys::_cef_v8value_t> =
             args.into_iter().map(Self::into_raw).collect();
 
